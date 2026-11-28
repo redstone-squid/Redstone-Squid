@@ -5,7 +5,7 @@ from typing import Annotated
 from litestar import Request, Response, Router, get, post
 from litestar.di import Provide
 from litestar.openapi.datastructures import ResponseSpec
-from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
+from litestar.params import FromPath, FromQuery, JSONBody, PathParameter, QueryParameter
 from litestar.response import Redirect
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
@@ -23,6 +23,8 @@ from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, P
 from squid.api.private_responses import private_response
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
 from squid.core.actors import ActingContext
+from squid.core.pagination import ChronologicalSort
+from squid.core.schematics.application.attachments import AttachmentListSort
 from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
 from squid.core.schematics.errors import SchematicNotFoundError, SchematicSupportUnavailableError
 
@@ -48,13 +50,14 @@ async def list_build_schematics(
     schematics: Schematics,
     page_size: PageSizeParam = 50,
     offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    sort: FromQuery[AttachmentListSort] = AttachmentListSort.ID,
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a approved build."""
     await build_queries.get_public(build_id, context=ActingContext.current())
-    # Attachment order has no identifier sequence worth anchoring to, so this listing is offset-only.
-    selector = resolve_selector(offset=offset)
+    selector = resolve_selector(offset=offset, cursor=cursor)
     page = await schematics.list_public_page(
-        build_id, selector=selector, page_size=page_size, context=ActingContext.current()
+        build_id, selector=selector, page_size=page_size, sort=sort, context=ActingContext.current()
     )
     return Page[SchematicSummary].from_domain(
         page,
@@ -299,6 +302,7 @@ async def list_own_schematic_videos(
     schematic_id: Annotated[int | None, QueryParameter(ge=1)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
 ) -> Page[VideoResponse]:
     """Page the videos the caller requested, newest first, optionally for one schematic.
@@ -310,7 +314,7 @@ async def list_own_schematic_videos(
         raise SchematicSupportUnavailableError
     page = await schematics.videos.list_videos(
         schematic_id=schematic_id,
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=caller.context(),
     )

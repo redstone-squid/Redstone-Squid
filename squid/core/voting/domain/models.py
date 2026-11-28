@@ -70,8 +70,9 @@ class ReviewKind(StrEnum):
 
 
 class ReviewSort(StrEnum):
-    """Review listing orders; session IDs follow creation, so both sort by ID."""
+    """Review listing orders. Session IDs follow creation."""
 
+    ID = "id"
     NEWEST = "newest"
     OLDEST = "oldest"
 

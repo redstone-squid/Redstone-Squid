@@ -15,7 +15,7 @@ from litestar.response.base import ASGIResponse
 from pydantic import BaseModel, ConfigDict
 
 from squid.core.errors import ErrorCode, ValidationError
-from squid.core.pagination import MAX_PAGE_OFFSET, PageCursor, PageSelector
+from squid.core.pagination import MAX_PAGE_OFFSET, ChronologicalSort, PageCursor, PageSelector
 from squid.core.pagination import Page as ResultPage
 from squid.core.pagination import PageAnchor as ResultPageAnchor
 from squid.core.validation import (
@@ -87,7 +87,9 @@ class Page[ItemT]:
         )
 
 
-def resolve_selector(*, offset: int | None, cursor: str | None = None) -> PageSelector:
+def resolve_selector(
+    *, offset: int | None, cursor: str | None = None, sort: ChronologicalSort | None = None
+) -> PageSelector:
     """Resolve the mutually exclusive `offset` and `cursor` parameters into one selector.
 
     With neither, seekable lists start in cursor mode.
@@ -106,7 +108,7 @@ def resolve_selector(*, offset: int | None, cursor: str | None = None) -> PageSe
                 for key in ("offset", "cursor")
             ),
         )
-    return PageSelector(offset=offset, cursor=None if cursor is None else PageCursor.decode(cursor))
+    return PageSelector(offset=offset, sort=sort, cursor=None if cursor is None else PageCursor.decode(cursor))
 
 
 class ListResponse[T](Response[T]):

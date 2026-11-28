@@ -121,3 +121,8 @@ class MinecraftPlayerContext:
 
 if TYPE_CHECKING:
     from squid.core.minecraft_auth.models import PaperInstallation, PlayerGrant
+
+
+class ServerListSort(StrEnum):
+    ID = "id"
+    OLDEST = "oldest"

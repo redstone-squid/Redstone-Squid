@@ -35,9 +35,16 @@ from squid.core.notifications.application import (
     InboxEntry,
     NotificationEditorSnapshot,
 )
-from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild, NotifiedRecord
+from squid.core.notifications.domain import (
+    ALL_INBOX_ITEMS,
+    InboxListFilters,
+    NotificationKind,
+    NotificationMessage,
+    NotifiedBuild,
+    NotifiedRecord,
+)
 from squid.core.notifications.models import NotificationSubscription
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, ChronologicalSort, Page, PageSelector
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
 
@@ -83,9 +90,9 @@ class NotificationRecorder(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Inbox:
-        self.inbox_reads.append((context, selector, page_size, unread_only))
+        self.inbox_reads.append((context, selector, page_size, filters.unread_only))
         return self.inbox_result
 
     @override
@@ -186,7 +193,7 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
 async def test_inbox_uses_the_authenticated_account() -> None:
     notifications = NotificationRecorder()
     await list_inbox.fn(notifications, ACCOUNT)
-    assert notifications.inbox_reads == [(ACCOUNT.context(), PageSelector(), 20, False)]
+    assert notifications.inbox_reads == [(ACCOUNT.context(), PageSelector(sort=ChronologicalSort.NEWEST), 20, False)]
 
 
 async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:

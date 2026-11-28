@@ -172,3 +172,26 @@ class ExternalRoleGrantSubject:
 
 
 type GrantSubject = AccountGrantSubject | ExternalRoleGrantSubject
+
+
+class RoleListSort(StrEnum):
+    ID = "id"
+    HIGHEST_RANK = "highest_rank"
+
+
+class GrantListSort(StrEnum):
+    ID = "id"
+    OLDEST = "oldest"
+
+
+class AssignmentListSort(StrEnum):
+    ID = "id"
+    OLDEST = "oldest"
+
+
+@dataclass(frozen=True, slots=True)
+class GuildListFilters:
+    guild_id: int | None = None
+
+
+ALL_GUILDS = GuildListFilters()

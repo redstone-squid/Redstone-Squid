@@ -5,7 +5,7 @@ from typing import Annotated
 
 from litestar import Router, get, post
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter, SkipValidation
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, get_accounts, get_build_queries
@@ -17,6 +17,7 @@ from squid.api.v1.schemas.creators import CreatorAliasDetail, CreditClaimApprova
 from squid.core.accounts.errors import CreatorAliasNotFoundError
 from squid.core.builds.application.queries import CreatorStats
 from squid.core.builds.domain import BuildListFilters
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -123,6 +124,7 @@ async def claim_queue(
     accounts: Accounts,
     caller: CurrentCaller,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[CreditClaimDetail]:
@@ -130,7 +132,7 @@ async def claim_queue(
     page = await accounts.credit_claim_page(
         context=caller.context(),
         staff_queue=True,
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
     )
     return Page.from_domain(page, CreditClaimDetail.from_claim)

@@ -18,6 +18,7 @@ from squid.core.builds.history import BuildEditContext
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot, PendingBuildEdit
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
 from squid.core.builds.models import OtherBuild
+from squid.core.pagination import PageSelector
 from squid.core.persistence.account_merge import AccountMergeContext
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -265,7 +266,9 @@ async def test_public_history_starts_with_published_values(sessions: async_sessi
         await uow.commit()
 
     async with SqlAlchemyUnitOfWork(sessions) as uow:
-        history = await uow.build_history.public_page(build_id, {"description": "Description"}, offset=0, page_size=1)
+        history = await uow.build_history.public_page(
+            build_id, {"description": "Description"}, selector=PageSelector(offset=0), page_size=1
+        )
         assert history.total == 1
         (revision,) = history.items
         (description,) = [change for change in revision.changes if change.field == "description"]

@@ -6,7 +6,7 @@ from uuid import UUID
 from litestar import Response, Router, delete, get, patch, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, HeaderParameter, JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter, SkipValidation
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Services, get_notifications
@@ -30,6 +30,7 @@ from squid.api.v1.schemas.notifications import (
 from squid.core.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.notifications import SubscriptionKind
+from squid.core.notifications.domain import InboxListFilters
 from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
@@ -38,6 +39,7 @@ from squid.core.notifications.edits import (
     notification_target,
 )
 from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 UserCaller = NamedDependency[SkipValidation[Caller]]
@@ -246,14 +248,15 @@ async def list_inbox(
     caller: UserCaller,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
     unread_only: Annotated[bool, QueryParameter(description="Only list unread items.")] = False,
 ) -> InboxPage:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     _account_id(caller)
-    selector = resolve_selector(offset=offset, cursor=cursor)
+    selector = resolve_selector(offset=offset, cursor=cursor, sort=sort)
     inbox = await notifications.inbox(
-        context=caller.context(), selector=selector, page_size=page_size, unread_only=unread_only
+        context=caller.context(), selector=selector, page_size=page_size, filters=InboxListFilters(unread_only)
     )
     return InboxPage.from_domain(inbox)
 

@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from typing import Literal, override
 
 from squid.core.sentinel import UNSET
@@ -83,3 +84,8 @@ def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
     edition, major, minor, patch = match.groups()
     parsed_edition: Edition = "Bedrock" if edition is not None and edition.lower() == "bedrock" else "Java"
     return parsed_edition, int(major), int(minor), int(patch or 0)
+
+
+class VersionListSort(StrEnum):
+    ID = "id"
+    RELEASE = "release"

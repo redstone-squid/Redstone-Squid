@@ -6,7 +6,15 @@ from typing import Any, cast
 from sqlalchemy import ColumnElement, Select, SQLColumnExpression, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.core.pagination import InvalidPageCursorError, Page, PageAnchor, PageCursor, PageSelector, offset_page
+from squid.core.pagination import (
+    ChronologicalSort,
+    InvalidPageCursorError,
+    Page,
+    PageAnchor,
+    PageCursor,
+    PageSelector,
+    offset_page,
+)
 
 _KEY = "keyset_key"
 _ID = "keyset_id"
@@ -42,12 +50,16 @@ class KeysetOrder:
         Raises:
             InvalidPageCursorError: The cursor belongs to another order or has a mistyped key.
         """
+        order = self
+        if selector.sort is not None:
+            key = self.id if selector.sort is ChronologicalSort.ID else self.key
+            order = KeysetOrder(selector.sort, key, self.id, descending=selector.sort is not ChronologicalSort.OLDEST)
         cursor = selector.cursor
         if cursor is not None:
-            statement = statement.where(self._beyond(self._checked(cursor), cursor))
+            statement = statement.where(order._beyond(order._checked(cursor), cursor))
         backward = cursor is not None and cursor.backward
         width = len(statement.column_descriptions)
-        statement = self._ordered(statement.add_columns(self.key.label(_KEY), self.id.label(_ID)), backward)
+        statement = order._ordered(statement.add_columns(order.key.label(_KEY), order.id.label(_ID)), backward)
         if selector.offset:
             statement = statement.offset(selector.offset)
         # One row past the page proves whether another page follows. Joined eager loads repeat
@@ -63,7 +75,7 @@ class KeysetOrder:
             return offset_page(items, offset=selector.offset, page_size=page_size, total=total)
         if not rows:
             return Page(items, total, next=None, prev=None)
-        first, last = (PageCursor(self.name, row[-2], row[-1]) for row in (rows[0], rows[-1]))
+        first, last = (PageCursor(order.name, row[-2], row[-1]) for row in (rows[0], rows[-1]))
         return Page(
             items,
             total,

@@ -34,6 +34,7 @@ from squid.api.pagination import (
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.core.builds.domain import DoorOrientationLiteral
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.models import (
@@ -159,12 +160,13 @@ async def list_door_ranges(
     depth: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
 ) -> Page[RangeRegistration]:
     """List registered door range queries newest first, with the names of their tags and version."""
     page = await publications.list_page(
         RangeListFilters(orientation, height, depth),
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=caller.context(),
     )
@@ -341,13 +343,14 @@ async def list_drift(
     caller: CurrentCaller,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
 ) -> Page[RecordDrift]:
     """List records the backstop changed although no queued change explained it, newest first.
 
     Each entry means the affected-set calculation missed a case.
     """
-    selector = resolve_selector(offset=offset, cursor=cursor)
+    selector = resolve_selector(offset=offset, cursor=cursor, sort=sort)
     page = await records.drift(selector=selector, page_size=page_size, context=caller.context())
     return Page[RecordDrift].from_domain(page)
 

@@ -477,3 +477,11 @@ def _validate_values(values: frozenset[str], allowed: frozenset[str], name: str)
     if invalid:
         value = sorted(invalid)[0]
         raise ValidationError(md_tr(t"notifications-domain-unsupported = unsupported {name}: {value}"))
+
+
+@dataclass(frozen=True, slots=True)
+class InboxListFilters:
+    unread_only: bool = False
+
+
+ALL_INBOX_ITEMS = InboxListFilters()

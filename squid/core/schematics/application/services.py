@@ -9,13 +9,18 @@ from typing import TYPE_CHECKING
 
 from squid.core.actors import ActingContext, WorkerActor
 from squid.core.errors import DataIntegrityError, SquidError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, collection_page
 from squid.core.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SCHEMATIC_MEASURE_TIMING,
     BUILD_SCHEMATIC_VIEW_PRIVATE,
 )
-from squid.core.schematics.application.attachments import PublicSchematicDownload, SchematicPublication, StoredSchematic
+from squid.core.schematics.application.attachments import (
+    AttachmentListSort,
+    PublicSchematicDownload,
+    SchematicPublication,
+    StoredSchematic,
+)
 from squid.core.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
 from squid.core.schematics.application.duplicates import DuplicateCandidate, DuplicateTier
 from squid.core.schematics.application.ports import (
@@ -271,17 +276,27 @@ class SchematicService:
             ]
 
     async def list_public_page(
-        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
+        self,
+        build_id: int,
+        *,
+        context: ActingContext,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+        sort: AttachmentListSort = AttachmentListSort.ID,
     ) -> Page[StoredSchematic]:
-        """Return an offset page of attachments allowed by their publication policy.
+        """Return a page of attachments allowed by their publication policy.
 
         Load all attachments for the build, filter them, then slice the result in memory. Build-level
         access must be checked by the caller.
         """
         with context.scope():
-            return offset_page(
+            return collection_page(
                 await self.list_public_for_build(build_id, context=context),
-                offset=selector.offset or 0,
+                selector=selector,
+                sort=sort,
+                identifier=lambda row: row.id,
+                display_key=lambda row: (),
+                key_types=(),
                 page_size=page_size,
             )
 

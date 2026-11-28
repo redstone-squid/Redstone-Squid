@@ -13,6 +13,8 @@ from squid.core.errors import InvalidStateError
 from squid.core.events import DomainEvent
 from squid.core.i18n import tr
 from squid.core.notifications.domain import (
+    ALL_INBOX_ITEMS,
+    InboxListFilters,
     InboxVisibility,
     NotificationMessage,
     NotificationPreferences,
@@ -110,7 +112,7 @@ class NotificationRepository(Protocol):
         selector: PageSelector,
         page_size: int,
         visibility: InboxVisibility,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Page[InboxNotification]: ...
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility, unread_only: bool = False) -> int: ...
@@ -237,7 +239,7 @@ class NotificationService:
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Inbox:
         """Return one page of web-visible inbox items in newest-first display order."""
         account_id = await self._reader_account(context)
@@ -247,11 +249,11 @@ class NotificationService:
                 msg = tr(t"notifications-page-size = page_size must be between 1 and 100")
                 raise InvalidStateError(msg)
             page = await uow.notifications.list_inbox(
-                account_id, selector=selector, page_size=page_size, visibility=visibility, unread_only=unread_only
+                account_id, selector=selector, page_size=page_size, visibility=visibility, filters=filters
             )
             unread = (
                 page.total
-                if unread_only
+                if filters.unread_only
                 else await uow.notifications.count_inbox(account_id, visibility=visibility, unread_only=True)
             )
             build_ids = sorted({build_id for row in page.items if type(build_id := row.payload.get("build_id")) is int})

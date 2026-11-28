@@ -16,6 +16,7 @@ from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.events.models import DomainEvent
 from squid.core.notifications.domain import (
+    InboxListFilters,
     InboxVisibility,
     NotificationCandidate,
     NotificationKind,
@@ -488,7 +489,11 @@ async def test_unread_filter_and_unread_ids_skip_read_and_newer_items(
     unread = await transact(
         repository,
         lambda uow: uow.notifications.list_inbox(
-            account.id, selector=FIRST_PAGE, page_size=10, visibility=ordinary, unread_only=True
+            account.id,
+            selector=FIRST_PAGE,
+            page_size=10,
+            visibility=ordinary,
+            filters=InboxListFilters(unread_only=True),
         ),
     )
     assert [item.payload["build_id"] for item in unread.items] == [4, 3, 1]

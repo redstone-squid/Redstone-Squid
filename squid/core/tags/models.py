@@ -11,6 +11,7 @@ the definition's canonical unit even when another unit is chosen for display.
 """
 
 from decimal import Decimal
+from enum import StrEnum
 
 from sqlalchemy import (
     ARRAY,
@@ -467,3 +468,8 @@ def display_conversion_scale(canonical: UnitDefinition | None, display: UnitDefi
         msg = "Display and canonical units must have the same dimension"
         raise ValueError(msg)
     return canonical.scale_to_base / display.scale_to_base
+
+
+class TagListSort(StrEnum):
+    ID = "id"
+    DISPLAY = "display"

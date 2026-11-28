@@ -8,7 +8,7 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, HeaderParameter, JSONBody, PathParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, PathParameter, SkipValidation
 from litestar.typing import FieldDefinition
 
 from squid.api.contract import (
@@ -55,6 +55,7 @@ from squid.core.builds.application.queries import CreatorStats
 from squid.core.builds.domain import BuildListFilters
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_PROFILE_MODERATE,
@@ -577,6 +578,7 @@ async def own_credit_claims(
     accounts: Accounts,
     caller: CurrentCaller,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[CreditClaimDetail]:
@@ -584,7 +586,7 @@ async def own_credit_claims(
     page = await accounts.credit_claim_page(
         context=caller.context(),
         staff_queue=False,
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
     )
     return Page.from_domain(page, CreditClaimDetail.from_claim)
@@ -602,6 +604,7 @@ async def credited_builds(
     services: Services,
     caller: CurrentCaller,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[CreditedBuild]:
@@ -610,7 +613,7 @@ async def credited_builds(
         raise AuthenticationError
     return Page.from_domain(
         await services.viewer_queries.portfolio(
-            resolve_selector(offset=offset, cursor=cursor), page_size, context=caller.context()
+            resolve_selector(offset=offset, cursor=cursor, sort=sort), page_size, context=caller.context()
         )
     )
 

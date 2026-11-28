@@ -5,14 +5,15 @@ from uuid import UUID
 
 from litestar import Router, get
 from litestar.di import Provide
+from litestar.params import FromQuery
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import CurrentCaller, MinecraftInstallations, get_minecraft_installations
 from squid.api.errors import responses
-from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
-from squid.core.minecraft_auth.domain.models import PublishedPaperServer
-from squid.core.pagination import offset_page
+from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.core.minecraft_auth.domain.models import PublishedPaperServer, ServerListSort
+from squid.core.pagination import collection_page
 
 
 class PublicServerSummary(BaseModel):
@@ -55,11 +56,22 @@ async def list_servers(
     installations: MinecraftInstallations,
     caller: CurrentCaller,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[ServerListSort] = ServerListSort.OLDEST,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[PublicServerSummary]:
     """List active Paper servers whose owners turned on their public profile, oldest first."""
     servers = await installations.public_servers(context=caller.context())
-    page = offset_page(servers, offset=offset or 0, page_size=page_size)
+    page = collection_page(
+        servers,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        sort=sort,
+        page_size=page_size,
+        identifier=lambda row: row.installation_id,
+        id_type=UUID,
+        display_key=lambda row: (row.created_at.format_iso(unit="nanosecond"),),
+        key_types=(str,),
+    )
     return Page[PublicServerSummary].from_domain(page, PublicServerSummary.from_domain)
 
 

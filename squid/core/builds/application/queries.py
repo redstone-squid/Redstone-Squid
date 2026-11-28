@@ -357,14 +357,20 @@ class BuildQueryService:
                 return await uow.build_history.submitters(builds)
 
     async def public_history(
-        self, build_id: int, labels: Mapping[str, str], *, context: ActingContext, offset: int, page_size: int
+        self,
+        build_id: int,
+        labels: Mapping[str, str],
+        *,
+        context: ActingContext,
+        selector: PageSelector,
+        page_size: int,
     ) -> Page[PublicBuildRevision]:
         with context.scope():
             async with self._uow_factory() as uow:
                 build = await uow.builds.get_by_id(build_id)
                 if build is None or build.submission_status is not BuildStatus.APPROVED:
                     raise BuildNotFoundError(build_id)
-                return await uow.build_history.public_page(build_id, labels, offset=offset, page_size=page_size)
+                return await uow.build_history.public_page(build_id, labels, selector=selector, page_size=page_size)
 
     async def pending(self, *, context: ActingContext) -> Sequence[Build]:
         with context.scope():
@@ -433,7 +439,7 @@ class PublicHistoryReader(Protocol):
     async def submitters(self, builds: Sequence[Build]) -> dict[int, HistoryActor]: ...
 
     async def public_page(
-        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+        self, build_id: int, labels: Mapping[str, str], *, selector: PageSelector, page_size: int
     ) -> Page[PublicBuildRevision]: ...
 
 

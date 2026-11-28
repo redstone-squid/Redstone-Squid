@@ -20,7 +20,14 @@ from squid.core.notifications import (
     SubscriptionKind,
 )
 from squid.core.notifications.application import FollowedSubject, Inbox, InboxEntry, NotificationEditorSnapshot
-from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild, NotifiedRecord
+from squid.core.notifications.domain import (
+    ALL_INBOX_ITEMS,
+    InboxListFilters,
+    NotificationKind,
+    NotificationMessage,
+    NotifiedBuild,
+    NotifiedRecord,
+)
 from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.suggestions.domain import Suggestion
@@ -92,7 +99,7 @@ class NotificationRecorder(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Inbox:
         self.inbox_reads.append(context.effective)
         read = bool(self.read_changes and self.read_changes[-1][2])

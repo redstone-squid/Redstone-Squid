@@ -1,6 +1,7 @@
 """Attachment and publication read models."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from whenever import Instant
 
@@ -78,3 +79,7 @@ class PublicSchematicDownload:
     schematic: StoredSchematic
     license: SchematicLicense
     source_format: SchematicFormat
+
+
+class AttachmentListSort(StrEnum):
+    ID = "id"

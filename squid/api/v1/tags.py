@@ -5,17 +5,17 @@ from typing import Annotated
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 from litestar import Router, get
 from litestar.di import Provide
-from litestar.params import FromPath, QueryParameter
+from litestar.params import FromPath, FromQuery, QueryParameter
 
 from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
 from squid.api.errors import responses
-from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
+from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.browser_views import BrowserViews, TagDetail
 from squid.core.actors import ActingContext
-from squid.core.pagination import offset_page
+from squid.core.pagination import collection_page
 from squid.core.tags.errors import TagNotFoundError
-from squid.core.tags.models import TagDefinition
+from squid.core.tags.models import TagDefinition, TagListSort
 
 
 class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
@@ -59,11 +59,21 @@ class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
 async def list_tags(
     tags: Tags,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[TagListSort] = TagListSort.DISPLAY,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[TagDefinition]:
     """List published tag definitions."""
     definitions = await tags.public_definitions(context=ActingContext.current())
-    page = offset_page(definitions, offset=offset or 0, page_size=page_size)
+    page = collection_page(
+        definitions,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        sort=sort,
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        display_key=lambda row: (row.default_display_order, row.display_name),
+        key_types=(int, str),
+    )
     return Page[TagDefinition].from_domain(page)
 
 

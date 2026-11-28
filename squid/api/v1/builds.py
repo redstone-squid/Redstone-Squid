@@ -52,6 +52,7 @@ from squid.core.builds.errors import (
 from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
@@ -154,6 +155,8 @@ async def get_build_history(
     build_queries: BuildQueries,
     services: Services,
     caller: CurrentCaller,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[PublicBuildRevision]:
@@ -163,7 +166,11 @@ async def get_build_history(
     )
     labels = {field.id: field.label for category in manifest.categories for field in manifest.fields_for(category.code)}
     history = await build_queries.public_history(
-        build_id, labels, offset=offset or 0, page_size=page_size, context=caller.context()
+        build_id,
+        labels,
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
+        page_size=page_size,
+        context=caller.context(),
     )
     return Page.from_domain(history)
 

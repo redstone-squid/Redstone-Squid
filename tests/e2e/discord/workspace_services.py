@@ -18,7 +18,13 @@ from squid.core.notifications import (
     PendingNotificationDelivery,
 )
 from squid.core.notifications.application import Inbox, InboxEntry, NotificationEditorSnapshot
-from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild
+from squid.core.notifications.domain import (
+    ALL_INBOX_ITEMS,
+    InboxListFilters,
+    NotificationKind,
+    NotificationMessage,
+    NotifiedBuild,
+)
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
@@ -97,7 +103,7 @@ class WorkspaceInbox(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Inbox:
         account_id = context.effective.require_account_id()
         assert account_id == self.account_id

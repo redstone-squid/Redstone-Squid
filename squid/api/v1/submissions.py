@@ -67,7 +67,7 @@ from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from squid.core.observability import record_histogram
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE, ChronologicalSort, PageSelector
 from squid.core.pagination import Page as ResultPage
 from squid.core.records.application.preview import RecordPreview
 from squid.core.submissions.application import (
@@ -339,11 +339,12 @@ async def list_correction_inbox(
     context: SubmissionContext,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
     cursor: CursorParam = None,
 ) -> Page[DraftSummaryResponse]:
     """List drafts needing staff correction oldest first, excluding attachment processing waits."""
     page = await drafts.attention_inbox(
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=context,
     )
@@ -721,12 +722,13 @@ async def list_draft_attempts(
     context: SubmissionContext,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
 ) -> Page[SubmissionAttemptResponse]:
     """List retained attempts newest first."""
     page = await finalization.attempts(
         draft_id,
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=context,
     )
@@ -806,12 +808,13 @@ async def list_submissions(
     context: SubmissionContext,
     status: FromQuery[SubmissionStatus | None] = None,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[SubmissionSummary]:
     """List the signed-in account's submissions, newest first."""
     page = await services.viewer_queries.submissions(
-        resolve_selector(offset=offset, cursor=cursor), page_size, status=status, context=context
+        resolve_selector(offset=offset, cursor=cursor, sort=sort), page_size, status=status, context=context
     )
     return Page.from_domain(page)
 
@@ -848,13 +851,14 @@ async def submission_review_queue(
     services: Services,
     context: SubmissionContext,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 20,
 ) -> Page[SubmissionSummary]:
     """List pending new builds and edits for authorized reviewers, oldest first."""
     return Page.from_domain(
         await services.viewer_queries.review_queue(
-            resolve_selector(offset=offset, cursor=cursor), page_size, context=context
+            resolve_selector(offset=offset, cursor=cursor, sort=sort), page_size, context=context
         )
     )
 

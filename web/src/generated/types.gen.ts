@@ -110,6 +110,11 @@ export type AssignmentDetail = {
 };
 
 /**
+ * AssignmentListSort
+ */
+export type AssignmentListSort = 'id' | 'oldest';
+
+/**
  * AssignmentRequest
  */
 export type AssignmentRequest = {
@@ -126,6 +131,11 @@ export type AssignmentRequest = {
 export type AttachSchematicRequest = {
     source_draft_id: string;
 };
+
+/**
+ * AttachmentListSort
+ */
+export type AttachmentListSort = 'id';
 
 /**
  * AuditEntryDetail
@@ -486,6 +496,11 @@ export type ChoiceOptionResponse = {
     label: string;
     value_type: 'text' | 'numeric' | 'boolean' | null;
 };
+
+/**
+ * ChronologicalSort
+ */
+export type ChronologicalSort = 'id' | 'newest' | 'oldest';
 
 /**
  * ClaimSelection
@@ -1471,6 +1486,11 @@ export type GrantDetail = {
     granted_by_account_id: string | null;
     reason: string | null;
 };
+
+/**
+ * GrantListSort
+ */
+export type GrantListSort = 'id' | 'oldest';
 
 /**
  * GrantRequest
@@ -2950,9 +2970,9 @@ export type ReviewKind = 'build' | 'build_edit';
 /**
  * ReviewSort
  *
- * Review listing orders; session IDs follow creation, so both sort by ID.
+ * Review listing orders. Session IDs follow creation.
  */
-export type ReviewSort = 'newest' | 'oldest';
+export type ReviewSort = 'id' | 'newest' | 'oldest';
 
 /**
  * ReviewVoteSummary
@@ -3003,6 +3023,11 @@ export type RoleDetail = {
     excludes: Array<string>;
     included_role_ids: Array<number>;
 };
+
+/**
+ * RoleListSort
+ */
+export type RoleListSort = 'id' | 'highest_rank';
 
 /**
  * RolePatternRequest
@@ -3409,6 +3434,11 @@ export type SectionProgressResponse = {
 };
 
 /**
+ * ServerListSort
+ */
+export type ServerListSort = 'id' | 'oldest';
+
+/**
  * ServerProfileSchema
  */
 export type ServerProfileSchema = {
@@ -3724,6 +3754,11 @@ export type TagDetail = {
 };
 
 /**
+ * TagListSort
+ */
+export type TagListSort = 'id' | 'display';
+
+/**
  * TagPredicateInput
  */
 export type TagPredicateInput = {
@@ -3988,6 +4023,11 @@ export type VersionDetail = {
     display_name: string;
     data_version: number | null;
 };
+
+/**
+ * VersionListSort
+ */
+export type VersionListSort = 'id' | 'release';
 
 /**
  * VersionScope
@@ -4391,6 +4431,7 @@ export type AccountCreditedBuildsData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -4486,6 +4527,7 @@ export type AccountCreditClaimsData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -5242,6 +5284,7 @@ export type CreditClaimQueueData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -5794,10 +5837,18 @@ export type BuildsEditFormGetResponse = BuildsEditFormGetResponses[keyof BuildsE
 
 export type BuildsHistoryListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path: {
         build_id: number;
     };
     query?: {
+        sort?: ChronologicalSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -5918,6 +5969,9 @@ export type BuildMirroredImageGetResponse = BuildMirroredImageGetResponses[keyof
 
 export type BuildsListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         status?: BuildStatusFilter | null;
@@ -6550,6 +6604,7 @@ export type DiagnosticsErrorsListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -7268,12 +7323,20 @@ export type MinecraftGrantRevokeResponse = MinecraftGrantRevokeResponses[keyof M
 
 export type MinecraftServersListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         /**
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: ServerListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -7593,6 +7656,7 @@ export type NotificationInboxListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -7884,6 +7948,11 @@ export type PermissionsGrantsListData = {
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: GrantListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -8050,6 +8119,11 @@ export type PermissionsRolesListData = {
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: RoleListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -8523,6 +8597,11 @@ export type PermissionsAssignmentsListData = {
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: AssignmentListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -8759,6 +8838,7 @@ export type PermissionsAuditData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -8846,6 +8926,9 @@ export type RecordsGetResponse = RecordsGetResponses[keyof RecordsGetResponses];
 
 export type RecordsListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         build_kind?: BuildKind | null;
@@ -8947,6 +9030,9 @@ export type RecordsLookupDoorRangesResponse = RecordsLookupDoorRangesResponses[k
 
 export type RecordsListDoorRangesData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         orientation?: 'Door' | 'Skydoor' | 'Trapdoor' | null;
@@ -8960,6 +9046,7 @@ export type RecordsListDoorRangesData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -9405,6 +9492,7 @@ export type RecordsDriftData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -9453,6 +9541,9 @@ export type RecordsDriftResponse = RecordsDriftResponses[keyof RecordsDriftRespo
 
 export type BuildSchematicsListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path: {
         build_id: number;
     };
@@ -9465,6 +9556,11 @@ export type BuildSchematicsListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        sort?: AttachmentListSort;
     };
     url: '/v1/builds/{build_id}/schematics';
 };
@@ -9761,6 +9857,7 @@ export type AccountSchematicVideoListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -9964,6 +10061,9 @@ export type SearchTermsSuggestResponse = SearchTermsSuggestResponses[keyof Searc
 
 export type SearchExecuteData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query: {
         q: string;
@@ -10507,6 +10607,7 @@ export type SubmissionsReviewQueueData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -10562,6 +10663,7 @@ export type SubmissionsListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -10669,6 +10771,7 @@ export type SubmissionCorrectionInboxData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -11162,6 +11265,7 @@ export type SubmissionAttemptsListData = {
          * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
+        sort?: ChronologicalSort;
         /**
          * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
@@ -12286,12 +12390,20 @@ export type SuggestionsGetResponse = SuggestionsGetResponses[keyof SuggestionsGe
 
 export type TagsListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         /**
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: TagListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -12588,12 +12700,20 @@ export type CreatorCreditClaimResponse = CreatorCreditClaimResponses[keyof Creat
 
 export type MinecraftVersionsListData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string;
+    };
     path?: never;
     query?: {
         /**
          * Maximum number of items to return.
          */
         page_size?: number;
+        sort?: VersionListSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -12809,10 +12929,10 @@ export type VoteSessionListData = {
     body?: never;
     path?: never;
     query?: {
-        kind?: Array<ReviewKind> | null;
+        kind_any?: Array<ReviewKind> | null;
         status?: VoteStatus | null;
         /**
-         * Review listing orders; session IDs follow creation, so both sort by ID.
+         * Review listing orders. Session IDs follow creation.
          */
         sort?: ReviewSort;
         /**

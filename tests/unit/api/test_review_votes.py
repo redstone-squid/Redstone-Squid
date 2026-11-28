@@ -80,7 +80,7 @@ async def test_review_votes_carry_the_build_its_submitter_and_the_callers_ballot
     votes = ReviewVotes(session, build_snapshot(id=13, target=BuildVoteTarget(2)))
 
     page = await list_review_votes.fn(
-        votes, PendingBuilds(), reviewer(), kind=[ReviewKind.BUILD], status=VoteStatus.OPEN, sort=ReviewSort.OLDEST
+        votes, PendingBuilds(), reviewer(), kind_any=[ReviewKind.BUILD], status=VoteStatus.OPEN, sort=ReviewSort.OLDEST
     )
 
     first, deleted = page.items

@@ -26,7 +26,7 @@ from squid.core.builds.history import (
 )
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot
 from squid.core.builds.models import Build
-from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector, offset_page
+from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.voting.domain import VoteStatus
 from squid.core.voting.models import BuildVoteSession, VoteSession
@@ -107,7 +107,7 @@ class BuildHistoryQueries:
         return {build_id: HistoryActor(name, public_id) for build_id, public_id, name in rows}
 
     async def public_page(
-        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+        self, build_id: int, labels: Mapping[str, str], *, selector: PageSelector, page_size: int
     ) -> Page[PublicBuildRevision]:
         before = aliased(BuildHistorySnapshot)
         after = aliased(BuildHistorySnapshot)
@@ -125,9 +125,11 @@ class BuildHistoryQueries:
         )
         session = self._session()
         total = await session.scalar(select(func.count()).select_from(statement.subquery()))
-        rows = await session.execute(statement.order_by(BuildHistoryEntry.id.desc()).limit(page_size).offset(offset))
+        page = await KeysetOrder("newest", BuildHistoryEntry.id, BuildHistoryEntry.id, descending=True).page(
+            session, statement, selector, page_size=page_size, total=total or 0
+        )
         items: list[PublicBuildRevision] = []
-        for entry, old, new, public_account_id, name in rows:
+        for entry, old, new, public_account_id, name in page.items:
             previous = self.public_fields(old)
             current = self.public_fields(new)
             changes = tuple(
@@ -144,7 +146,7 @@ class BuildHistoryQueries:
                     changes,
                 )
             )
-        return offset_page(items, offset=offset, page_size=page_size, total=total or 0)
+        return replace(page, items=tuple(items))
 
     @staticmethod
     def public_fields(state: BuildHistorySnapshot | None) -> dict[str, JsonValue]:

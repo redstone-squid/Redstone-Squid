@@ -30,7 +30,7 @@ from squid.core.schematics.application import (
     SchematicService,
     StoredSchematic,
 )
-from squid.core.schematics.application.attachments import PublicSchematicDownload
+from squid.core.schematics.application.attachments import AttachmentListSort, PublicSchematicDownload
 from squid.core.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from squid.core.schematics.errors import SchematicRenderRefusedError
 from tests.unit.schematics.fakes import make_analysis
@@ -104,7 +104,13 @@ class PublicSchematics(SchematicService):
 
     @override
     async def list_public_page(
-        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
+        self,
+        build_id: int,
+        *,
+        context: ActingContext,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+        sort: AttachmentListSort = AttachmentListSort.ID,
     ) -> Page[StoredSchematic]:
         items = self.items if build_id == 7 else ()
         return offset_page(items, offset=selector.offset, page_size=page_size)

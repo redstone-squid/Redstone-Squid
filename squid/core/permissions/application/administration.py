@@ -49,11 +49,13 @@ from squid.core.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE_GUILD,
 )
 from squid.core.permissions.domain.models import (
+    ALL_GUILDS,
     AccountGrantSubject,
     AuditAction,
     AuditSubjectKind,
     ExternalRoleGrantSubject,
     GrantSubject,
+    GuildListFilters,
     PatternMode,
     RolePermissionSubject,
 )
@@ -541,13 +543,15 @@ class PermissionAdministrationService:
         self,
         *,
         context: ActingContext,
-        guild_id: int | None = None,
+        filters: GuildListFilters = ALL_GUILDS,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
     ) -> Page[PermissionAuditEntry]:
         """Page permission mutations newest first."""
         async with self._read() as uow:
-            return await uow.permission_admin.list_audit(guild_id=guild_id, selector=selector, page_size=page_size)
+            return await uow.permission_admin.list_audit(
+                guild_id=filters.guild_id, selector=selector, page_size=page_size
+            )
 
     @application_operation
     async def stored_grant(self, grant_id: int, *, context: ActingContext) -> PermissionGrant:

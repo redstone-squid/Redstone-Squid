@@ -64,6 +64,7 @@ from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInsta
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import Inbox
+from squid.core.notifications.domain import ALL_INBOX_ITEMS, InboxListFilters
 from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionAdministrationService, PermissionService, SubjectRecords
@@ -84,7 +85,7 @@ from squid.core.records.application.range_publication import RangePublicationSer
 from squid.core.records.application.range_snapshots import RangePublication
 from squid.core.records.domain import BuildKind
 from squid.core.schematics.application import SchematicService
-from squid.core.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
+from squid.core.schematics.application.attachments import AttachmentListSort, PublicSchematicDownload, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest
 from squid.core.schematics.application.previews import RenderedSchematic
 from squid.core.schematics.domain import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
@@ -370,7 +371,13 @@ class MockSchematics(SchematicService):
 
     @override
     async def list_public_page(
-        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
+        self,
+        build_id: int,
+        *,
+        context: ActingContext,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+        sort: AttachmentListSort = AttachmentListSort.ID,
     ) -> Page[StoredSchematic]:
         return cast(Page[StoredSchematic], _EMPTY_PAGE)
 
@@ -646,7 +653,7 @@ class MockNotifications(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Inbox:
         return Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
 

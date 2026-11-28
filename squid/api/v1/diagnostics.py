@@ -6,7 +6,7 @@ from typing import Annotated
 from litestar import Response, Router, delete, get
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import PathParameter, QueryParameter, SkipValidation
+from litestar.params import FromQuery, PathParameter, QueryParameter, SkipValidation
 from whenever import Instant
 
 from squid.api.contract import ANONYMOUS, cli_command, contract, transport_only
@@ -24,6 +24,7 @@ from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportStats, ErrorReportSummary
 from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportFilters
 from squid.core.errors import ErrorCode
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
 # Reading and clearing reports require different permissions, declared per route.
@@ -77,6 +78,7 @@ async def list_error_reports(
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
     work_lost: WorkLostParam = False,
     surface: SurfaceParam = None,
@@ -99,7 +101,7 @@ async def list_error_reports(
     )
     page = await error_reports.recent(
         context=caller.context(),
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         filters=filters,
     )

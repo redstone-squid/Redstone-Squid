@@ -18,6 +18,8 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.core.notifications.domain import (
+    ALL_INBOX_ITEMS,
+    InboxListFilters,
     InboxVisibility,
     NotificationCandidate,
     NotificationKind,
@@ -334,14 +336,14 @@ class PostgresNotificationRepository:
         selector: PageSelector,
         page_size: int,
         visibility: InboxVisibility,
-        unread_only: bool = False,
+        filters: InboxListFilters = ALL_INBOX_ITEMS,
     ) -> Page[InboxNotification]:
         """List one newest-first page of web-visible inbox items."""
         statement = _inbox_filter(
-            select(InboxNotification), account_id=account_id, visibility=visibility, unread_only=unread_only
+            select(InboxNotification), account_id=account_id, visibility=visibility, unread_only=filters.unread_only
         )
         order = KeysetOrder("newest", InboxNotification.id, InboxNotification.id, descending=True)
-        total = await self.count_inbox(account_id, visibility=visibility, unread_only=unread_only)
+        total = await self.count_inbox(account_id, visibility=visibility, unread_only=filters.unread_only)
         return await order.page(self._session(), statement, selector, page_size=page_size, total=total)
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility, unread_only: bool = False) -> int:

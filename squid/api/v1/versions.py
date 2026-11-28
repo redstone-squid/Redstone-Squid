@@ -2,18 +2,19 @@
 
 from litestar import Router, delete, get, patch, post
 from litestar.di import Provide
-from litestar.params import FromPath, JSONBody
+from litestar.params import FromPath, FromQuery, JSONBody
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Versions, get_versions
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
-from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
+from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import requires
 from squid.api.v1.schemas.versions import VersionCorrectionRequest, VersionCreateRequest, VersionDetail
 from squid.core.actors import ActingContext
-from squid.core.pagination import offset_page
+from squid.core.pagination import collection_page
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE, VERSION_ENTRY_DELETE, VERSION_ENTRY_EDIT
+from squid.core.versions.domain.models import VersionListSort
 
 
 @get(
@@ -27,11 +28,26 @@ from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE, VERSIO
 async def list_versions(
     versions_service: Versions,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[VersionListSort] = VersionListSort.RELEASE,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[VersionDetail]:
     """List recognized Java and Bedrock releases."""
     versions = await versions_service.list_all(context=ActingContext.current())
-    page = offset_page(versions, offset=offset or 0, page_size=page_size)
+    page = collection_page(
+        versions,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        sort=sort,
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        display_key=lambda row: (
+            int(row.version.edition == "Bedrock"),
+            row.version.major,
+            row.version.minor,
+            row.version.patch,
+        ),
+        key_types=(int, int, int, int),
+    )
     return Page[VersionDetail].from_domain(page, VersionDetail.from_domain)
 
 

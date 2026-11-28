@@ -12,7 +12,7 @@ from uuid import UUID
 
 from litestar import Router, delete, get, patch, post
 from litestar.di import Provide
-from litestar.params import FromPath, JSONBody, QueryParameter
+from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
@@ -39,7 +39,7 @@ from squid.api.v1.schemas.permissions import (
     SubjectRequest,
 )
 from squid.core.errors import ValidationError
-from squid.core.pagination import offset_page
+from squid.core.pagination import ChronologicalSort, collection_page
 from squid.core.permissions.domain import CATALOGUE, Effect
 from squid.core.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
@@ -50,9 +50,13 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.permissions.domain.models import (
     AccountGrantSubject,
+    AssignmentListSort,
     ExternalRoleGrantSubject,
+    GrantListSort,
     GrantSubject,
+    GuildListFilters,
     PatternMode,
+    RoleListSort,
 )
 from squid.core.validation import FieldErrorCode, SimpleIssue
 
@@ -167,6 +171,8 @@ async def list_grants(
     discord_role_id: DiscordRoleQuery = None,
     guild_id: GuildQuery = None,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[GrantListSort] = GrantListSort.OLDEST,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[GrantDetail]:
     """List stored grants, oldest first. Grants are granted and revoked, never edited."""
@@ -177,7 +183,15 @@ async def list_grants(
         discord_role_id=query.discord_role_id,
         guild_id=query.guild_id,
     )
-    page = offset_page(grants, offset=offset or 0, page_size=page_size)
+    page = collection_page(
+        grants,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        sort=sort,
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
+        key_types=(str,),
+    )
     accounts = await _accounts(
         services,
         caller,
@@ -256,11 +270,24 @@ async def list_roles(
     caller: CurrentCaller,
     guild_id: GuildQuery = None,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[RoleListSort] = RoleListSort.HIGHEST_RANK,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[RoleDetail]:
     """List global roles, and one guild's own roles when `guild_id` is given, highest rank first."""
     roles = await admin.roles(context=caller.context(), guild_id=_int(guild_id))
-    return Page[RoleDetail].from_domain(offset_page(roles, offset=offset or 0, page_size=page_size), RoleDetail.of)
+    return Page[RoleDetail].from_domain(
+        collection_page(
+            roles,
+            selector=resolve_selector(offset=offset, cursor=cursor),
+            sort=sort,
+            page_size=page_size,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (-row.rank, row.slug),
+            key_types=(int, str),
+        ),
+        RoleDetail.of,
+    )
 
 
 @get(
@@ -434,6 +461,8 @@ async def list_assignments(
     discord_role_id: DiscordRoleQuery = None,
     guild_id: GuildQuery = None,
     page_size: PageSizeParam = 50,
+    sort: FromQuery[AssignmentListSort] = AssignmentListSort.OLDEST,
+    cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[AssignmentDetail]:
     """List role assignments, oldest first. A `guild_id` filter keeps every account assignment."""
@@ -444,7 +473,15 @@ async def list_assignments(
         discord_role_id=query.discord_role_id,
         guild_id=query.guild_id,
     )
-    page = offset_page(assignments, offset=offset or 0, page_size=page_size)
+    page = collection_page(
+        assignments,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        sort=sort,
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
+        key_types=(str,),
+    )
     accounts = await _accounts(
         services, caller, (id_ for row in page.items for id_ in (row.subject_account_id, row.granted_by_account_id))
     )
@@ -550,13 +587,14 @@ async def list_audit(
     guild_id: GuildQuery = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
 ) -> Page[AuditEntryDetail]:
     """List permission changes newest first. Anchors keep a reader's place while changes arrive."""
     page = await admin.audit_page(
         context=caller.context(),
-        guild_id=_int(guild_id),
-        selector=resolve_selector(offset=offset, cursor=cursor),
+        filters=GuildListFilters(_int(guild_id)),
+        selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
     )
     accounts = await _accounts(

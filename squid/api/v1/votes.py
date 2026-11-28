@@ -50,7 +50,7 @@ async def list_review_votes(
     votes: Votes,
     build_queries: BuildQueries,
     caller: CurrentCaller,
-    kind: FromQuery[list[ReviewKind] | None] = None,
+    kind_any: FromQuery[list[ReviewKind] | None] = None,
     status: FromQuery[VoteStatus | None] = None,
     sort: FromQuery[ReviewSort] = ReviewSort.NEWEST,
     page_size: PageSizeParam = 20,
@@ -59,11 +59,11 @@ async def list_review_votes(
 ) -> Page[ReviewVoteSummary]:
     """Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.
 
-    Repeat `kind` to choose several; without it every review kind is listed.
+    Repeat `kind_any` to choose several; without it every review kind is listed.
     """
     account_id = caller.require_account_id()
     page = await votes.list_reviews(
-        ReviewFilters(frozenset(kind or ()), status),
+        ReviewFilters(frozenset(kind_any or ()), status),
         sort=sort,
         selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,

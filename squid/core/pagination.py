@@ -8,9 +8,11 @@ row is deleted, filtered out or moved.
 import base64
 import binascii
 import json
-from collections.abc import Sequence
+from bisect import bisect_left, bisect_right
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Self, cast
+from enum import StrEnum
+from typing import Any, Self, cast
 from uuid import UUID
 
 from whenever import Instant
@@ -98,12 +100,19 @@ def _untagged(value: object) -> object:
     raise ValueError(value)
 
 
+class ChronologicalSort(StrEnum):
+    ID = "id"
+    NEWEST = "newest"
+    OLDEST = "oldest"
+
+
 @dataclass(frozen=True, slots=True)
 class PageSelector:
     """The single way one request addresses its page."""
 
     offset: int | None = None
     cursor: PageCursor | None = None
+    sort: ChronologicalSort | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,4 +159,76 @@ def offset_page[ItemT](
         if offset + page_size <= MAX_PAGE_OFFSET and offset + page_size < total
         else None,
         prev=PageAnchor(offset=max(offset - page_size, 0)) if offset else None,
+    )
+
+
+def collection_page[T](
+    rows: Sequence[T],
+    *,
+    selector: PageSelector,
+    page_size: int,
+    sort: StrEnum,
+    identifier: Callable[[T], int | UUID],
+    id_type: type[int] | type[UUID] = int,
+    display_key: Callable[[T], tuple[Any, ...]],
+    key_types: tuple[type, ...],
+) -> Page[T]:
+    """Seek a materialized collection by its display key and ID, or by descending ID."""
+    by_id = sort.value == "id"
+
+    def key(row: T) -> tuple[Any, ...]:
+        return (identifier(row),) if by_id else (*display_key(row), identifier(row))
+
+    ordered = sorted(rows, key=key, reverse=by_id)
+    if selector.offset is not None:
+        return offset_page(ordered, offset=selector.offset, page_size=page_size)
+
+    # Bisect in ascending key order even when the display order is reversed.
+    ascending = ordered[::-1] if by_id else ordered
+    start, end = 0, len(ordered)
+    cursor = selector.cursor
+    if cursor is not None:
+        if cursor.order != sort or type(cursor.id) is not id_type:
+            raise InvalidPageCursorError
+        if by_id:
+            if type(cursor.key) is not id_type or cursor.key != cursor.id:
+                raise InvalidPageCursorError
+            boundary = (cursor.id,)
+        else:
+            if not isinstance(cursor.key, str):
+                raise InvalidPageCursorError
+            try:
+                fields = json.loads(cursor.key)
+            except (ValueError, RecursionError) as exc:
+                raise InvalidPageCursorError from exc
+            if not isinstance(fields, list) or tuple(map(type, fields)) != key_types:
+                raise InvalidPageCursorError
+            boundary = (*fields, cursor.id)
+        if cursor.backward:
+            end = (
+                len(ordered) - bisect_right(ascending, boundary, key=key)
+                if by_id
+                else bisect_left(ascending, boundary, key=key)
+            )
+        else:
+            start = (
+                len(ordered) - bisect_left(ascending, boundary, key=key)
+                if by_id
+                else bisect_right(ascending, boundary, key=key)
+            )
+    if cursor is not None and cursor.backward:
+        start = max(0, end - page_size)
+    else:
+        end = min(end, start + page_size)
+    items = tuple(ordered[start:end])
+
+    def anchor(row: T, *, backward: bool = False) -> PageAnchor:
+        value = identifier(row) if by_id else json.dumps(display_key(row), separators=(",", ":"))
+        return PageAnchor(cursor=PageCursor(sort, value, identifier(row), backward))
+
+    return Page(
+        items,
+        len(ordered),
+        anchor(items[-1]) if items and end < len(ordered) else None,
+        anchor(items[0], backward=True) if items and start else None,
     )

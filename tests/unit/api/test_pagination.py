@@ -62,3 +62,14 @@ def test_long_malformed_cursor_returns_the_restart_error(app_factory: tuple[Lite
         response = client.get("/v1/builds", params={"cursor": "x" * 513})
     assert response.status_code == 400
     assert response.json()["code"] == "INVALID_PAGE_CURSOR"
+
+
+def test_public_list_revalidates_its_representation(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+    with TestClient(app) as client:
+        first = client.get("/v1/builds")
+        assert first.status_code == 200
+        etag = first.headers["ETag"]
+        cached = client.get("/v1/builds", headers={"If-None-Match": f"W/{etag}"})
+        assert (cached.status_code, cached.content, cached.headers["ETag"]) == (304, b"", etag)
+        assert client.get("/v1/builds", headers={"If-None-Match": '"old"'}).status_code == 200

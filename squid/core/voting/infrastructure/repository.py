@@ -439,7 +439,7 @@ class VoteRepository:
         self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, page_size: int
     ) -> Page[VoteSessionSnapshot]:
         session = self._session()
-        order = KeysetOrder(sort, VoteSession.id, VoteSession.id, descending=sort is ReviewSort.NEWEST)
+        order = KeysetOrder(sort, VoteSession.id, VoteSession.id, descending=sort is not ReviewSort.OLDEST)
         total = await session.scalar(_reviews(select(func.count()).select_from(VoteSession), filters))
         page = await order.page(
             session,

@@ -499,6 +499,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -783,6 +794,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -3183,6 +3205,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -4974,6 +5007,37 @@
             "deprecated": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -5009,12 +5073,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -5081,6 +5159,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -5568,12 +5654,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -5670,6 +5770,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -7214,6 +7322,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -9630,6 +9749,37 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ServerListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -9649,12 +9799,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -9721,6 +9885,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -10644,6 +10816,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -11596,6 +11779,37 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/GrantListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -12119,6 +12333,37 @@
               "default": 50
             },
             "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/RoleListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -13641,6 +13886,37 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AssignmentListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -14433,6 +14709,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -14888,12 +15175,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -14960,6 +15261,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -15187,6 +15496,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -15205,12 +15525,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -15277,6 +15611,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -16570,6 +16912,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -16778,12 +17131,57 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/AttachmentListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -16865,6 +17263,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -17751,6 +18157,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -18456,12 +18873,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -18528,6 +18959,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -19983,6 +20422,17 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "cursor",
             "in": "query",
             "schema": {
@@ -20165,6 +20615,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -20507,6 +20968,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -22132,6 +22604,17 @@
               "description": "Number of items to skip. Excludes cursor."
             },
             "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -25906,6 +26389,37 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/TagListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -25925,12 +26439,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -25997,6 +26525,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -26804,6 +27340,37 @@
             "allowReserved": false
           },
           {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/VersionListSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "offset",
             "in": "query",
             "schema": {
@@ -26823,12 +27390,26 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "description": "Validator for the current cacheable page.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -26895,6 +27476,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "The cached page is current.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -27463,11 +28052,11 @@
           "vote sessions"
         ],
         "summary": "ListReviewVotes",
-        "description": "Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.\n\nRepeat `kind` to choose several; without it every review kind is listed.",
+        "description": "Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.\n\nRepeat `kind_any` to choose several; without it every review kind is listed.",
         "operationId": "vote_session_list",
         "parameters": [
           {
-            "name": "kind",
+            "name": "kind_any",
             "in": "query",
             "schema": {
               "oneOf": [
@@ -27511,7 +28100,7 @@
             "schema": {
               "$ref": "#/components/schemas/ReviewSort"
             },
-            "description": "Review listing orders; session IDs follow creation, so both sort by ID.",
+            "description": "Review listing orders. Session IDs follow creation.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -28485,6 +29074,15 @@
         ],
         "title": "AssignmentDetail"
       },
+      "AssignmentListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "oldest"
+        ],
+        "title": "AssignmentListSort",
+        "default": "oldest"
+      },
       "AssignmentRequest": {
         "properties": {
           "role_id": {
@@ -28553,6 +29151,14 @@
           "source_draft_id"
         ],
         "title": "AttachSchematicRequest"
+      },
+      "AttachmentListSort": {
+        "type": "string",
+        "enum": [
+          "id"
+        ],
+        "title": "AttachmentListSort",
+        "default": "id"
       },
       "AuditEntryDetail": {
         "properties": {
@@ -30033,6 +30639,16 @@
           "value_type"
         ],
         "title": "ChoiceOptionResponse"
+      },
+      "ChronologicalSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "newest",
+          "oldest"
+        ],
+        "title": "ChronologicalSort",
+        "default": "newest"
       },
       "ClaimSelection": {
         "properties": {
@@ -33350,6 +33966,15 @@
           "subject"
         ],
         "title": "GrantDetail"
+      },
+      "GrantListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "oldest"
+        ],
+        "title": "GrantListSort",
+        "default": "oldest"
       },
       "GrantRequest": {
         "properties": {
@@ -38776,11 +39401,12 @@
       "ReviewSort": {
         "type": "string",
         "enum": [
+          "id",
           "newest",
           "oldest"
         ],
         "title": "ReviewSort",
-        "description": "Review listing orders; session IDs follow creation, so both sort by ID.",
+        "description": "Review listing orders. Session IDs follow creation.",
         "default": "newest"
       },
       "ReviewVoteSummary": {
@@ -39057,6 +39683,15 @@
           "slug"
         ],
         "title": "RoleDetail"
+      },
+      "RoleListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "highest_rank"
+        ],
+        "title": "RoleListSort",
+        "default": "highest_rank"
       },
       "RolePatternRequest": {
         "properties": {
@@ -40486,6 +41121,15 @@
         ],
         "title": "SectionProgressResponse"
       },
+      "ServerListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "oldest"
+        ],
+        "title": "ServerListSort",
+        "default": "oldest"
+      },
       "ServerProfileSchema": {
         "properties": {
           "enabled": {
@@ -41583,6 +42227,15 @@
         ],
         "title": "TagDetail"
       },
+      "TagListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "display"
+        ],
+        "title": "TagListSort",
+        "default": "display"
+      },
       "TagPredicateInput": {
         "properties": {
           "tag_id": {
@@ -42240,6 +42893,15 @@
           "patch"
         ],
         "title": "VersionDetail"
+      },
+      "VersionListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "release"
+        ],
+        "title": "VersionListSort",
+        "default": "release"
       },
       "VersionScope": {
         "type": "string",

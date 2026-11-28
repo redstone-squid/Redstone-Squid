@@ -20,6 +20,7 @@ from whenever import Instant
 
 from squid.api.contract import iter_contract_routes, validate_contract
 from squid.api.errors import ProblemDetail, ValidationProblemDetail, responses
+from squid.api.pagination import ListResponse
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.api.v1.schemas.submissions import StoredDraftResponse
 from squid.api.validation import ValidationContext
@@ -66,6 +67,20 @@ def _contract_document(app: Litestar, schema: dict[str, Any]) -> dict[str, Any]:
         operation = operations.get(handler.operation_id)
         if operation is None:
             continue
+        if handler.response_class is ListResponse:
+            operation.setdefault("parameters", []).append(
+                {
+                    "name": "If-None-Match",
+                    "in": "header",
+                    "required": False,
+                    "schema": {"type": "string"},
+                }
+            )
+            operation["responses"]["200"].setdefault("headers", {})["ETag"] = {
+                "description": "Validator for the current cacheable page.",
+                "schema": {"type": "string"},
+            }
+            operation["responses"]["304"] = {"description": "The cached page is current."}
         extra = deepcopy(handler.opt)
         for status, response in extra.pop("responses", {}).items():
             operation.setdefault("responses", {}).setdefault(str(status), {}).update(response)
