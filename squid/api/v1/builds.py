@@ -26,6 +26,7 @@ from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.media_files import media_file
 from squid.api.pagination import (
     CursorParam,
+    ListResponse,
     OffsetParam,
     Page,
     PageSizeParam,
@@ -143,6 +144,7 @@ async def get_build(
     "/{build_id:int}/history",
     responses=responses(404, 422, 503),
     security=[ANONYMOUS],
+    response_class=ListResponse,
     operation_id="builds_history_list",
     opt=contract(cli=transport_only()),
 )
@@ -243,6 +245,7 @@ async def get_build_media(build_id: FromPath[int], upload_id: FromPath[UUID], se
 @get(
     "/",
     responses=responses(400, 401, 403, 422, 503),
+    response_class=ListResponse,
     operation_id="builds_list",
     security=[ANONYMOUS, SERVICE, WEB, DEVICE],
     opt=contract(cli=transport_only()),
@@ -295,7 +298,7 @@ async def list_builds(
         context=caller.context(),
     )
     personal = submitter_id is not None or statuses != {BuildStatus.APPROVED}
-    return Response(
+    return ListResponse(
         Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build),
         headers={"Cache-Control": "no-store"} if personal else None,
     )

@@ -10,7 +10,7 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import CurrentCaller, MinecraftInstallations, get_minecraft_installations
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam
+from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
 from squid.core.minecraft_auth.domain.models import PublishedPaperServer
 from squid.core.pagination import offset_page
 
@@ -46,6 +46,7 @@ class PublicServerSummary(BaseModel):
 @get(
     "/",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="minecraft_servers_list",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),

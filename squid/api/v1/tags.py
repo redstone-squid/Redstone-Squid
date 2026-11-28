@@ -10,7 +10,7 @@ from litestar.params import FromPath, QueryParameter
 from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam
+from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
 from squid.api.v1.browser_views import BrowserViews, TagDetail
 from squid.core.actors import ActingContext
 from squid.core.pagination import offset_page
@@ -50,6 +50,7 @@ class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
 @get(
     "/",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="tags_list",
     return_dto=PublicTagDTO,
     security=[ANONYMOUS],

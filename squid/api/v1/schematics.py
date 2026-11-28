@@ -19,7 +19,7 @@ from squid.api.dependencies import (
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
-from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.private_responses import private_response
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
 from squid.core.actors import ActingContext
@@ -36,6 +36,7 @@ from squid.core.schematics.errors import SchematicNotFoundError, SchematicSuppor
         503,
         describe={404: "No approved build with this identifier. A pending build answers 404 as well."},
     ),
+    response_class=ListResponse,
     operation_id="build_schematics_list",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),

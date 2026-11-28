@@ -11,7 +11,7 @@ from litestar.params import QueryParameter
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, CurrentCaller, Search, get_build_queries, get_search
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, PageAnchor, PageSizeParam
+from squid.api.pagination import ListResponse, OffsetParam, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
     MetadataSearchEntry,
@@ -73,6 +73,7 @@ async def suggest_terms(
 @get(
     "/",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="search_execute",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),

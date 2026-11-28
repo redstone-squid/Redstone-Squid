@@ -6,9 +6,12 @@ validates query parameters and converts those pages to JSON representations.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Self, cast, overload
+from hashlib import sha256
+from typing import Annotated, Any, Self, cast, overload, override
 
+from litestar import Litestar, Request, Response
 from litestar.params import QueryParameter
+from litestar.response.base import ASGIResponse
 from pydantic import BaseModel, ConfigDict
 
 from squid.core.errors import ErrorCode, ValidationError
@@ -104,3 +107,22 @@ def resolve_selector(*, offset: int | None, cursor: str | None = None) -> PageSe
             ),
         )
     return PageSelector(offset=offset, cursor=None if cursor is None else PageCursor.decode(cursor))
+
+
+class ListResponse[T](Response[T]):
+    """Revalidate public pages against their serialized representation."""
+
+    @override
+    def to_asgi_response(self, app: Litestar | None, request: Request, **kwargs: Any) -> ASGIResponse:
+        response = super().to_asgi_response(app, request, **kwargs)
+        if "no-store" in response.headers.get("cache-control", "") or "Squid-Impersonation-Session" in request.headers:
+            return response
+        etag = f'"{sha256(response.body).hexdigest()}"'
+        response.headers["etag"] = etag
+        if any(
+            tag.strip().removeprefix("W/") in {etag, "*"} for tag in request.headers.get("if-none-match", "").split(",")
+        ):
+            response.status_code = 304
+            response.body = b""
+            del response.headers["content-length"]
+        return response

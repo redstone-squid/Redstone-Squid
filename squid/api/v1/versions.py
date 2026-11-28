@@ -8,7 +8,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB_WRITE, contract, 
 from squid.api.dependencies import CurrentCaller, Versions, get_versions
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
-from squid.api.pagination import OffsetParam, Page, PageSizeParam
+from squid.api.pagination import ListResponse, OffsetParam, Page, PageSizeParam
 from squid.api.security import requires
 from squid.api.v1.schemas.versions import VersionCorrectionRequest, VersionCreateRequest, VersionDetail
 from squid.core.actors import ActingContext
@@ -19,6 +19,7 @@ from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE, VERSIO
 @get(
     "/",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="minecraft_versions_list",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),

@@ -25,6 +25,7 @@ from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.pagination import (
     CursorParam,
+    ListResponse,
     OffsetParam,
     Page,
     PageSizeParam,
@@ -78,6 +79,7 @@ async def get_record(
 @get(
     "/",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="records_list",
     dependencies={"records": Provide(get_public_records, sync_to_thread=False)},
     security=[ANONYMOUS],
@@ -143,6 +145,7 @@ async def lookup_door_ranges(
 @get(
     "/ranges/door",
     responses=responses(400, 422, 503),
+    response_class=ListResponse,
     operation_id="records_list_door_ranges",
     dependencies={"publications": Provide(get_range_publication, sync_to_thread=False)},
     security=[ANONYMOUS],
