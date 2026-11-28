@@ -68,6 +68,7 @@ from squid.core.submissions.models.finalization import (
     SubmissionFinalizationResult,
 )
 from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 from squid.core.submissions.payload_integrity import submission_payload_digest
 from tests.support.schema import model_tables
@@ -78,6 +79,7 @@ pytestmark = pytest.mark.asyncio
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 NOW = Instant.parse_iso("2026-08-11T18:00:00Z")
 _TABLES = model_tables(
+    BuildSubmission,
     Account,
     SubmissionDraft,
     SubmissionSuppliedAttachment,

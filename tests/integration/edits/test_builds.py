@@ -50,6 +50,7 @@ from squid.core.submissions.application.build_drafts import BuildDraftEditor
 from squid.core.submissions.application.drafts import SubmissionDraftService
 from squid.core.submissions.application.forms import CheckedInFormManifestRegistry
 from squid.core.submissions.domain import DraftChange, DraftChangeKey, FieldOperation, FieldOperationKind
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
 from squid.core.voting.application.services import VoteService
@@ -196,6 +197,13 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     assert vote_id is not None
     assert not result.outcome.changed
     assert (await executor.execute(command, context=ActingContext.direct(actor))).outcome.review_vote_id == vote_id
+    async with migrated_session_factory() as session:
+        submission = (
+            await session.scalars(select(BuildSubmission).where(BuildSubmission.edit_vote_id == vote_id))
+        ).one()
+        assert submission.submitter_account_id == creator.id
+        assert submission.base_revision == current.revision
+        assert submission.content["patch"] == command.values.unpack()
     published = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert published is not None
     assert published.description == "original"

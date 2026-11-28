@@ -54,6 +54,7 @@ from squid.core.submissions.models.finalization import (
     SubmissionFinalizationResult,
     SubmissionReceiptMedia,
 )
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 from squid.core.submissions.payload_integrity import submission_payload_digest
 
@@ -512,6 +513,15 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 msg = "submission target returned conflicting results for one source draft"
                 raise DataIntegrityError(msg)
         else:
+            session.add(
+                BuildSubmission(
+                    build_id=result.build_id,
+                    submitter_account_id=draft.owner_account_id,
+                    submitted_at=now,
+                    finalization_job_id=model.id,
+                    content=encode_submission(job.payload),
+                )
+            )
             session.add(
                 SubmissionFinalizationResult(
                     job_id=model.id,

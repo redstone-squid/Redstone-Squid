@@ -24,6 +24,7 @@ from squid.core.posts.models import DiscordPost
 from squid.core.scores import round_score
 from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.settings.models import ServerSetting
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
     BallotChange,
@@ -117,6 +118,15 @@ class VoteRepository:
                 public_suggestion=target.public_suggestion,
                 proposal_revision=target.revision,
                 proposal_patch=dict(target.patch),
+            )
+        )
+        session.add(
+            BuildSubmission(
+                build_id=target.build_id,
+                submitter_account_id=author_account_id,
+                edit_vote_id=session_id,
+                base_revision=target.revision,
+                content={"patch": dict(target.patch), "changes": list(target.changes)},
             )
         )
         return session_id

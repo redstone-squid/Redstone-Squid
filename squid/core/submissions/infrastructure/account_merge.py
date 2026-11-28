@@ -15,6 +15,7 @@ from squid.core.submissions.models.finalization import SubmissionFinalizationJob
 from squid.core.submissions.payload_integrity import submission_payload_digest
 
 SUBMISSION_REFERENCES = (
+    AccountReference("build_submissions", "submitter_account_id"),
     AccountReference("builds", "submitter_account_id"),
     AccountReference("submission_drafts", "owner_account_id"),
     AccountReference("submission_drafts", "submission_actor_account_id"),

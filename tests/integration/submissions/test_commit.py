@@ -37,6 +37,7 @@ from squid.core.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
 from squid.core.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
+from squid.core.submissions.models.reviews import BuildSubmission
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
@@ -119,6 +120,10 @@ async def test_executor_commits_build_receipt_and_event_once(
         receipt = await session.get(SubmissionFinalizationResult, claim.job_id)
         assert receipt is not None
         assert receipt.build_id == result.build_id
+        submission = (await session.scalars(select(BuildSubmission))).one()
+        assert submission.finalization_job_id == claim.job_id
+        assert submission.build_id == result.build_id
+        assert submission.content["owner_account_id"] == claim.payload.owner_account_id
         assert await session.scalar(select(func.count()).select_from(SubmissionReceiptMedia)) == int(with_media)
         assert await session.scalar(select(func.count()).select_from(Build)) == 1
         assert (
