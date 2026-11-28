@@ -406,6 +406,27 @@ async def test_update_round_trip_preserves_category_fields(
     _assert_round_trip(build, loaded)
 
 
+async def test_credit_ids_follow_credits_through_edits(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    build = _make_build(BuildCategory.UTILITY, account_id)
+    await _resolve_and_save(migrated_session_factory, repository, build)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert loaded is not None
+    alice, bob = loaded.credits
+    assert alice.credit_id is not None
+    assert bob.credit_id is not None
+    edited = loaded.copy_for_edit()
+    edited.credits = [bob, *name_credits(["Charlie"])]
+    await _resolve_and_save(migrated_session_factory, repository, edited)
+    saved = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert saved is not None
+    assert saved.credits[0].credit_id == bob.credit_id
+    assert saved.credits[1].credit_id not in {None, alice.credit_id, bob.credit_id}
+
+
 async def test_alias_resolves_to_canonical_display_name(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

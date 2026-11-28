@@ -518,6 +518,9 @@ class BuildCredit(Base):
 
     __tablename__ = "build_credits"
     __table_args__ = (
+        UniqueConstraint(
+            "build_id", "position", name="build_credits_position_key", deferrable=True, initially="DEFERRED"
+        ),
         Index("build_credits_alias_idx", "alias_id"),
         Index("build_credits_subject_idx", "kind", "subject"),
         CheckConstraint("position >= 0", name="build_credits_position_nonnegative"),
@@ -533,14 +536,14 @@ class BuildCredit(Base):
             "kind <> 'name' OR (subject IS NULL AND username IS NULL)", name="build_credits_generic_reference"
         ),
     )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid(), init=False)
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="build_credits_build_id_fkey", ondelete="CASCADE"),
-        primary_key=True,
         init=False,
         compare=False,
     )
-    position: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    position: Mapped[int] = mapped_column(SmallInteger)
     name: Mapped[str] = mapped_column(Text)
     kind: Mapped[CreditKind] = mapped_column(StrEnumText(CreditKind), default=CreditKind.NAME)
     username: Mapped[str | None] = mapped_column(Text, default=None)
@@ -562,6 +565,7 @@ class BuildCredit(Base):
 
     def to_credit(self, public_account_id: uuid.UUID | None = None) -> Credit:
         return Credit(
+            credit_id=self.id,
             account_id=public_account_id,
             name=self.name,
             kind=self.kind,

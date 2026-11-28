@@ -662,8 +662,9 @@ class BuildRepository:
             setattr(build, name, value)
         try:
             with session.no_autoflush:
+                previous_credits = tuple(sql_build.build_credits)
                 sql_build = await session.merge(build)
-                await self._setup_relationships(build, session, sql_build)
+                await self._setup_relationships(build, session, sql_build, previous_credits)
                 # JSON edits are replacement writes, including nested edits made during preparation.
                 sql_build.extra_info = cast(Info, dict(build.extra_info))
                 flag_modified(sql_build, "extra_info")
@@ -687,9 +688,10 @@ class BuildRepository:
             )
         return build.submitter_account_id
 
-    async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: Build) -> None:
+    async def _setup_relationships(
+        self, build: Build, session: AsyncSession, sql_build: Build, previous_credits: Sequence[BuildCredit] = ()
+    ) -> None:
         """Rebuild creator, version, and tag relationships from the prepared build."""
-        sql_build.build_credits = []
         sql_build.build_versions = []
         legacy = list(
             {
@@ -705,22 +707,37 @@ class BuildRepository:
                 strict=True,
             )
         )
-        sql_build.build_credits.extend(
-            BuildCredit(
-                position=position,
-                name=credit.name,
-                kind=credit.kind,
-                username=credit.username,
-                subject=credit.subject,
-                role=credit.role,
-                attribution=credit.attribution,
-                source_message_id=credit.source_message_id,
-                alias_id=aliases.get(fold_creator_name(credit.name))
-                if credit.attribution is CreditAttribution.LEGACY
-                else None,
+        by_id = {row.id: row for row in previous_credits}
+        by_value: dict[Credit, list[BuildCredit]] = defaultdict(list)
+        reserved = {credit.credit_id for credit in build.credits if credit.credit_id is not None}
+        for row in reversed(previous_credits):
+            if row.id not in reserved:
+                by_value[row.to_credit()].append(row)
+
+        rows = []
+        for position, credit in enumerate(build.credits):
+            if credit.credit_id is None:
+                matches = by_value[credit]
+                row = matches.pop() if matches else BuildCredit(position=position, name=credit.name)
+            else:
+                existing = by_id.pop(credit.credit_id, None)
+                if existing is None:
+                    msg = "Unknown or repeated credit ID for this build."
+                    raise InvalidBuildError(msg)
+                row = existing
+            row.position = position
+            row.name = credit.name
+            row.kind = credit.kind
+            row.username = credit.username
+            row.subject = credit.subject
+            row.role = credit.role
+            row.attribution = credit.attribution
+            row.source_message_id = credit.source_message_id
+            row.alias_id = (
+                aliases.get(fold_creator_name(credit.name)) if credit.attribution is CreditAttribution.LEGACY else None
             )
-            for position, credit in enumerate(build.credits)
-        )
+            rows.append(row)
+        sql_build.build_credits = rows
 
         await self._setup_tag_assignments(build, session, sql_build)
 
