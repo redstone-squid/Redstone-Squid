@@ -38,24 +38,6 @@ export function storyShow42Builds(locale: Locale = getLocale()): string {
   }
 }
 
-/** A moderator checks the evidence before the record appears in listings. */
-export function storyAModeratorChecksTheEvidenceBeforeTheRecord(
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "A moderator checks the evidence before the record appears in listings.";
-    case "zh-CN":
-      return "版主核查证明材料后，纪录才会出现在列表中。";
-    case "en-XA":
-      return (
-        "[" +
-        "Å ɱöđéŕåţöŕ çĥéçķš ţĥé éṽîđéñçé ƀéƒöŕé ţĥé ŕéçöŕđ åþþéåŕš îñ ļîšţîñĝš." +
-        "····························]"
-      );
-  }
-}
-
 /** A modal task, such as a confirmation or short form. */
 export function storyDialogDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -441,6 +423,7 @@ export function storyShowOnlyBuildsThatMatch(locale: Locale = getLocale()): stri
 }
 
 export {
+  storyAModeratorChecksTheEvidenceBeforeTheRecord,
   storyActions,
   storyBuildActions,
   storyClose,

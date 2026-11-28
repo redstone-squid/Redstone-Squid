@@ -23,7 +23,7 @@ const title = m.signInTitle();
 ---
 
 <CatalogueLayout {title} canonicalPath="/sign-in" noindex>
-  <PageHeader {title} description={m.signInDescription()} />
+  <PageHeader {title} />
   <p>
     {m.signInAgreement()} <Link href={localizePath("/terms")}>{m.termsTitle()}</Link>.{" "}
     <Link href={localizePath("/privacy")}>{m.privacyTitle()}</Link>

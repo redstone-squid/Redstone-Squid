@@ -39,12 +39,12 @@
     className,
   )}
 >
-  <div class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-    <div class="grid min-w-0 gap-1">
+  <div class="grid min-w-0 gap-1">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <Heading {level} id={headingId}>{title}</Heading>
-      {#if description}<p class="max-w-prose text-sm text-fg-muted">{description}</p>{/if}
+      {#if actions}<div class="flex flex-wrap items-center gap-3">{@render actions()}</div>{/if}
     </div>
-    {#if actions}<div class="flex flex-wrap items-center gap-3">{@render actions()}</div>{/if}
+    {#if description}<p class="max-w-prose text-sm text-fg-muted">{description}</p>{/if}
   </div>
   {@render children()}
 </section>

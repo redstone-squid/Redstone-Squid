@@ -20,7 +20,7 @@ const { items, next, prev } = loaded;
   canonicalPath="/records"
   noindex={Object.keys(page).length > 0}
 >
-  <PageHeader title={m.recordsTitle()} description={m.recordsIntro()} />
+  <PageHeader title={m.recordsTitle()} />
   <RecordList
     records={items}
     prevHref={prev ? pageHref(Astro.url, prev) : null}

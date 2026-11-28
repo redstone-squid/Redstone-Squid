@@ -122,6 +122,7 @@
 </script>
 
 <Story name="PageHeader" source="patterns/PageHeader" description={m.storyPageHeaderDescription()}>
+  <PageHeader title={m.navRecords()} />
   <PageHeader
     title={m.storyCopperBolt55()}
     eyebrow={m.trialDoor()}
@@ -248,17 +249,20 @@
 </Story>
 
 <Story name="Section" source="patterns/Section">
-  <Variant label={m.storyWithActions()}>
-    <Section title={m.recordHolders()} description={m.storyBuildsThatHoldThisRecord()}>
+  <Layout pattern="grid" min="card-wide">
+    <Section title={m.recordHolders()} surface level={3}>
       {#snippet actions()}<Button size="sm" variant="quiet">{m.storyViewAll()}</Button>{/snippet}
       <p class="text-sm">{m.storyCopperBolt55()}</p>
     </Section>
-  </Variant>
-  <Variant label={m.storySurfaceLevel3()}>
-    <Section title={m.storyDoorEvidence()} surface level={3}>
+    <Section
+      title={m.storyDoorEvidence()}
+      description={m.storyAModeratorChecksTheEvidenceBeforeTheRecord()}
+      surface
+      level={3}
+    >
       <p class="text-sm">{m.storyMeasuredWithATickCounterOnJava1()}</p>
     </Section>
-  </Variant>
+  </Layout>
 </Story>
 
 {#snippet navActions()}<Button size="sm" variant="primary">{m.navSubmit()}</Button>{/snippet}

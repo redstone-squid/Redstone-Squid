@@ -43,6 +43,7 @@
   {#if providers.length === 0}
     <Notice tone="warning">{m.signInUnavailable()}</Notice>
   {:else}
+    <p class="text-sm text-fg-muted">{m.signInDescription()}</p>
     <Layout as="ul" pattern="stack" aria-label={m.signInProviders()}>
       {#each providers as { provider, href } (provider.id)}
         <li>

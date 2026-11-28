@@ -19,6 +19,7 @@
   {#if records.length === 0}
     <EmptyState title={m.recordsEmpty()} />
   {:else}
+    <p class="text-sm text-fg-muted">{m.recordsIntro()}</p>
     <Layout as="ul" pattern="grid" min="card-wide">
       {#each records as record (record.record_id)}
         <RecordCard {record} as="li" headingLevel={2} />

@@ -66,18 +66,6 @@ export function storyAFastFlush55Door(locale: Locale = getLocale()): string {
   }
 }
 
-/** Builds that hold this record. */
-export function storyBuildsThatHoldThisRecord(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Builds that hold this record.";
-    case "zh-CN":
-      return "保持此纪录的作品。";
-    case "en-XA":
-      return "[" + "Ɓûîļđš ţĥåţ ĥöļđ ţĥîš ŕéçöŕđ." + "············]";
-  }
-}
-
 /** The production BuildCard and RecordCard with fixtures. */
 export function storyCatalogueCardsDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1850,30 +1838,6 @@ export function storySuggestACorrection(locale: Locale = getLocale()): string {
   }
 }
 
-/** with actions */
-export function storyWithActions(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "with actions";
-    case "zh-CN":
-      return "带操作";
-    case "en-XA":
-      return "[" + "ŵîţĥ åçţîöñš" + "·····]";
-  }
-}
-
-/** surface, level 3 */
-export function storySurfaceLevel3(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "surface, level 3";
-    case "zh-CN":
-      return "面板，三级";
-    case "en-XA":
-      return "[" + "šûŕƒåçé, ļéṽéļ 3" + "·······]";
-  }
-}
-
 /** danger */
 export function storyDanger(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1920,6 +1884,7 @@ export {
   recordHolders,
   siteName,
   story312Builds,
+  storyAModeratorChecksTheEvidenceBeforeTheRecord,
   storyApproved,
   storyBreadcrumb,
   storyBuildActions,
