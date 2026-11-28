@@ -1635,8 +1635,10 @@ CREATE TABLE public.accounts (
     public_account_id uuid DEFAULT gen_random_uuid() NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
     discord_build_indexing_enabled boolean DEFAULT false NOT NULL,
+    deleted_at timestamp with time zone,
     CONSTRAINT accounts_privacy_notice_receipt_complete CHECK (((privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL))),
-    CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
+    CONSTRAINT accounts_revision_positive CHECK ((revision > 0)),
+    CONSTRAINT accounts_tombstone_has_no_receipt CHECK (((deleted_at IS NULL) OR (privacy_notice_version IS NULL)))
 );
 
 
@@ -1652,6 +1654,13 @@ COMMENT ON TABLE public.accounts IS 'An internal caller independent of every ext
 --
 
 COMMENT ON COLUMN public.accounts.id IS 'Internal account identifier; assigned when the account is first saved.';
+
+
+--
+-- Name: COLUMN accounts.deleted_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.accounts.deleted_at IS 'When the owner deleted the account; the row stays as an empty tombstone for retained references.';
 
 
 --
