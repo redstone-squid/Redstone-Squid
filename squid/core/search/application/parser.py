@@ -51,6 +51,7 @@ class _TokenKind(StrEnum):
     AND = "and"
     OR = "or"
     NOT = "not"
+    COMMA = "comma"
     TO = "to"
     LEFT_PAREN = "left_paren"
     RIGHT_PAREN = "right_paren"
@@ -219,6 +220,7 @@ class SearchQueryParser:
     def _tokenize(self, source: str) -> tuple[_Token, ...]:
         tokens: list[_Token] = []
         index = 0
+        in_list = False
         while index < len(source):
             character = source[index]
             if character.isspace():
@@ -226,6 +228,22 @@ class SearchQueryParser:
                 continue
             if character in _UNSUPPORTED_MODIFIERS:
                 _fail(f"unsupported query modifier {character!r}", index)
+            if len(tokens) >= self._max_tokens:
+                _fail(f"query exceeds {self._max_tokens} tokens", index)
+            if character == "," and in_list:
+                tokens.append(_Token(_TokenKind.COMMA, character, index))
+                index += 1
+                continue
+            if character == "(":
+                in_list = (
+                    len(tokens) >= 2
+                    and tokens[-2].kind is _TokenKind.COLON
+                    and tokens[-1].kind is _TokenKind.WORD
+                    and tokens[-1].value.casefold() in {"any", "all"}
+                    and tokens[-1].position + len(tokens[-1].value) == index
+                )
+            elif character == ")":
+                in_list = False
             if character in _PUNCTUATION:
                 tokens.append(_Token(_PUNCTUATION[character], character, index))
                 index += 1
@@ -249,7 +267,12 @@ class SearchQueryParser:
                 tokens.append(_Token(_TokenKind.PHRASE, phrase, index - len(phrase) - 2))
                 continue
             start = index
-            while index < len(source) and not source[index].isspace() and source[index] not in _WORD_BREAKS:
+            while (
+                index < len(source)
+                and not source[index].isspace()
+                and source[index] not in _WORD_BREAKS
+                and not (in_list and source[index] == ",")
+            ):
                 index += 1
             value = source[start:index]
             keyword = {
@@ -259,8 +282,6 @@ class SearchQueryParser:
                 "TO": _TokenKind.TO,
             }.get(value.upper())
             tokens.append(_Token(keyword or _TokenKind.WORD, value, start))
-            if len(tokens) > self._max_tokens:
-                _fail(f"query exceeds {self._max_tokens} tokens", start)
         tokens.append(_Token(_TokenKind.END, "", len(source)))
         return tuple(tokens)
 
@@ -353,7 +374,7 @@ class SearchQueryParser:
         self._advance()
         return PresenceExpression(field, is_set=is_set)
 
-    def _parse_field(self, name: _Token) -> FieldExpression:
+    def _parse_field(self, name: _Token) -> QueryExpression:
         field = self._resolve_field(name)
         operator_token = self._advance()
         operator = {
@@ -368,6 +389,24 @@ class SearchQueryParser:
                 _fail("ranges must follow ':'", operator_token.position)
             return self._parse_range(field)
         value_token = self._expect_value()
+        if (
+            operator is ComparisonOperator.EQUAL
+            and value_token.kind is _TokenKind.WORD
+            and value_token.value.casefold() in {"any", "all"}
+            and self._peek().position == value_token.position + len(value_token.value)
+            and self._accept(_TokenKind.LEFT_PAREN)
+        ):
+            join = BooleanOperator.OR if value_token.value.casefold() == "any" else BooleanOperator.AND
+            operands = []
+            while True:
+                item = self._expect_value()
+                operands.append(
+                    FieldExpression(field, operator, self._coerce(field, item), phrase=item.kind is _TokenKind.PHRASE)
+                )
+                if not self._accept(_TokenKind.COMMA):
+                    break
+            self._expect(_TokenKind.RIGHT_PAREN, "expected ',' or ')' after list value")
+            return operands[0] if len(operands) == 1 else BooleanExpression(join, tuple(operands))
         if operator is not ComparisonOperator.EQUAL and not field.supports_range:
             _fail(f"{field.name} does not support comparisons", operator_token.position)
         return FieldExpression(

@@ -277,3 +277,24 @@ def test_clauses_of_a_blank_query_are_empty() -> None:
     parser = SearchQueryParser()
 
     assert parser.clauses(parser.parse("  ")) == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "expanded"),
+    [
+        ('width<=5 tag:AnY(slim, "no, observer")', 'width<=5 AND (tag:slim OR tag:"no, observer")'),
+        ("NOT tag:ALL(slim,seamless)", "NOT (tag:slim AND tag:seamless)"),
+        ("width:any(05)", "width:5"),
+        ("tag:any (door)", "tag:any AND door"),
+    ],
+)
+def test_value_lists_expand_to_boolean_groups(source: str, expanded: str) -> None:
+    parser = SearchQueryParser()
+    assert parser.parse(source) == parser.parse(expanded)
+
+
+@pytest.mark.parametrize(("source", "position"), [("tag:any()", 8), ("tag:all(a,)", 10), ("tag:any(a", 9)])
+def test_invalid_value_list_position(source: str, position: int) -> None:
+    with pytest.raises(QuerySyntaxError) as error:
+        SearchQueryParser().parse(source)
+    assert error.value.position == position
