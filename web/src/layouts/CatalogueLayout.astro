@@ -1,4 +1,5 @@
 ---
+import HeaderSearch from "./HeaderSearch.astro";
 import Logo from "@/ui/favicon.svg";
 import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import type { ComponentProps } from "astro/types";
@@ -20,7 +21,6 @@ const activePath = unprefixedPath(Astro.url.pathname);
 const nav = [
   [m.navBuilds, "/builds"],
   [m.navRecords, "/records"],
-  [m.navSearch, "/search"],
   [m.navAbout, "/about"],
 ] as const;
 ---
@@ -50,6 +50,9 @@ const nav = [
         >
           <Logo class="size-8" width="32" height="32" aria-hidden="true" />
           <Fragment slot="actions">
+            <HeaderSearch
+              value={activePath === "/search" ? (Astro.url.searchParams.get("q") ?? "") : ""}
+            />
             <LanguageSelector />
             <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
               {m.navSubmit()}

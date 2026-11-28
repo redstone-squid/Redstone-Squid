@@ -1,6 +1,64 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
+import { searchExecute } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { pageHref, readPageAddress } from "@/server/pagination";
+import Pagination from "@/ui/navigation/Pagination.svelte";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import SearchBox from "@/ui/patterns/SearchBox.svelte";
+
+const q = Astro.url.searchParams.get("q")?.trim() ?? "";
+const results = q
+  ? await load(
+      searchExecute({
+        client: Astro.locals.api,
+        query: { q, scope: "all", ...readPageAddress(Astro.url.searchParams) },
+      }),
+    )
+  : null;
 ---
 
-<PlaceholderPage title={m.searchTitle} />
+<CatalogueLayout title={m.searchTitle()} canonicalPath="/search" noindex>
+  <PageHeader title={m.searchTitle()} />
+  <SearchBox
+    client:load
+    action={localizePath("/search")}
+    value={q}
+    label={m.navSearch()}
+    submitLabel={m.navSearch()}
+    clearLabel={m.navClearSearch()}
+  />
+  {results && (
+    <>
+      {results.items.length ? (
+        <ul>
+          {results.items.map((item) => (
+            <li>
+              {"build" in item ? (
+                <a href={localizePath(`/builds/${item.build.id}`)}>{item.build.title}</a>
+              ) : "record" in item ? (
+                <a href={localizePath(`/records/${encodeURIComponent(item.record.record_id)}`)}>
+                  {item.record.title}
+                </a>
+              ) : (
+                <>
+                  {item.metadata.title}
+                  {item.metadata.description && <p>{item.metadata.description}</p>}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>{m.storyNoMatches()}</p>
+      )}
+      <Pagination
+        prevHref={results.prev ? pageHref(Astro.url, results.prev) : null}
+        nextHref={results.next ? pageHref(Astro.url, results.next) : null}
+        labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
+      />
+    </>
+  )}
+</CatalogueLayout>

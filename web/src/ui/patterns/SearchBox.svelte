@@ -10,9 +10,7 @@
    * A search form that submits `name` (default `q`) to `action` with GET, so results have a
    * URL and it works without JavaScript. `hidden` keeps other query parameters, such as the
    * scope and view, across a new search. `suggestions` turns the field into an
-   * `Autocomplete`. `compact` hides the label and shortens the button to an icon, for the
-   * header; the label still names the field. One magnifier shows either way: in the field, or
-   * on the compact button. Once hydrated, a button named `clearLabel` empties the field; it does
+   * `Autocomplete`. `compact` hides the label and uses a single field for the header. Enter submits it. Once hydrated, a button named `clearLabel` empties the field; it does
    * not search again, since `ActiveFilters` removes an applied query.
    */
   type Props = {
@@ -61,14 +59,14 @@
         labels={suggestions.labels}
         clearable
         {clearLabel}
-        icon={compact ? undefined : Search}
+        icon={Search}
       />
     {:else}
       <TextField
         class="min-w-0 flex-1"
         type="search"
         enterkeyhint="search"
-        icon={compact ? undefined : Search}
+        icon={Search}
         clearable
         {clearLabel}
         {name}
@@ -78,12 +76,6 @@
         {placeholder}
       />
     {/if}
-    <Button
-      type="submit"
-      variant={compact ? "secondary" : "primary"}
-      icon={compact ? Search : undefined}
-      iconOnly={compact}
-      label={submitLabel}>{submitLabel}</Button
-    >
+    {#if !compact}<Button type="submit" variant="primary">{submitLabel}</Button>{/if}
   </form>
 </search>

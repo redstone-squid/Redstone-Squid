@@ -8,7 +8,6 @@ const routes = [
   "/builds",
   "/cli/link?user_code=example",
   "/minecraft/link?user_code=example",
-  "/search?q=door",
   "/search/help",
 ];
 
