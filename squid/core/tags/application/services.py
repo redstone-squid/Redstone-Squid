@@ -31,7 +31,7 @@ class TagDefinitionRepository(Protocol):
 
     async def reserve_identity(self) -> int: ...
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def proposals(self, status: TagModerationStatus) -> Sequence[TagDefinition]: ...
 
     async def get(self, tag_id: int | str) -> TagDefinition | None: ...
 
@@ -61,8 +61,12 @@ class TagService:
     @application_operation
     async def pending(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         """List user definitions awaiting staff review."""
+        return await self.list_proposals(TagModerationStatus.PENDING, context=context)
+
+    @application_operation
+    async def list_proposals(self, status: TagModerationStatus, *, context: ActingContext) -> Sequence[TagDefinition]:
         async with self._uow_factory() as uow:
-            return await uow.tags.pending()
+            return await uow.tags.proposals(status)
 
     @application_operation
     async def public_definitions(

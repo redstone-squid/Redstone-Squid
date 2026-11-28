@@ -30,9 +30,10 @@ from sqlalchemy import (
     SmallInteger,
     Text,
     UniqueConstraint,
+    literal,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 from whenever import Instant
 
 from squid.core.pagination import Page, PageSelector, collection_page
@@ -156,6 +157,11 @@ class TagDefinition(SlugMixin, AuditTimestampsMixin, Revisioned, Base, kw_only=T
     stable_key: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    rules_anchor: Mapped[str | None] = mapped_column(Text, default=None)
+    build_count: Mapped[int] = query_expression(literal(0))
+    record_count: Mapped[int] = query_expression(literal(0))
+
     query_name: Mapped[str | None] = mapped_column(Text, default=None)
     authority: Mapped[TagAuthority] = mapped_column(StrEnumText(TagAuthority), nullable=False)
     semantic_kind: Mapped[TagSemanticKind] = mapped_column(StrEnumText(TagSemanticKind), nullable=False)
@@ -201,7 +207,12 @@ class TagDefinition(SlugMixin, AuditTimestampsMixin, Revisioned, Base, kw_only=T
         back_populates="definition", default_factory=list, lazy="raise_on_sql", repr=False
     )
 
+    @property
+    def alias_names(self) -> list[str]:
+        return sorted(alias.alias for alias in self.aliases)
+
     def __post_init__(self) -> None:
+        self.build_count = self.record_count = 0
         if not self.normalized_name:
             self.normalized_name = " ".join(self.display_name.casefold().split())
 

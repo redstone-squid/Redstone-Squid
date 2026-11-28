@@ -15,6 +15,8 @@ from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.records.application.models import RecordListFilters, RecordListSort, RecordStatus
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from tests.support.build_edits import build_edit_session
 
 
@@ -42,7 +44,16 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
             )
 
         small, large = door(2, 2020), door(3, 2021)
-        session.add_all([small, large])
+        pattern = TagDefinition(
+            stable_key="glass",
+            display_name="Glass",
+            authority=TagAuthority.OFFICIAL,
+            semantic_kind=TagSemanticKind.PATTERN,
+            value_type=TagValueType.NONE,
+            moderation_status=TagModerationStatus.APPROVED,
+        )
+        small.tags.append(TagAssignment(pattern))
+        session.add_all([pattern, small, large])
         await session.flush()
         small_id = small.id
 
@@ -53,6 +64,12 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
 
     async with factory() as uow:
         records = uow.records
+        glossary = await uow.tags.get(pattern.id)
+        assert glossary is not None
+        assert glossary.build_count == 1
+        matching = await records.count_published_records(filters=RecordListFilters(tag_slugs=(pattern.slug,)))
+        assert matching > 0
+        assert glossary.record_count == matching
         smallest = RecordListFilters(criteria=(RecordCriterion.SMALLEST,), version_scopes=(VersionScope.ALL_TIME,))
         assert await records.count_published_records(filters=smallest) == 2
         by_title = await records.list_published_records(sort=RecordListSort.TITLE, filters=smallest, page_size=1)

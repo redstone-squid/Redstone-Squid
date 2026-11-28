@@ -3,12 +3,16 @@
 from collections.abc import Callable, Sequence
 from typing import override
 
-from sqlalchemy import exists, func, or_, select, text
+from sqlalchemy import Select, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload, with_expression
 from whenever import Instant
 
+from squid.core.builds.domain.models import BuildStatus
+from squid.core.builds.models import Build
 from squid.core.edits.domain import Revision
 from squid.core.persistence.revisions import flush_revision
+from squid.core.records.models import Record, RecordResult
 from squid.core.tags.application import TagDefinitionRepository
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition, TagSlug
@@ -56,28 +60,52 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         return row
 
     @override
-    async def pending(self) -> Sequence[TagDefinition]:
+    async def proposals(self, status: TagModerationStatus) -> Sequence[TagDefinition]:
         session = self._session()
         rows = (
             await session.scalars(
                 select(TagDefinition)
                 .where(
-                    TagDefinition.moderation_status == TagModerationStatus.PENDING, TagDefinition.withdrawn.is_(False)
+                    TagDefinition.moderation_status == status,
+                    TagDefinition.withdrawn.is_(False),
+                    TagDefinition.authority == TagAuthority.USER,
+                    TagDefinition.semantic_kind == TagSemanticKind.SHOWCASE,
                 )
                 .order_by(TagDefinition.created_at, TagDefinition.id)
             )
         ).all()
         return tuple(row for row in rows)
 
+    @staticmethod
+    def _public_query() -> Select[TagDefinition]:
+        builds = (
+            select(func.count(TagAssignment.build_id.distinct()))
+            .join(Build, Build.id == TagAssignment.build_id)
+            .where(TagAssignment.tag_id == TagDefinition.id, Build.submission_status == BuildStatus.APPROVED)
+            .correlate(TagDefinition)
+            .scalar_subquery()
+        )
+        records = (
+            select(func.count(RecordResult.id))
+            .join(Record, Record.public_id == RecordResult.record_id)
+            .where(RecordResult.matches_tag(TagDefinition.id))
+            .correlate(TagDefinition)
+            .scalar_subquery()
+        )
+        return select(TagDefinition).options(
+            selectinload(TagDefinition.aliases),
+            with_expression(TagDefinition.build_count, builds),
+            with_expression(TagDefinition.record_count, records),
+        )
+
     @override
     async def get(self, tag_id: int | str) -> TagDefinition | None:
-        session = self._session()
+        statement = self._public_query()
         if isinstance(tag_id, str):
-            return await session.scalar(
-                select(TagDefinition).join(TagSlug, TagSlug.tag_id == TagDefinition.id).where(TagSlug.slug == tag_id)
-            )
-        row = await session.get(TagDefinition, tag_id)
-        return None if row is None else row
+            statement = statement.join(TagSlug, TagSlug.tag_id == TagDefinition.id).where(TagSlug.slug == tag_id)
+        else:
+            statement = statement.where(TagDefinition.id == tag_id)
+        return await self._session().scalar(statement)
 
     @override
     async def reserve_identity(self) -> int:
@@ -126,7 +154,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         self, *, kind: TagSemanticKind | None = None, authority: TagAuthority | None = None, q: str = ""
     ) -> Sequence[TagDefinition]:
         session = self._session()
-        statement = select(TagDefinition).where(
+        statement = self._public_query().where(
             TagDefinition.moderation_status == TagModerationStatus.APPROVED, TagDefinition.withdrawn.is_(False)
         )
         if kind is not None:

@@ -72,6 +72,10 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     await restrictions.add_alias("Restriction", "Other alias", context=ActingContext.direct(AnonymousActor()))
     tags = TagService(uow_factory=factory)
     context = ActingContext.direct(AnonymousActor())
+    detail = await tags.public_definition(definition.id, context=context)
+    assert detail is not None
+    assert detail.alias_names == ["Alternate", "Other alias"]
+    assert (detail.build_count, detail.record_count) == (0, 0)
     for prefix in ("ReSt", "aLt", " other  A "):
         matches = await tags.public_definitions(
             kind=TagSemanticKind.RESTRICTION, authority=TagAuthority.OFFICIAL, q=prefix, context=context
@@ -141,6 +145,19 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
     )
     assert approved.receipt is not None
     assert approved.receipt.final
+    assert [
+        tag.id for tag in await tags.list_proposals(TagModerationStatus.APPROVED, context=ActingContext.direct(actor))
+    ] == [identity]
+    with pytest.raises(ConflictError):
+        await executor.execute(
+            EditCommand(
+                MODERATION_EDIT,
+                approved.outcome.revisions,
+                ModerationValues(status=TagModerationStatus.REJECTED).edit_values(),
+            ),
+            context=ActingContext.direct(UserActor(account_id=account.id, is_bot_owner=True)),
+        )
+
     with pytest.raises(InvalidStateError):
         approved.receipt.undo(approved.outcome.revisions)
     assert [row.id for row in await tags.public_definitions(context=ActingContext.direct(AnonymousActor()))] == [

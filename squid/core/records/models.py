@@ -24,17 +24,22 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    ColumnElement,
     ForeignKey,
     Identity,
     Index,
     SmallInteger,
     Text,
     UniqueConstraint,
+    cast,
     func,
+    literal,
+    or_,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import InstrumentedAttribute, Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.core.persistence.base import Base
@@ -318,6 +323,19 @@ class RecordResult(Base, kw_only=True):
     last_checked_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+    @classmethod
+    def matches_tag(cls, tag_id: int | InstrumentedAttribute[int]) -> ColumnElement[bool]:
+        restriction = (
+            select(RecordDefinitionTag.tag_id)
+            .where(RecordDefinitionTag.definition_id == cls.definition_id, RecordDefinitionTag.tag_id == tag_id)
+            .correlate_except(RecordDefinitionTag)
+            .exists()
+        )
+        # Patterns live in the category key as whole IDs inside t[3,17].
+        identity = literal(str(tag_id)) if isinstance(tag_id, int) else cast(tag_id, Text)
+        pattern = Record.category_key.regexp_match(literal(r"\|t\[([0-9]+,)*") + identity + r"(,[0-9]+)*\]")
+        return or_(restriction, pattern)
 
 
 class RecordMember(Base, kw_only=True):

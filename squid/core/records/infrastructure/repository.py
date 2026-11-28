@@ -774,17 +774,7 @@ class PostgresRecordRepository:
                 return statement.where(false())
             tag_ids.extend(by_slug.values())
         for tag_id in dict.fromkeys(tag_ids):
-            restriction = (
-                select(RecordDefinitionTag.tag_id)
-                .where(
-                    RecordDefinitionTag.definition_id == RecordResult.definition_id,
-                    RecordDefinitionTag.tag_id == tag_id,
-                )
-                .exists()
-            )
-            # Types appear only in the category key, as `t[3,17]`.
-            pattern = Record.category_key.regexp_match(rf"\|t\[([0-9]+,)*{tag_id}(,[0-9]+)*\]")
-            statement = statement.where(or_(restriction, pattern))
+            statement = statement.where(RecordResult.matches_tag(tag_id))
         return statement
 
     @staticmethod

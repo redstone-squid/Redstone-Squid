@@ -277,6 +277,11 @@ class TagModerationEdit(FieldCommand[TagEditUnitOfWork, TagDefinition, Moderatio
         if node is None:
             raise ValidationError
         await self._permissions.require(actor, node, uow=uow)
+        if after.status is TagModerationStatus.ARCHIVED:
+            if before.status is not TagModerationStatus.APPROVED:
+                raise ConflictError
+        elif before.status is not TagModerationStatus.PENDING or root.authority is not TagAuthority.USER:
+            raise ConflictError
         return after
 
     @override
