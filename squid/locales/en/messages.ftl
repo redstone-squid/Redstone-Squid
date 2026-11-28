@@ -3455,7 +3455,7 @@ edits-concurrent-write = Another edit committed first. Reload this item before t
 # squid/core/edits/domain.py:164
 edits-final = This operation cannot be undone.
 
-# squid/api/revisions.py:15
+# squid/api/revisions.py:25
 edits-invalid-revision = This revision does not match the item being edited.
 
 # squid/core/edits/domain.py:227
@@ -3467,7 +3467,7 @@ edits-operation-reused = This operation identifier was already used for another 
 # squid/bot/edit_controller.py:252
 edits-refresh = Refresh saved values
 
-# squid/api/revisions.py:11
+# squid/api/revisions.py:21
 edits-revision-required = Send the ETag you read in the If-Match header.
 
 # squid/bot/errors.py:194

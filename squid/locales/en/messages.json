@@ -11287,7 +11287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/revisions.py:15"
+      "squid/api/revisions.py:25"
     ]
   },
   "edits-operation-expired": {
@@ -11323,7 +11323,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/api/revisions.py:11"
+      "squid/api/revisions.py:21"
     ]
   },
   "errors-command-already-running": {
