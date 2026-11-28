@@ -1444,18 +1444,6 @@ export function recordsEmpty(locale: Locale = getLocale()): string {
   }
 }
 
-/** Record holder */
-export function recordHolders(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Record holder";
-    case "zh-CN":
-      return "纪录保持者";
-    case "en-XA":
-      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
-  }
-}
-
 /** Shared record */
 export function recordCoHolders(locale: Locale = getLocale()): string {
   switch (locale) {

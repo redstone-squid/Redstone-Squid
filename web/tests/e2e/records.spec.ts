@@ -33,7 +33,7 @@ test("shows a record's classification and holders", async ({ page }) => {
   await page.getByRole("link", { name: fastestDoor }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(fastestDoor);
   await expect(page.getByText(recordCriterionLabel("fastest_smallest", "en"))).toBeVisible();
-  const holders = page.getByRole("region", { name: m.recordHolders("en") });
+  const holders = page.getByRole("heading", { level: 2, name: "Copper Bolt" });
   await holders.getByRole("link", { name: "Copper Bolt" }).click();
   await expect(page).toHaveURL(/\/builds\/1$/);
 });
@@ -42,7 +42,7 @@ test("renders records in the visitor's locale", async ({ page }) => {
   await page.goto("/zh-cn/records/11111111-1111-1111-1111-111111111111");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   await expect(page.getByText(recordCriterionLabel("fastest_smallest", "zh-CN"))).toBeVisible();
-  await expect(page.getByRole("heading", { name: m.recordHolders("zh-CN") })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Copper Bolt" })).toBeVisible();
   await expect(page).toPassAxe();
 });
 

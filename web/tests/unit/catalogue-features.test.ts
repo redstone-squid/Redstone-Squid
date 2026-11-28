@@ -39,8 +39,11 @@ describe("catalogue", () => {
       },
     });
     expect(screen.getByRole("heading", { level: 1, name: fastest.title })).toBeVisible();
-    const holders = screen.getByRole("region", { name: m.recordHolders() });
-    expect(within(holders).getAllByRole("listitem")).toHaveLength(1);
+    const featured = screen.getByRole("heading", {
+      level: 2,
+      name: holder.display_name ?? holder.title,
+    });
+    expect(within(featured).getByRole("link")).toHaveAttribute("href", `/builds/${holder.id}`);
     expect(screen.getByText(m.recordChangeable({ count: 1 }))).toBeVisible();
     const contenders = screen.getByRole("region", { name: m.recordContenders() });
     expect(

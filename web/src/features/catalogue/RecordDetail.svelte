@@ -17,6 +17,9 @@
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
   import Section from "@/ui/patterns/Section.svelte";
+  import List from "@/ui/data/List.svelte";
+  import FeaturedBuild from "./FeaturedBuild.svelte";
+  import BuildListItem from "./BuildListItem.svelte";
   import BuildCard from "./BuildCard.svelte";
 
   /**
@@ -82,17 +85,11 @@
     ]}
   />
   {#if retiredAt === null}
-    <Section
-      title={shared ? m.recordCoHolders() : m.recordHolders()}
-      description={shared
-        ? sharedUndated
-          ? m.recordCoHoldersUndated()
-          : m.recordCoHoldersDescription()
-        : undefined}
-    >
-      {#if record.holder_builds.length === 0}
-        <EmptyState title={m.recordNoHolders()} />
-      {:else}
+    {#if shared}
+      <Section
+        title={m.recordCoHolders()}
+        description={sharedUndated ? m.recordCoHoldersUndated() : m.recordCoHoldersDescription()}
+      >
         <Layout as="ul" pattern="grid">
           {#each record.holder_builds as build, index (build.id)}
             <BuildCard
@@ -100,11 +97,24 @@
               category={kind}
               as="li"
               priority={index === 0}
-              missingFacts={shared ? missing(build.id) : []}
+              missingFacts={missing(build.id)}
             />
           {/each}
         </Layout>
-      {/if}
+      </Section>
+    {:else if record.holder_builds[0]}
+      <FeaturedBuild build={record.holder_builds[0]} />
+    {:else}
+      <EmptyState title={m.recordNoHolders()} />
+    {/if}
+  {/if}
+  {#if tied.length > 0}
+    <Section title={m.recordTied()} description={m.recordTiedDescription()}>
+      <List>
+        {#each tied as build (build.id)}
+          <BuildListItem {build} />
+        {/each}
+      </List>
     </Section>
   {/if}
   {#if contenders.length > 0}
@@ -134,15 +144,6 @@
                   })}
             </Text>
           </li>
-        {/each}
-      </Layout>
-    </Section>
-  {/if}
-  {#if tied.length > 0}
-    <Section title={m.recordTied()} description={m.recordTiedDescription()}>
-      <Layout as="ul" pattern="grid">
-        {#each tied as build (build.id)}
-          <BuildCard {build} category={kind} as="li" />
         {/each}
       </Layout>
     </Section>

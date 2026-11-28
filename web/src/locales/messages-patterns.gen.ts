@@ -14,6 +14,18 @@ export function navClearSearch(locale: Locale = getLocale()): string {
   }
 }
 
+/** Record holder */
+export function recordHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Record holder";
+    case "zh-CN":
+      return "纪录保持者";
+    case "en-XA":
+      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
+  }
+}
+
 /** Needs attention */
 export function storyNeedsAttention(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1881,7 +1893,6 @@ export {
   navRecords,
   navSearch,
   navSubmit,
-  recordHolders,
   siteName,
   story312Builds,
   storyAModeratorChecksTheEvidenceBeforeTheRecord,
