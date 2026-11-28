@@ -4,8 +4,8 @@
       "first": "First",
       "fastest": "Fastest",
       "smallest": "Smallest",
-      "fastest_smallest": "Fastest, then smallest",
-      "smallest_fastest": "Smallest, then fastest"
+      "fastest_smallest": "Fastest Smallest",
+      "smallest_fastest": "Smallest Fastest"
     },
     "build_kind": {
       "door": "Door",
@@ -135,8 +135,8 @@
       "first": "首个",
       "fastest": "最快",
       "smallest": "最小",
-      "fastest_smallest": "先最快，再最小",
-      "smallest_fastest": "先最小，再最快"
+      "fastest_smallest": "最快最小",
+      "smallest_fastest": "最小最快"
     },
     "build_kind": {
       "door": "门",

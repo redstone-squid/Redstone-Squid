@@ -14,22 +14,22 @@ const recordCriterionLabels = {
     first: "First",
     fastest: "Fastest",
     smallest: "Smallest",
-    fastest_smallest: "Fastest, then smallest",
-    smallest_fastest: "Smallest, then fastest",
+    fastest_smallest: "Fastest Smallest",
+    smallest_fastest: "Smallest Fastest",
   },
   "zh-CN": {
     first: "首个",
     fastest: "最快",
     smallest: "最小",
-    fastest_smallest: "先最快，再最小",
-    smallest_fastest: "先最小，再最快",
+    fastest_smallest: "最快最小",
+    smallest_fastest: "最小最快",
   },
   "en-XA": {
     first: "[Ƒîŕšţ··]",
     fastest: "[Ƒåšţéšţ···]",
     smallest: "[Šɱåļļéšţ····]",
-    fastest_smallest: "[Ƒåšţéšţ, ţĥéñ šɱåļļéšţ·········]",
-    smallest_fastest: "[Šɱåļļéšţ, ţĥéñ ƒåšţéšţ·········]",
+    fastest_smallest: "[Ƒåšţéšţ Šɱåļļéšţ·······]",
+    smallest_fastest: "[Šɱåļļéšţ Ƒåšţéšţ·······]",
   },
 } as const satisfies Record<Locale, Record<RecordCriterion, string>>;
 export function recordCriterionLabel(value: RecordCriterion, locale: Locale = getLocale()): string {
