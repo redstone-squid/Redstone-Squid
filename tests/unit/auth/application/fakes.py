@@ -78,7 +78,7 @@ class SessionRepository:
             or self.expires_at <= now
         ):
             return None
-        return WebSessionIdentity("session-id", self.account_id)
+        return WebSessionIdentity("session-id", self.account_id, Instant.now())
 
     async def revoke(self, token_hash: bytes, *, now: Instant) -> None:
         del now

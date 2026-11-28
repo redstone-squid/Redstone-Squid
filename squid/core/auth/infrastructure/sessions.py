@@ -80,10 +80,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
         web_session, account = row
         await session.execute(update(WebSession).where(WebSession.id == web_session.id).values(last_seen_at=now))
         await session.flush()
-        return WebSessionIdentity(
-            str(web_session.id),
-            account.id,
-        )
+        return WebSessionIdentity(str(web_session.id), account.id, web_session.created_at)
 
     @override
     async def revoke(self, token_hash: bytes, *, now: Instant) -> None:

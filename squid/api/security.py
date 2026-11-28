@@ -11,7 +11,9 @@ from litestar.connection import ASGIConnection
 from litestar.di import NamedDependency
 from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
+from whenever import Instant
 
+from squid.core.accounts.domain import RecentAccountProof
 from squid.core.actors import ActingContext, Actor, AnonymousActor, ServiceActor, UserActor
 from squid.core.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.core.cli_auth.errors import CliAuthorizationError
@@ -50,6 +52,7 @@ class Caller:
     cli_session_id: UUID | None = None
 
     browser_session_id: str | None = None
+    browser_signed_in_at: Instant | None = None
     acting_context: ActingContext | None = None
 
     def browser_binding(self) -> str:
@@ -60,6 +63,13 @@ class Caller:
         ):
             raise AuthorizationError
         return f"browser:{self.browser_session_id}"
+
+    def recent_account_proof(self) -> RecentAccountProof:
+        """Return proof of the browser sign-in behind this request, refusing other credentials."""
+        self.browser_binding()
+        if self.account_id is None or self.browser_signed_in_at is None:
+            raise AuthorizationError
+        return RecentAccountProof(self.account_id, self.browser_signed_in_at)
 
     async def allows(
         self,
@@ -231,6 +241,7 @@ async def _authenticate_caller(request: Request) -> Caller:
             kind="account",
             subject=f"account:{identity.account_id}",
             browser_session_id=identity.session_id,
+            browser_signed_in_at=identity.signed_in_at,
             nodes=UNBOUNDED,
             account_id=identity.account_id,
         )
