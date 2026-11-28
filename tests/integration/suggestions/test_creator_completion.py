@@ -163,3 +163,27 @@ async def test_the_prefix_query_uses_the_prefix_index(
         )
     assert "creator_aliases_normalized_name_prefix_idx" in plan, plan
     assert "Seq Scan" not in plan, plan
+
+
+async def test_staff_account_picker_ranks_exact_handles_before_prefixes(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        accounts = [Account(), Account()]
+        session.add_all(accounts)
+        await session.flush()
+        for index, name in enumerate(("Foxglove", "Fox", "FoxTwo")):
+            account = accounts[min(index, 1)]
+            identity = AccountIdentity.discord(index + 1)
+            identity.account_id = account.id
+            identity.display_name = name
+            session.add(identity)
+        session.add(AccountProfile(account_id=accounts[1].id, display_name="Builder"))
+        exact_id = accounts[1].public_account_id
+
+    queries = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    assert await queries.accounts(" FOX ", limit=1) == [(exact_id, "Builder")]
+    assert len(await queries.accounts("fox", limit=10)) == 2
+    assert await queries.accounts(str(exact_id), limit=1) == [(exact_id, "Builder")]
+    assert await queries.accounts("%", limit=10) == []
+    assert await queries.accounts(" ", limit=10) == []

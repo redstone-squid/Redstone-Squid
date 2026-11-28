@@ -56,7 +56,7 @@ def gated_source() -> SuggestionSource:
         id="builds_pending",
         provider=StaticProvider.labelled([("7", "#7 — pending door")]),
         visibility=Visibility.REQUIRES_NODE,
-        required_node=VIEW_PENDING,
+        required_nodes=(VIEW_PENDING,),
         value_type=ValueType.INTEGER,
     )
 

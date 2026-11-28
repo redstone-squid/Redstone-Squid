@@ -94,7 +94,7 @@ def document_sources(repository: SuggestionRepository) -> tuple[SuggestionSource
             # command's permission checks before its autocomplete callback.
             provider=DocumentProvider(repository, "build", statuses=PENDING_BUILD_STATUSES, kind_label="build"),
             visibility=Visibility.REQUIRES_NODE,
-            required_node=BUILD_SUBMISSION_VIEW_PENDING.name,
+            required_nodes=(BUILD_SUBMISSION_VIEW_PENDING.name,),
             value_type=ValueType.INTEGER,
             kind_label="build",
         ),

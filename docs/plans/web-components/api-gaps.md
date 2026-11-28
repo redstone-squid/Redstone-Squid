@@ -27,7 +27,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Creators and accounts
 
-27. **Staff account picker.** Add a staff-only `accounts` source to `GET /v1/suggest/accounts?q=&limit=` for X5 and X6. Use the standard suggestion fields: the account ID as `value`, the display name as `label`, and a short `description` to distinguish accounts with the same name.
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
 
 ### Submissions
@@ -99,6 +98,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 24. **Creator pages (P13).** `GET /v1/creator-aliases/lookup?name=` returns `{id, name}`. `GET /v1/creator-aliases/summary?name=` summarizes a credited name and `GET /v1/accounts/{account_id}/creator-stats` summarizes a public account across names. Both count distinct approved builds and distinct records held now or ever.
 25. **Creator builds (P13).** Filter `GET /v1/builds` by `account_id` or `creator_name_id`. Each build appears once. Each credit carries a stable `credit_id`, its printed name and a nullable public `account_id`.
 26. **Credit claims (P13, A3, X4).** Send `{credit_ids: [...]}` to `POST /v1/creator-aliases/{id}/claims`. Applicants read `GET /v1/accounts/me/claims`. Staff read pending claims oldest first at `GET /v1/claims` and post decisions to `/v1/claims/{id}/approve` or `/reject`. Approval takes the selected `credit_ids` and requires `reassign: true` to replace an existing owner. Later builds under the same name are unaffected. Historical links migrate as automatic attributions, with conflicting credits left unassigned.
+27. **Staff account picker (X5, X6).** `GET /v1/suggest/accounts?q=&limit=` suggests public account UUIDs by name, linked handle or exact ID for callers with `account.profile.moderate` or `perm.subject.inspect`.
 53. **Merge codes (A3).** Preview and completion accept lowercase, whitespace and hyphens in a merge code.
 
 ### Notifications

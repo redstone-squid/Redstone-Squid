@@ -101,7 +101,7 @@ async def test_a_gated_source_is_empty_for_a_user_without_the_node() -> None:
         id="builds_pending",
         provider=BuildProvider(),
         visibility=Visibility.REQUIRES_NODE,
-        required_node=VIEW_PENDING,
+        required_nodes=(VIEW_PENDING,),
         value_type=ValueType.INTEGER,
     )
     interaction = make_autocomplete_interaction(service_with(source))
@@ -113,7 +113,7 @@ async def test_a_gated_source_is_served_to_a_user_holding_the_node() -> None:
         id="builds_pending",
         provider=BuildProvider(),
         visibility=Visibility.REQUIRES_NODE,
-        required_node=VIEW_PENDING,
+        required_nodes=(VIEW_PENDING,),
         value_type=ValueType.INTEGER,
     )
     interaction = make_autocomplete_interaction(

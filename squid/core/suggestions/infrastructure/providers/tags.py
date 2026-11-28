@@ -122,7 +122,7 @@ def tag_sources(repository: TagReader, tags: PendingTagDefinitions) -> tuple[Sug
             id="tags_pending",
             provider=PendingTagProvider(tags),
             visibility=Visibility.REQUIRES_NODE,
-            required_node=TAG_PROPOSAL_LIST.name,
+            required_nodes=(TAG_PROPOSAL_LIST.name,),
             value_type=ValueType.INTEGER,
             kind_label="tag",
         ),

@@ -70,7 +70,7 @@ def gated_source(node: str = "build.submission.view_pending") -> SuggestionSourc
         id="restrictions",
         provider=StaticProvider.of(NAMES),
         visibility=Visibility.REQUIRES_NODE,
-        required_node=node,
+        required_nodes=(node,),
     )
 
 
@@ -226,7 +226,7 @@ def test_a_source_requiring_a_node_must_name_one() -> None:
 
 def test_a_public_source_may_not_name_a_node() -> None:
     with pytest.raises(InvalidStateError, match="required_node"):
-        SuggestionSource(id="x", provider=StaticProvider.of([]), required_node="some.node")
+        SuggestionSource(id="x", provider=StaticProvider.of([]), required_nodes=("some.node",))
 
 
 def test_source_ids_must_be_addressable_as_form_option_sources() -> None:

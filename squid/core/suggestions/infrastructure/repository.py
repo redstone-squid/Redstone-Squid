@@ -8,7 +8,7 @@ services return.
 from collections.abc import Callable, Collection, Sequence
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -171,6 +171,38 @@ class PostgresSuggestionRepository:
             for version in rows
             if version.data_version is not None
         ]
+
+    async def accounts(self, query: str, *, limit: int) -> Sequence[tuple[UUID, str]]:
+        """Match a public account ID, profile name or linked handle for a staff picker."""
+        terms = query.strip().lower()
+        if not terms:
+            return []
+        account_id = cast(Account.public_account_id, String)
+        profile = func.lower(AccountProfile.display_name)
+        handle = func.lower(AccountIdentity.display_name)
+        priority = case(
+            (account_id == terms, 0),
+            (or_(profile == terms, handle == terms, AccountIdentity.subject == terms), 1),
+            else_=2,
+        )
+        label = func.coalesce(AccountProfile.display_name, func.min(AccountIdentity.display_name), account_id)
+        statement = (
+            select(Account.public_account_id, label)
+            .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+            .outerjoin(AccountIdentity, AccountIdentity.account_id == Account.id)
+            .where(
+                or_(
+                    account_id == terms,
+                    AccountIdentity.subject == terms,
+                    profile.startswith(terms, autoescape=True),
+                    handle.startswith(terms, autoescape=True),
+                )
+            )
+            .group_by(Account.id, AccountProfile.display_name)
+            .order_by(func.min(priority), label, Account.id)
+            .limit(limit)
+        )
+        return [(public_id, name) for public_id, name in (await self._session().execute(statement)).tuples()]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
         """Suggest public accounts by ID, published credit, profile name or visible identity."""

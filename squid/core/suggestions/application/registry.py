@@ -35,8 +35,8 @@ class SuggestionSource:
     provider: SuggestionProvider | ComposedSuggestionProvider
     kind: SourceKind = SourceKind.QUERIED
     visibility: Visibility = Visibility.PUBLIC
-    required_node: str | None = None
-    """The permission node checked when `visibility` is `REQUIRES_NODE`."""
+    required_nodes: tuple[str, ...] = ()
+    """Any one of these permissions grants access when visibility is REQUIRES_NODE."""
 
     context_keys: frozenset[str] = frozenset()
     """Required context keys; the service returns no suggestions if any are absent."""
@@ -56,7 +56,7 @@ class SuggestionSource:
                     t"suggestions-invalid-suggestion-source = invalid suggestion source id: {source_id!r}",
                 )
             )
-        if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
+        if (self.visibility is Visibility.REQUIRES_NODE) != bool(self.required_nodes):
             raise InvalidStateError(
                 md_tr(
                     t"suggestions-required-node-set = {source_id!s}: "

@@ -6,11 +6,18 @@ from typing import Protocol
 from squid.core.accounts.application.presentation import claimant_label
 from squid.core.accounts.models import AliasClaim
 from squid.core.actors import ActingContext
-from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_LIST
+from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_LIST, ACCOUNT_PROFILE_MODERATE, PERM_SUBJECT_INSPECT
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.queries import SuggestionRepository
 from squid.core.suggestions.application.registry import SuggestionSource
-from squid.core.suggestions.domain import MAX_QUERY_SUGGESTIONS, SuggestionRequest, ValueType, Visibility
+from squid.core.suggestions.domain import (
+    MAX_QUERY_SUGGESTIONS,
+    Suggestion,
+    SuggestionRequest,
+    SuggestionResult,
+    ValueType,
+    Visibility,
+)
 
 
 class RecordDefinitionReader(Protocol):
@@ -42,6 +49,22 @@ class RecordDefinitionProvider:
                 terms=(title, str(definition_id)),
             )
             for definition_id, title, build_kind in rows
+        )
+
+
+class AccountProvider:
+    """Offer account IDs to profile moderators and permission inspectors."""
+
+    def __init__(self, repository: SuggestionRepository) -> None:
+        self._repository = repository
+
+    async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
+        rows = await self._repository.accounts(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
+        return SuggestionResult(
+            items=tuple(
+                Suggestion(value=str(account_id), label=name, description=str(account_id), kind="account")
+                for account_id, name in rows
+            )
         )
 
 
@@ -137,6 +160,13 @@ def record_sources(
 ) -> tuple[SuggestionSource, ...]:
     sources = (
         SuggestionSource(
+            id="accounts",
+            provider=AccountProvider(repository),
+            visibility=Visibility.REQUIRES_NODE,
+            required_nodes=(ACCOUNT_PROFILE_MODERATE.name, PERM_SUBJECT_INSPECT.name),
+            kind_label="account",
+        ),
+        SuggestionSource(
             id="title_definitions",
             provider=RecordDefinitionProvider(repository),
             kind_label="record_category",
@@ -166,7 +196,7 @@ def record_sources(
             id="alias_claims_pending",
             provider=AliasClaimProvider(accounts),
             visibility=Visibility.REQUIRES_NODE,
-            required_node=ACCOUNT_CLAIM_LIST.name,
+            required_nodes=(ACCOUNT_CLAIM_LIST.name,),
             value_type=ValueType.INTEGER,
             kind_label="claim",
         ),

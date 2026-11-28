@@ -3,6 +3,7 @@
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
@@ -48,6 +49,7 @@ class SuggestionRepository(Protocol):
     async def conversion_versions(self) -> Sequence[tuple[int, str]]: ...
 
     async def version_ids(self) -> Sequence[tuple[int, str]]: ...
+    async def accounts(self, query: str, *, limit: int) -> Sequence[tuple[UUID, str]]: ...
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
     async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
@@ -83,6 +85,10 @@ class SuggestionQueryService:
     async def version_ids(self) -> Sequence[tuple[int, str]]:
         async with self._uow_factory() as uow:
             return await uow.suggestions.version_ids()
+
+    async def accounts(self, query: str, *, limit: int) -> Sequence[tuple[UUID, str]]:
+        async with self._uow_factory() as uow:
+            return await uow.suggestions.accounts(query, limit=limit)
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
         async with self._uow_factory() as uow:

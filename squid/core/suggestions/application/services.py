@@ -173,14 +173,16 @@ class SuggestionService:
             case Visibility.VIEWER_SCOPED:
                 return request.viewer.linked_account_id is not None
             case Visibility.REQUIRES_NODE:
-                assert source.required_node is not None
                 if authorizer is None:
                     logger.warning(
                         "Gated suggestion source requested without an authorizer",
-                        extra={"source": source.id, "node": source.required_node},
+                        extra={"source": source.id, "nodes": source.required_nodes},
                     )
                     return False
-                return await authorizer.allows(source.required_node)
+                for node in source.required_nodes:
+                    if await authorizer.allows(node):
+                        return True
+                return False
 
 
 def content_revision(items: Sequence[Suggestion]) -> int:

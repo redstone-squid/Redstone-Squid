@@ -55,10 +55,10 @@ def test_guild_scoped_sources_declare_the_context_they_need() -> None:
 
 def test_sources_holding_unreviewed_data_are_gated() -> None:
     discord = registry(discord=True)
-    for source_id in ("builds_pending", "tags_pending", "alias_claims_pending"):
+    for source_id in ("accounts", "builds_pending", "tags_pending", "alias_claims_pending"):
         source = discord.resolve(source_id)
         assert source.visibility is Visibility.REQUIRES_NODE
-        assert source.required_node
+        assert source.required_nodes
 
 
 def test_public_build_suggestions_cannot_leak_unconfirmed_submissions() -> None:
