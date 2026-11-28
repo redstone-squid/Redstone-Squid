@@ -6,6 +6,7 @@ import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { load } from "@/server/api";
 import { returnPath } from "@/server/session";
+import Link from "@/ui/content/Link.svelte";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const { session, config } = Astro.locals;
@@ -24,8 +25,8 @@ const title = m.signInTitle();
 <CatalogueLayout {title} canonicalPath="/sign-in" noindex>
   <PageHeader {title} description={m.signInDescription()} />
   <p>
-    {m.signInAgreement()} <a href={localizePath("/terms")}>{m.termsTitle()}</a>.{" "}
-    <a href={localizePath("/privacy")}>{m.privacyTitle()}</a>
+    {m.signInAgreement()} <Link href={localizePath("/terms")}>{m.termsTitle()}</Link>.{" "}
+    <Link href={localizePath("/privacy")}>{m.privacyTitle()}</Link>
   </p>
   <SignInPanel {providers} authError={Astro.url.searchParams.get("auth_error")} />
 </CatalogueLayout>

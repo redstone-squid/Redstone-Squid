@@ -2,6 +2,7 @@ import type { Rule } from "eslint";
 
 // Elements src/ui wraps with their states, labels, and themes.
 const WRAPPED = {
+  fieldset: "forms/FieldGroup",
   button: "actions/Button",
   input: "a forms field",
   select: "forms/SelectField",

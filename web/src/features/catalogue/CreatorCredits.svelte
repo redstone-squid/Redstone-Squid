@@ -4,6 +4,12 @@
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/actions/Button.svelte";
   import CheckField from "@/ui/forms/CheckField.svelte";
+  import Link from "@/ui/content/Link.svelte";
+  import DescriptionList from "@/ui/data/DescriptionList.svelte";
+  import List from "@/ui/data/List.svelte";
+  import ListItem from "@/ui/data/ListItem.svelte";
+  import FieldGroup from "@/ui/forms/FieldGroup.svelte";
+  import Section from "@/ui/patterns/Section.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Pagination from "@/ui/navigation/Pagination.svelte";
 
@@ -18,31 +24,30 @@
 </script>
 
 <Layout pattern="stack">
-  <section>
-    <h2>{m.creatorBuildCount({ count: stats.build_count })}</h2>
+  <Section title={m.creatorBuildCount({ count: stats.build_count })}>
     {#if stats.builds_by_year.length > 0}
-      <dl>
-        {#each stats.builds_by_year as entry (entry.year)}
-          <div>
-            <dt>{entry.year}</dt>
-            <dd>{entry.count}</dd>
-          </div>
-        {/each}
-      </dl>
+      <DescriptionList
+        items={stats.builds_by_year.map(({ year, count }) => ({
+          term: String(year),
+          value: String(count),
+          numeric: true,
+        }))}
+      />
     {/if}
     <ul>
       {#each builds as build (build.id)}
         <li>
-          <a href={localizePath(`/builds/${build.id}`)}>{build.display_name ?? build.title}</a>
+          <Link href={localizePath(`/builds/${build.id}`)}>{build.display_name ?? build.title}</Link
+          >
           <ul aria-label={m.buildCreators()}>
             {#each build.credits ?? [] as creator (creator.credit_id)}
               <li>
-                <a
+                <Link
                   href={localizePath(
                     creator.account_id !== null
                       ? `/accounts/${creator.account_id}`
                       : `/creators/${encodeURIComponent(creator.name)}`,
-                  )}>{creator.name}</a
+                  )}>{creator.name}</Link
                 >
               </li>
             {/each}
@@ -55,22 +60,24 @@
       {nextHref}
       labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
     />
-  </section>
-  <section>
-    <h2>{m.recordCurrent()} · {m.navRecords()}</h2>
+  </Section>
+  <Section title={`${m.recordCurrent()} · ${m.navRecords()}`}>
     <p>{m.creatorRecordCounts({ held: stats.records_held.length, ever: stats.records_ever })}</p>
     {#if stats.records_held.length > 0}
-      <ul>
+      <List>
         {#each stats.records_held as record (record.id)}
-          <li><a href={localizePath(`/records/${record.id}`)}>{record.title}</a></li>
+          <ListItem
+            density="compact"
+            href={localizePath(`/records/${record.id}`)}
+            title={record.title}
+          />
         {/each}
-      </ul>
+      </List>
     {/if}
-  </section>
+  </Section>
   {#if claimNameId !== undefined && builds.length > 0}
     <form method="post">
-      <fieldset>
-        <legend>{m.creatorClaimSelect()}</legend>
+      <FieldGroup label={m.creatorClaimSelect()}>
         {#each builds as build (build.id)}
           {#each build.credits ?? [] as credit (credit.credit_id)}
             {#if credit.credit_id != null && credit.name_id === claimNameId}
@@ -82,7 +89,7 @@
             {/if}
           {/each}
         {/each}
-      </fieldset>
+      </FieldGroup>
       <Button type="submit">{m.creatorClaimSubmit()}</Button>
     </form>
   {/if}

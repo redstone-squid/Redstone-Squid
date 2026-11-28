@@ -8,6 +8,7 @@ import { requireSession, writeHeaders } from "@/server/session";
 import { load } from "@/server/api";
 import CheckField from "@/ui/forms/CheckField.svelte";
 import Button from "@/ui/actions/Button.svelte";
+import Section from "@/ui/patterns/Section.svelte";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
 import Pagination from "@/ui/navigation/Pagination.svelte";
 import { readPageAddress, pageHref } from "@/server/pagination";
@@ -50,8 +51,7 @@ const title = m.indexingTitle();
     />
     <Button type="submit">{m.indexingSave()}</Button>
   </form>
-  <section id="claims">
-    <h2>{m.creatorClaims()}</h2>
+  <Section id="claims" title={m.creatorClaims()}>
     {claims.items.length === 0 ? (
       <p>{m.creatorClaimsEmpty()}</p>
     ) : (
@@ -73,5 +73,5 @@ const title = m.indexingTitle();
       nextHref={claims.next ? pageHref(Astro.url, claims.next) + "#claims" : null}
       labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
     />
-  </section>
+  </Section>
 </CatalogueLayout>

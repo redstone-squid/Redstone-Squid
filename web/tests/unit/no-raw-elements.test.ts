@@ -20,6 +20,11 @@ new RuleTester({ languageOptions: { parser: svelteParser } }).run(
     ],
     invalid: [
       { filename: "A.svelte", code: '<button type="button">{label}</button>', errors: [error] },
+      {
+        filename: "A.svelte",
+        code: "<fieldset><legend>Credits</legend></fieldset>",
+        errors: [error],
+      },
       { filename: "A.svelte", code: "<input type={kind} />", errors: [error] },
       { filename: "A.svelte", code: "<table><tr><td>{n}</td></tr></table>", errors: [error] },
       { filename: "A.svelte", code: '<img src={url} alt="" />', errors: [error] },
