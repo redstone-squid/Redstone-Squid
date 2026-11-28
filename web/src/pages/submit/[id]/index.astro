@@ -217,7 +217,7 @@ const title = String(draft.answers.display_name ?? category?.label ?? draft.cate
         {m.workbenchSaveDraft()}
       </Button>
     )}
-    {draft.viewer.can_edit && (
+    {draft.viewer.can_edit && draft.viewer.role !== "editor" && (
       <Button type="submit" name="action" value="submit">
         {m.navSubmit()}
       </Button>

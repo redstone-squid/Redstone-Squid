@@ -57,6 +57,26 @@ class DraftCapacityExceededError(ConflictError):
         super().__init__(public_context={"limit": limit})
 
 
+class DraftEditorLimitError(ConflictError):
+    """A draft already has the most editors it may have."""
+
+    default_message = "This draft already has the maximum number of editors."
+    default_title = "Too many draft editors"
+    default_resource = "submission_draft"
+    default_end_user_action = "Remove an editor before inviting another."
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(public_context={"limit": limit})
+
+
+class DraftNotShareableError(ConflictError):
+    """Drafts that edit a published build stay with the maintainer who opened them."""
+
+    default_message = "Drafts that edit a published build cannot be shared."
+    default_title = "Draft cannot be shared"
+    default_resource = "submission_draft"
+
+
 class DraftStateConflictError(ConflictError):
     """A draft mutation lost a race with a lifecycle transition."""
 

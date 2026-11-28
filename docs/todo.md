@@ -86,15 +86,6 @@
   - Blocks naming the creator who holds a contested alias in the consent-verification UX: it only helps if the
     reader has somewhere to look the name up.
 
-## Submissions
-
-- [ ] Let a draft owner share a submission draft with editors.
-  - `submission_draft_access` already models this (`owner` / `editor` roles; account merge keeps it consistent),
-    but only the owner row is written, at creation, and nothing reads it.
-  - Make draft authorization read the table instead of `submission_drafts.owner_account_id` alone.
-  - Add inviting and removing editors in the bot and the API, and decide which actions stay owner-only,
-    such as finalizing, discarding, and managing editors.
-
 ## Website
 
 - [ ] Serve the catalogue's content-hashed assets (`/_astro/*`) with

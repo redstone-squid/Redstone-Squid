@@ -132,35 +132,23 @@ class SubmissionDraft(Base, kw_only=True):
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 
-class SubmissionDraftAccess(Base, kw_only=True):
-    """An account's role on a draft; creation grants one account the owner role."""
+class SubmissionDraftEditor(Base, kw_only=True):
+    """An account the draft owner invited to edit answers; the owner itself is on the draft."""
 
-    __tablename__ = "submission_draft_access"
-    __table_args__ = (
-        UniqueConstraint("draft_id", "account_id", name="submission_draft_access_draft_account_key"),
-        CheckConstraint("role IN ('owner', 'editor')", name="submission_draft_access_role_check"),
-        Index(
-            "submission_draft_access_one_owner",
-            "draft_id",
-            unique=True,
-            postgresql_where=text("role = 'owner'"),
-        ),
-        Index("submission_draft_access_account_idx", "account_id", "draft_id"),
-    )
+    __tablename__ = "submission_draft_editors"
+    __table_args__ = (Index("submission_draft_editors_account_idx", "account_id", "draft_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     draft_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("submission_drafts.id", name="submission_draft_access_draft_id_fkey", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("submission_drafts.id", name="submission_draft_editors_draft_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
     )
     account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("accounts.id", name="submission_draft_access_account_id_fkey", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("accounts.id", name="submission_draft_editors_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
     )
-    role: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[Instant] = mapped_column(
+    added_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 

@@ -5,10 +5,11 @@ was looking at, and shows each stage of the submission lifecycle. Section editor
 editor, and the preview are separate messages that share the panel's DraftWorkspace.
 """
 
+import dataclasses
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, override
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, create_autospec
 from uuid import UUID, uuid4
 
 import anyio
@@ -20,10 +21,14 @@ import squid_ui.ext.discord as sd
 from squid.bot.submission.ui.drafts import (
     BuildPreviewScreen,
     DraftEditorScreen,
+    DraftEditorsScreen,
     FilesEditorScreen,
     Phase,
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
+from squid.core.accounts.application.services import AccountService
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.input import parse_build_ticks
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
@@ -99,7 +104,7 @@ class Drafts(SubmissionDraftService):
         self.required_actor: Actor | None = None
 
     @override
-    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext, owner_only: bool = False) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         if self.required_actor is not None and context.effective != self.required_actor:
             raise DraftAccessDeniedError
@@ -120,6 +125,16 @@ class Drafts(SubmissionDraftService):
         self.changes.append(change)
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
+
+    @override
+    async def add_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        self.current = replace(self.current, editor_account_ids=self.current.editor_account_ids | {account_id})
+        return self.current
+
+    @override
+    async def remove_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        self.current = replace(self.current, editor_account_ids=self.current.editor_account_ids - {account_id})
+        return self.current
 
 
 class Forms(SubmissionFormService):
@@ -982,3 +997,60 @@ async def test_catalogue_picker_keeps_selection_across_menus() -> None:
             assert not ui.root.presentation.pending_reveals
             ui.control("pick_restrictions_25")
         ui.assert_within_limits()
+
+
+def with_accounts(services: BotServices, *discord_ids: tuple[int, int]) -> BotServices:
+    """Give each account ID a Discord identity so the editors message can mention it."""
+    accounts = create_autospec(AccountService, instance=True)
+    accounts.get_accounts.return_value = {
+        account_id: Account(
+            id=account_id, identities=(AccountIdentity.for_provider(IdentityProvider.DISCORD, str(discord_id)),)
+        )
+        for account_id, discord_id in discord_ids
+    }
+    accounts.get_or_create_identity.return_value = Account(id=9)
+    return dataclasses.replace(services, accounts=accounts)
+
+
+async def test_editors_change_answers_but_cannot_submit() -> None:
+    services, drafts = setup()
+    drafts.current = replace(drafts.current, editor_account_ids=frozenset({8}))
+    owner = await open_editor(services, drafts)
+    editor = await open_editor(services, drafts, actor=8)
+
+    assert find(owner.render(), sl.semantic.ActionControl, key="submit")
+    assert not find_all(editor.render(), sl.semantic.ActionControl, key="submit")
+    assert find(editor.render(), sl.semantic.ActionControl, key="editors")
+
+
+async def test_owner_invites_and_removes_editors() -> None:
+    services, drafts = setup()
+    services = with_accounts(services, (7, 111), (9, 333))
+    editor = await open_editor(services, drafts)
+    screen = DraftEditorsScreen(editor.workspace)
+
+    await editor.workspace.add_editor(333)
+    await screen.load_names()
+    async with stage(screen, owner=object()) as ui:
+        assert any("<@333>" in text for text in ui.texts())
+        assert any("<@111>" in text for text in ui.texts())
+        await ui.press("remove-9")
+        assert "Nobody else can edit this draft yet." in ui.texts()
+
+    assert drafts.current.editor_account_ids == frozenset()
+
+
+async def test_an_editor_can_leave_the_draft() -> None:
+    services, drafts = setup()
+    services = with_accounts(services, (7, 111), (8, 222))
+    drafts.current = replace(drafts.current, editor_account_ids=frozenset({8}))
+    editor = await open_editor(services, drafts, actor=8)
+    screen = DraftEditorsScreen(editor.workspace)
+    await screen.load_names()
+
+    async with stage(screen, owner=object()) as ui:
+        assert not ui.query('[custom_id*="remove-8"]').exists()
+        await ui.press("leave")
+        assert any("You left this draft." in text for text in ui.texts())
+
+    assert drafts.current.editor_account_ids == frozenset()

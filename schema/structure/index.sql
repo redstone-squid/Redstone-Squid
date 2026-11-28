@@ -185,10 +185,9 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/starboard_votes.sql
 \ir public/TABLES/starboards.sql
 \ir public/SEQUENCES/starboards_id_seq.sql
-\ir public/TABLES/submission_draft_access.sql
-\ir public/SEQUENCES/submission_draft_access_id_seq.sql
 \ir public/TABLES/submission_draft_changes.sql
 \ir public/SEQUENCES/submission_draft_changes_id_seq.sql
+\ir public/TABLES/submission_draft_editors.sql
 \ir public/TABLES/submission_draft_schematics.sql
 \ir public/TABLES/submission_drafts.sql
 \ir public/TABLES/submission_finalization_inputs.sql

@@ -115,7 +115,7 @@ class UnavailableDrafts(SubmissionDraftService):
         self.lookups: list[tuple[UUID, int | None]] = []
 
     @override
-    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext, owner_only: bool = False) -> StoredDraft:
         self.lookups.append((draft_id, context.effective.linked_account_id))
         raise self.error
 

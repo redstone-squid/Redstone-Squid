@@ -72,7 +72,7 @@ from squid.core.submissions.domain.links import SubmissionLink
 from squid.core.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
-from squid.core.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
+from squid.core.submissions.models.entities import SubmissionDraft, SubmissionDraftChange, SubmissionDraftEditor
 from squid.core.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.core.submissions.payload_integrity import submission_payload_digest
 from squid.core.tags.models import TagDefinition
@@ -610,8 +610,8 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         await session.flush()
         session.add_all(
             [
-                SubmissionDraftAccess(draft_id=draft_id, account_id=absorbed.id, role="owner"),
-                SubmissionDraftAccess(draft_id=draft_id, account_id=survivor.id, role="editor"),
+                # The survivor edits the absorbed account's draft, so the merge makes it the owner.
+                SubmissionDraftEditor(draft_id=draft_id, account_id=survivor.id),
                 SubmissionDraftChange(
                     draft_id=draft_id,
                     actor_account_id=absorbed.id,
@@ -683,11 +683,9 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
                 )
             )
         ).one()
-        access = (
-            await session.execute(
-                select(SubmissionDraftAccess.account_id, SubmissionDraftAccess.role).where(
-                    SubmissionDraftAccess.draft_id == draft_id
-                )
+        editors = (
+            await session.scalars(
+                select(SubmissionDraftEditor.account_id).where(SubmissionDraftEditor.draft_id == draft_id)
             )
         ).all()
         change_actor = await session.scalar(
@@ -732,7 +730,7 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
 
     assert build_owner == survivor.id
     assert draft_owner == (survivor.id, installation_id)
-    assert access == [(survivor.id, "owner")]
+    assert editors == []
     assert change_actor == survivor.id
     assert rights_actor == survivor.id
     assert installation == (survivor.id, installation_id, installation_secret_hash)

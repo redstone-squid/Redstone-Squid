@@ -133,6 +133,12 @@ class FakeDraftRepository:
         del draft_id, account_id
         return False
 
+    async def add_editor(self, draft_id: UUID, account_id: int, *, limit: int) -> StoredDraft:
+        raise NotImplementedError
+
+    async def remove_editor(self, draft_id: UUID, account_id: int) -> StoredDraft:
+        raise NotImplementedError
+
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
         del now, limit
         return 0

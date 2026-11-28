@@ -52,6 +52,8 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
     DraftCreateRequest,
+    DraftEditorRequest,
+    DraftEditorsResponse,
     DraftListResponse,
     DraftManifestUpgradeRequest,
     DraftManifestUpgradeResponse,
@@ -145,6 +147,10 @@ class SubmissionDraftCommands(Protocol):
     ) -> AppliedDraftUpgrade: ...
 
     async def delete(self, draft_id: UUID, *, context: ActingContext) -> None: ...
+
+    async def add_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft: ...
+
+    async def remove_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft: ...
 
 
 class SubmissionFinalizationCommands(Protocol):
@@ -355,8 +361,9 @@ async def list_correction_inbox(
         context=context,
     )
     progress = {draft.snapshot.id: await drafts.progress(draft) for draft in page.items}
+    account_id = context.effective.require_account_id()
     return Page[DraftSummaryResponse].from_domain(
-        page, lambda draft: DraftSummaryResponse.from_domain(draft, progress[draft.snapshot.id])
+        page, lambda draft: DraftSummaryResponse.from_domain(draft, progress[draft.snapshot.id], account_id)
     )
 
 
@@ -376,10 +383,11 @@ async def list_correction_inbox(
 )
 @private_response
 async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListResponse:
-    """Return at most ten compact active drafts owned by the signed-in account."""
+    """Return at most ten compact active drafts the signed-in account owns or edits."""
     active = await drafts.list_active(context=context)
+    account_id = context.effective.require_account_id()
     return DraftListResponse(
-        drafts=[DraftSummaryResponse.from_domain(draft, await drafts.progress(draft)) for draft in active]
+        drafts=[DraftSummaryResponse.from_domain(draft, await drafts.progress(draft), account_id) for draft in active]
     )
 
 
@@ -803,6 +811,92 @@ async def delete_draft(
     return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 
+@get(
+    "/drafts/{draft_id:uuid}/editors",
+    responses=responses(401, 403, 404, 409, 503),
+    operation_id="submission_draft_editors_list",
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=cli_command("draft.editors.list", features=("submission-drafts",), interaction="direct")),
+    status_code=200,
+    dependencies={
+        "drafts": Provide(get_submission_drafts, sync_to_thread=False),
+        "context": Provide(authenticated_submission_context),
+    },
+)
+@private_response
+async def list_draft_editors(
+    draft_id: FromPath[UUID], drafts: Drafts, services: Services, context: SubmissionContext
+) -> DraftEditorsResponse:
+    """Return the draft's owner and the accounts invited to edit its answers."""
+    draft = await drafts.get_accessible(draft_id, context=context)
+    public_ids = await services.accounts.public_ids(draft.account_ids, context=context)
+    return DraftEditorsResponse.from_domain(draft, public_ids)
+
+
+@post(
+    "/drafts/{draft_id:uuid}/editors",
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    operation_id="submission_draft_editors_add",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
+    opt=contract(cli=cli_command("draft.editors.add", features=("submission-drafts",), interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "drafts": Provide(get_submission_drafts, sync_to_thread=False),
+        "context": Provide(authenticated_submission_context),
+    },
+)
+@private_response
+async def add_draft_editor(
+    draft_id: FromPath[UUID],
+    data: JSONBody[DraftEditorRequest],
+    drafts: Drafts,
+    services: Services,
+    context: SubmissionContext,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> DraftEditorsResponse:
+    """Let the owner invite an account to edit answers. Only the owner can submit or discard the draft.
+
+    Inviting a current editor or the owner changes nothing. Drafts that edit a published build
+    cannot be shared.
+    """
+    account_id = await services.accounts.resolve_public_id(data.account_id, context=context)
+    draft = await drafts.add_editor(draft_id, account_id, context=context)
+    public_ids = await services.accounts.public_ids(draft.account_ids, context=context)
+    return DraftEditorsResponse.from_domain(draft, public_ids)
+
+
+@delete(
+    "/drafts/{draft_id:uuid}/editors/{account_id:uuid}",
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="submission_draft_editors_remove",
+    security=[WEB_WRITE, DEVICE, MINECRAFT],
+    opt=contract(cli=cli_command("draft.editors.remove", features=("submission-drafts",), interaction="direct")),
+    status_code=200,
+    dependencies={
+        "_reservation": Provide(reserve_idempotent_request),
+        "drafts": Provide(get_submission_drafts, sync_to_thread=False),
+        "context": Provide(authenticated_submission_context),
+    },
+)
+@private_response
+async def remove_draft_editor(
+    draft_id: FromPath[UUID],
+    account_id: FromPath[UUID],
+    drafts: Drafts,
+    services: Services,
+    context: SubmissionContext,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> DraftEditorsResponse:
+    """Remove an editor. The owner can remove anyone; an editor can remove only themselves."""
+    target = await services.accounts.resolve_public_id(account_id, context=context)
+    draft = await drafts.remove_editor(draft_id, target, context=context)
+    public_ids = await services.accounts.public_ids(draft.account_ids, context=context)
+    return DraftEditorsResponse.from_domain(draft, public_ids)
+
+
 async def submission_reader(caller: NamedDependency[SkipValidation[Caller]]) -> ActingContext:
     """Use browser session authority for account portfolio and reviewer reads."""
     if caller.kind != "account":
@@ -975,5 +1069,8 @@ router = Router(
         list_draft_attempts,
         get_draft_attempt,
         delete_draft,
+        list_draft_editors,
+        add_draft_editor,
+        remove_draft_editor,
     ],
 )

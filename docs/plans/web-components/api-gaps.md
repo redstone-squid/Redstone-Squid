@@ -10,10 +10,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 28. **Product decision: account deletion.** A2 can download account records through `GET /v1/accounts/me/export` in JSON or zipped CSV. Decide whether to offer `DELETE /v1/accounts/me` before promising deletion.
 
-### Submissions
-
-38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
-
 ## Finished
 
 ### Search
@@ -98,6 +94,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 ### Submissions
 
 36. **Finalization status.** S3 polls active attempts with `If-None-Match`, backs off while unchanged and pauses in hidden tabs. Use the status read-duration histogram (count and latency by conditional response) and completion-observation latency to decide whether push is warranted.
+38. **Draft sharing.** `GET/POST /v1/submissions/drafts/{id}/editors` and `DELETE …/editors/{account_id}` let the owner invite and remove editors by public account ID. Drafts and draft lists carry the viewer's `role`; S2 still needs an editors panel.
 60. **Record prediction.** Saved drafts and reviewed submissions expose `/record-preview` under their own detail routes. A review-session link selects its archived revision. Both compare against current approved builds with publication rules and return missing facts and deltas against current holders.
 
 **Creator credit picker.** The `creators` suggestion source returns names printed on approved builds, including names credited to hidden accounts. The separate `creator_profiles` source returns visible accounts. A submitter can credit “RedFox” and explicitly nominate Alice via `proposed_account_id`. A name match alone assigns no account. Reviewers can change or clear the nomination before approving the build.

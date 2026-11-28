@@ -142,9 +142,9 @@ class BuildSubmissionExecutor:
         try:
             if uow is None:
                 async with self._uow_factory() as check:
-                    await self._drafts.get_accessible_in(check, job.draft_id, actor)
+                    await self._drafts.get_accessible_in(check, job.draft_id, actor, owner_only=True)
             else:
-                await self._drafts.get_accessible_in(uow, job.draft_id, actor)
+                await self._drafts.get_accessible_in(uow, job.draft_id, actor, owner_only=True)
         except DraftAccessDeniedError, PermissionDeniedError:
             return False
         return True

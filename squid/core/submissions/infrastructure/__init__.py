@@ -6,8 +6,8 @@ from squid.core.submissions.infrastructure.repository import PostgresDraftReposi
 from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.core.submissions.models.entities import (
     SubmissionDraft,
-    SubmissionDraftAccess,
     SubmissionDraftChange,
+    SubmissionDraftEditor,
 )
 from squid.core.submissions.models.finalization import (
     SubmissionFinalizationJob,
@@ -20,8 +20,8 @@ __all__ = [
     "PostgresDraftRepository",
     "PostgresFinalizationJobRepository",
     "SubmissionDraft",
-    "SubmissionDraftAccess",
     "SubmissionDraftChange",
+    "SubmissionDraftEditor",
     "SubmissionFinalizationJob",
     "SubmissionFinalizationResult",
 ]

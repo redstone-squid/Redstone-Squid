@@ -163,9 +163,16 @@ edit adds a new history entry rather than removing one.
 Credits are public attribution and grant nothing by themselves. Edit rights belong to
 *maintainers*:
 
+- A draft's maintainers are its owner and the editors the owner invites
+  (`submission_draft_editors`). Editors change answers and files. Only the owner submits,
+  discards, upgrades the form, and manages editors (`DraftRole`). Drafts that edit a
+  published build cannot be shared.
 - A build's maintainers are its submitter and the accounts linked to its `creator` credits
   (`Build.maintainer_account_ids`). Designer, layout, and contributor credits are
   attribution only. Maintainers receive the build's review outcome notifications.
+
+Draft editors don't carry over to the build. Credit someone as a creator to keep them as
+a maintainer after submission. Staff with `build.submission.edit` reach every draft and build.
 
 Maintainers can change names, descriptions, and showcase tags directly, and can correct
 pending submissions. Changes to other published facts go through a build edit vote.

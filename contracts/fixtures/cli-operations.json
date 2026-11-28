@@ -503,6 +503,61 @@
           "code": "UNAUTHORIZED"
         }
       }
+    },
+    "submission_draft_editors_list": {
+      "success": {
+        "status": 200,
+        "body": {
+          "owner": "00000000-0000-4000-8000-000000000002",
+          "editors": [
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        }
+      },
+      "problem": {
+        "status": 404,
+        "body": {
+          "title": "Draft not found",
+          "status": 404,
+          "code": "NOT_FOUND"
+        }
+      }
+    },
+    "submission_draft_editors_add": {
+      "success": {
+        "status": 200,
+        "body": {
+          "owner": "00000000-0000-4000-8000-000000000002",
+          "editors": [
+            "00000000-0000-4000-8000-000000000003"
+          ]
+        }
+      },
+      "problem": {
+        "status": 409,
+        "body": {
+          "title": "Too many draft editors",
+          "status": 409,
+          "code": "DOMAIN_ERROR"
+        }
+      }
+    },
+    "submission_draft_editors_remove": {
+      "success": {
+        "status": 200,
+        "body": {
+          "owner": "00000000-0000-4000-8000-000000000002",
+          "editors": []
+        }
+      },
+      "problem": {
+        "status": 404,
+        "body": {
+          "title": "Draft not found",
+          "status": 404,
+          "code": "NOT_FOUND"
+        }
+      }
     }
   }
 }

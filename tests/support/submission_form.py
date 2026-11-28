@@ -113,7 +113,7 @@ class Drafts(SubmissionDraftService):
         return AppliedDraftChange(self.current)
 
     @override
-    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext, owner_only: bool = False) -> StoredDraft:
         assert self.current is not None
         return self.current
 

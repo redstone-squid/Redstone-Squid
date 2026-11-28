@@ -716,7 +716,7 @@ class MockSubmissionDrafts(SubmissionDraftService):
         return offset_page((), offset=selector.offset, page_size=page_size)
 
     @override
-    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext, owner_only: bool = False) -> StoredDraft:
         raise DraftNotFoundError(draft_id)
 
     @override

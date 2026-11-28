@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid7
 
@@ -17,6 +18,7 @@ from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.submissions.application.forms import FormManifestRegistry
 from squid.core.submissions.domain import (
     DraftChange,
@@ -32,6 +34,7 @@ from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import (
     DraftAccessDeniedError,
     DraftNotFoundError,
+    DraftNotShareableError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
     DraftValidationError,
@@ -44,6 +47,7 @@ from squid_i18n import md_tr
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
 DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
+MAX_DRAFT_EDITORS = 10
 INGESTION_OPTIONAL_FIELDS = frozenset(
     {
         "creators",
@@ -81,8 +85,21 @@ class DraftPermissions(Protocol):
     ) -> None: ...
 
 
+class DraftRole(StrEnum):
+    """How an account reaches a draft.
+
+    Owners and editors change answers. Only the owner submits, discards, upgrades the form,
+    and manages editors. Staff reach every draft through `build.submission.edit`.
+    """
+
+    OWNER = "owner"
+    EDITOR = "editor"
+    STAFF = "staff"
+
+
 @dataclass(frozen=True, slots=True)
 class DraftViewer:
+    role: DraftRole
     can_edit: bool
     can_discard: bool
 
@@ -108,15 +125,28 @@ class StoredDraft:
     inference_run_id: UUID | None = None
     preparation_attempt: UUID | None = None
     edit_source: DraftEditSource | None = None
+    editor_account_ids: frozenset[int] = frozenset()
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
             msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation ID.")
             raise ValidationError(msg)
 
+    @property
+    def account_ids(self) -> frozenset[int]:
+        """The owner and editors."""
+        return self.editor_account_ids | {self.snapshot.owner_account_id}
+
+    def role_of(self, account_id: int) -> DraftRole:
+        """The account's role, assuming it already passed the service's access check."""
+        if account_id == self.snapshot.owner_account_id:
+            return DraftRole.OWNER
+        return DraftRole.EDITOR if account_id in self.editor_account_ids else DraftRole.STAFF
+
     def viewer(self, account_id: int) -> DraftViewer:
         editable = self.snapshot.status in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}
-        return DraftViewer(editable, editable and self.snapshot.owner_account_id == account_id)
+        role = self.role_of(account_id)
+        return DraftViewer(role, editable, editable and role is DraftRole.OWNER)
 
     @property
     def ingested(self) -> bool:
@@ -205,6 +235,15 @@ class DraftRepository(Protocol):
 
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
 
+    async def add_editor(self, draft_id: UUID, account_id: int, *, limit: int) -> StoredDraft:
+        """Add an editor while the draft row is locked; adding a current editor is a no-op.
+
+        Raises DraftEditorLimitError when the draft already has `limit` editors.
+        """
+        ...
+
+    async def remove_editor(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int: ...
 
 
@@ -292,10 +331,10 @@ class SubmissionDraftService:
     draft to be resumed even after the current form changes. Incomplete answers
     are allowed while editing; validate_for_finalization checks required fields.
 
-    Access checks require an Actor and allow the owner or staff with submission-edit
-    permission. Transports construct that subject once and preserve it through service
-    calls; an account ID cannot substitute for Discord roles or bot ownership. Methods
-    explicitly limited to ownership (get_owned, delete, upgrade_manifest) accept an ID.
+    Access checks require an Actor and allow the owner, invited editors, or staff with
+    submission-edit permission (see `DraftRole`). Transports construct that subject once
+    and preserve it through service calls; an account ID cannot substitute for Discord roles
+    or bot ownership.
     Writes use the draft repository's revision and replay checks, and this service
     commits them. SubmissionFinalizationService handles the later step of turning
     a completed draft into a queued build submission.
@@ -402,7 +441,7 @@ class SubmissionDraftService:
 
     @application_operation
     async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
-        """List a bounded newest-first view of one account's unexpired active drafts."""
+        """List a bounded newest-first view of the unexpired active drafts an account owns or edits."""
         account_id = context.effective.require_account_id()
         async with self._uow_factory() as uow:
             if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
@@ -435,21 +474,32 @@ class SubmissionDraftService:
         self._require_owner(draft, account_id)
         return draft
 
-    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
-        """Return one unexpired draft after checking owner or current staff authority."""
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext, owner_only: bool = False) -> StoredDraft:
+        """Return one unexpired draft after checking the actor's role on it."""
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
-                return await self.get_accessible_in(uow, draft_id, actor)
+                return await self.get_accessible_in(uow, draft_id, actor, owner_only=owner_only)
 
-    async def get_accessible_in(self, uow: DraftUnitOfWork, draft_id: UUID, actor: Actor) -> StoredDraft:
-        """Check draft access within the caller's read or write operation."""
+    async def get_accessible_in(
+        self, uow: DraftUnitOfWork, draft_id: UUID, actor: Actor, *, owner_only: bool = False
+    ) -> StoredDraft:
+        """Check draft access within the caller's read or write operation.
+
+        `owner_only` excludes editors, for actions such as submitting; staff still qualify.
+        """
         draft = await uow.submission_drafts.get(draft_id)
         if draft is None:
             raise DraftNotFoundError(draft_id)
         account_id = draft_actor_id(actor)
-        if draft.snapshot.owner_account_id != account_id:
-            await self._require_staff(uow, actor)
+        role = draft.role_of(account_id)
+        if role is DraftRole.STAFF or (owner_only and role is DraftRole.EDITOR):
+            try:
+                await self._require_staff(uow, actor)
+            except PermissionDeniedError:
+                if role is DraftRole.EDITOR:
+                    raise DraftAccessDeniedError(reason="owner_required") from None
+                raise
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
             and draft.expires_at <= self._now()
@@ -474,6 +524,35 @@ class SubmissionDraftService:
             if not await uow.submission_drafts.delete_owned(draft_id, account_id):
                 raise DraftNotFoundError(draft_id)
             await uow.commit()
+
+    @application_operation
+    async def add_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        """Let the owner invite an account to edit answers; inviting the owner changes nothing.
+
+        Editors lose access when the draft is submitted. Afterwards, only the build's credits
+        decide who maintains it.
+        """
+        async with self._uow_factory() as uow:
+            draft = await self.get_accessible_in(uow, draft_id, context.effective, owner_only=True)
+            if draft.edit_source is not None:
+                raise DraftNotShareableError
+            if draft.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise DraftStateConflictError(draft.snapshot.status.value, operation="add_editor")
+            if account_id == draft.snapshot.owner_account_id:
+                return draft
+            result = await uow.submission_drafts.add_editor(draft_id, account_id, limit=MAX_DRAFT_EDITORS)
+            await uow.commit()
+            return result
+
+    @application_operation
+    async def remove_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        """Remove an editor. The owner can remove anyone; an editor can remove only themselves."""
+        actor = context.effective
+        async with self._uow_factory() as uow:
+            await self.get_accessible_in(uow, draft_id, actor, owner_only=draft_actor_id(actor) != account_id)
+            result = await uow.submission_drafts.remove_editor(draft_id, account_id)
+            await uow.commit()
+            return result
 
     async def expire_due(self, *, context: ActingContext, limit: int = 100, now: Instant | None = None) -> int:
         """Expire one bounded batch using the same authoritative service clock."""

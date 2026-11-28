@@ -5198,19 +5198,19 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                },
-                "required": false,
-                "deprecated": false
-              },
               "ETag": {
                 "schema": {
                   "type": "string"
                 },
                 "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
                 "required": true,
+                "deprecated": false
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
                 "deprecated": false
               },
               "Request-Id": {
@@ -5558,19 +5558,19 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                },
-                "required": false,
-                "deprecated": false
-              },
               "ETag": {
                 "schema": {
                   "type": "string"
                 },
                 "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
                 "required": true,
+                "deprecated": false
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
                 "deprecated": false
               },
               "Request-Id": {
@@ -23181,7 +23181,7 @@
           "submissions"
         ],
         "summary": "ListDrafts",
-        "description": "Return at most ten compact active drafts owned by the signed-in account.",
+        "description": "Return at most ten compact active drafts the signed-in account owns or edits.",
         "operationId": "submission_drafts_list",
         "responses": {
           "200": {
@@ -25475,6 +25475,575 @@
         ],
         "x-squid-cli": {
           "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/editors": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "ListDraftEditors",
+        "description": "Return the draft's owner and the accounts invited to edit its answers.",
+        "operationId": "submission_draft_editors_list",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftEditorsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.editors.list",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
+        }
+      },
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "AddDraftEditor",
+        "description": "Let the owner invite an account to edit answers. Only the owner can submit or discard the draft.\n\nInviting a current editor or the owner changes nothing. Drafts that edit a published build\ncannot be shared.",
+        "operationId": "submission_draft_editors_add",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftEditorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftEditorsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.editors.add",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/editors/{account_id}": {
+      "delete": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "RemoveDraftEditor",
+        "description": "Remove an editor. The owner can remove anyone; an editor can remove only themselves.",
+        "operationId": "submission_draft_editors_remove",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftEditorsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.editors.remove",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -35734,6 +36303,41 @@
         ],
         "title": "DraftEditResult"
       },
+      "DraftEditorRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "DraftEditorRequest"
+      },
+      "DraftEditorsResponse": {
+        "properties": {
+          "owner": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "editors": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "editors",
+          "owner"
+        ],
+        "title": "DraftEditorsResponse"
+      },
       "DraftListResponse": {
         "properties": {
           "drafts": {
@@ -35966,6 +36570,16 @@
         ],
         "title": "DraftProgressResponse"
       },
+      "DraftRole": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "editor",
+          "staff"
+        ],
+        "title": "DraftRole",
+        "description": "How an account reaches a draft.\n\nOwners and editors change answers. Only the owner submits, discards, upgrades the form,\nand manages editors. Staff reach every draft through `build.submission.edit`.\n"
+      },
       "DraftSchematicResponse": {
         "properties": {
           "id": {
@@ -36049,6 +36663,9 @@
             "type": "string",
             "format": "uuid"
           },
+          "role": {
+            "$ref": "#/components/schemas/DraftRole"
+          },
           "inferred": {
             "type": "boolean"
           },
@@ -36128,6 +36745,7 @@
           "origin",
           "progress",
           "revision",
+          "role",
           "schema_id",
           "schema_revision",
           "source_build_id",
@@ -36138,6 +36756,9 @@
       },
       "DraftViewer": {
         "properties": {
+          "role": {
+            "$ref": "#/components/schemas/DraftRole"
+          },
           "can_edit": {
             "type": "boolean"
           },
@@ -36148,7 +36769,8 @@
         "type": "object",
         "required": [
           "can_discard",
-          "can_edit"
+          "can_edit",
+          "role"
         ],
         "title": "DraftViewer"
       },

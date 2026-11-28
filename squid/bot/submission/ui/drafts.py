@@ -54,6 +54,8 @@ from squid.bot.submission.ui.sections import (
     problem_text,
     section_text,
 )
+from squid.bot.utils.accounts import get_or_create_discord_account_id
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext, Actor
 from squid.core.builds.models import Build
 from squid.core.errors import JSONValue, SquidError
@@ -61,6 +63,7 @@ from squid.core.i18n import tr
 from squid.core.submissions.application import FinalizationJobSnapshot, StoredDraft
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
 from squid.core.submissions.application.build_target import preview_build
+from squid.core.submissions.application.drafts import MAX_DRAFT_EDITORS, DraftRole, draft_actor_id
 from squid.core.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
 from squid.core.submissions.application.intake import SuppliedAttachment
 from squid.core.submissions.domain import (
@@ -100,6 +103,7 @@ type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target
 @dataclass(frozen=True, slots=True)
 class DraftProjection:
     draft: StoredDraft
+    viewer_account_id: int
     attachments: tuple[SuppliedAttachment, ...] = ()
     result: FinalizationJobSnapshot | None = None
 
@@ -153,6 +157,7 @@ class DraftWorkspace(sl.Reactive):
         changes: Topic,
         render_card: CardRenderer | None = None,
         resolve_actor: Callable[[], Awaitable[Actor]],
+        viewer_account_id: int,
     ) -> None:
         self.services = services
 
@@ -163,7 +168,7 @@ class DraftWorkspace(sl.Reactive):
         self._draft_id = draft.snapshot.id
         self.uploads = draft_intake.DraftUploads(services, self._draft_id, resolve_actor, self.edits)
         self._changes = changes
-        self._seed: DraftProjection | None = DraftProjection(draft)
+        self._seed: DraftProjection | None = DraftProjection(draft, viewer_account_id)
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> DraftProjection:
@@ -191,6 +196,10 @@ class DraftWorkspace(sl.Reactive):
     @property
     def draft(self) -> StoredDraft:
         return self._current().draft
+
+    @property
+    def role(self) -> DraftRole:
+        return self.draft.role_of(self._current().viewer_account_id)
 
     @property
     def category(self) -> str:
@@ -295,11 +304,17 @@ class DraftWorkspace(sl.Reactive):
             self.projection.replace(current)
 
     async def _read(self) -> DraftProjection:
-        context = ActingContext.for_actor(await self.resolve_actor())
+        actor = await self.resolve_actor()
+        context = ActingContext.for_actor(actor)
         draft = await self.services.submission_drafts.get_accessible(self._draft_id, context=context)
         attachments = await self.services.submission_intake.list(self._draft_id, context=context)
         result = await self.services.submission_finalization.status(self._draft_id, context=context)
-        return DraftProjection(draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None)
+        return DraftProjection(
+            draft,
+            draft_actor_id(actor),
+            attachments,
+            result if isinstance(result, FinalizationJobSnapshot) else None,
+        )
 
     async def load_options(self, fields: Iterable[FormField]) -> None:
         """Fetch the current catalogue for each catalogue field, replacing any earlier copy."""
@@ -349,6 +364,31 @@ class DraftWorkspace(sl.Reactive):
             self.notice = ""
             self.edits.forget({draft_target(self._draft_id).identity})
         await self.reload()
+
+    async def add_editor(self, discord_user_id: int) -> None:
+        context = ActingContext.for_actor(await self.resolve_actor())
+        account_id = await get_or_create_discord_account_id(self.services.accounts, discord_user_id)
+        try:
+            await self.services.submission_drafts.add_editor(self._draft_id, account_id, context=context)
+        except SquidError as error:
+            self.notice = error.public_text()
+            return
+        self.notice = ""
+        await self.reload()
+
+    async def remove_editor(self, account_id: int) -> None:
+        """Remove an editor. A viewer who removes themselves loses access, so the panel is not reloaded."""
+        actor = await self.resolve_actor()
+        try:
+            await self.services.submission_drafts.remove_editor(
+                self._draft_id, account_id, context=ActingContext.for_actor(actor)
+            )
+        except SquidError as error:
+            self.notice = error.public_text()
+            return
+        self.notice = ""
+        if account_id != draft_actor_id(actor):
+            await self.reload()
 
     async def add_files(self, files: Sequence[sl.forms.UploadedFile], *, base_revision: int | None = None) -> None:
         revision = self.draft.snapshot.revision if base_revision is None else base_revision
@@ -518,7 +558,8 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         Raises:
             ValueError: This server can no longer read the draft's form revision.
         """
-        context = ActingContext.for_actor(await resolve_actor())
+        actor = await resolve_actor()
+        context = ActingContext.for_actor(actor)
         draft = await services.submission_drafts.get_accessible(draft_id, context=context)
         manifest = await services.submission_forms.manifest_revision(
             draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None, context=context
@@ -527,7 +568,13 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             message = "This draft's form revision is unavailable."
             raise ValueError(message)
         workspace = DraftWorkspace(
-            services, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
+            services,
+            draft,
+            manifest,
+            changes=changes,
+            render_card=render_card,
+            resolve_actor=resolve_actor,
+            viewer_account_id=draft_actor_id(actor),
         )
         await workspace.reload()
         await workspace.load_options(workspace.fields)
@@ -647,6 +694,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             )
             return children
         missing = len(ws.missing_required())
+        owner_submits = ws.role is DraftRole.EDITOR
         footer = (
             md_tr(
                 t"""
@@ -657,6 +705,8 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 """,
             )
             if missing
+            else tr(t"draft-editor-owner-submits = Ready. Only the draft's owner can submit it.")
+            if owner_submits
             else tr(t"draft-editor-ready = Ready to submit.")
         )
         children.extend(
@@ -664,7 +714,10 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 sl.paragraph(footer),
                 sl.action_controls(
                     preview,
-                    sl.action_control(
+                    ws.draft.edit_source is None
+                    and sl.action_control(tr(t"draft-editor-editors = Editors"), self._open_editors, key="editors"),
+                    not owner_submits
+                    and sl.action_control(
                         tr(t"draft-editor-submit = Submit draft"),
                         self._submit,
                         key="submit",
@@ -718,6 +771,11 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     async def _preview(self, event: sd.PressEvent) -> None:
         await self.open_child(event, BuildPreviewScreen(self.workspace), on_result=self._child_closed)
+
+    async def _open_editors(self, event: sd.PressEvent) -> None:
+        screen = DraftEditorsScreen(self.workspace)
+        await screen.load_names()
+        await self.open_child(event, screen, on_result=self._child_closed)
 
     async def _infer_schematic(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
@@ -855,6 +913,110 @@ class FilesEditorScreen(sd.Screen[None]):
             key="replace-file",
             on_submit=supplied,
         )
+
+    async def _done(self, event: sd.PressEvent) -> None:
+        self.complete(event, None)
+
+
+class DraftEditorsScreen(sd.Screen[None]):
+    """A private message listing who can edit the draft, where the owner invites and removes editors."""
+
+    policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, session=DETAIL_SESSION)
+    names: Mapping[int, TextLike] = sl.state({})
+    left: bool = sl.state(False)
+
+    def __init__(self, workspace: DraftWorkspace) -> None:
+        self.session_id: UUID | None = None
+        self.workspace = workspace
+
+    async def load_names(self) -> None:
+        """Name each account by its Discord mention, or by another identity's display name."""
+        accounts = await self.workspace.services.accounts.get_accounts(tuple(self.workspace.draft.account_ids))
+        names: dict[int, TextLike] = {}
+        for account_id, account in accounts.items():
+            discord = account.identities_for(IdentityProvider.DISCORD)
+            shown = next((identity.display_name for identity in account.identities if identity.display_name), None)
+            names[account_id] = sl.mention(int(discord[0].subject)) if discord else (shown or "?")
+        self.names = names
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+        ws = self.workspace
+        if self.left:
+            return (sl.status(tr(t"draft-editors-left = You left this draft. You can dismiss this message.")),)
+        if (closed := closed_detail(self, ws)) is not None:
+            return closed
+        draft = ws.draft
+        manages = ws.role is not DraftRole.EDITOR
+        owner = self.names.get(draft.snapshot.owner_account_id, "?")
+        children: list[Any] = [
+            sl.heading(tr(t"draft-editors-heading = Editors")),
+            sl.paragraph(
+                md_tr(
+                    t"draft-editors-help = Editors can change answers and files. Only the owner, {owner}, "
+                    t"can submit or discard the draft. Editors lose access once it is submitted."
+                )
+            ),
+        ]
+        if ws.notice:
+            children.append(sl.paragraph(t"⚠️ {ws.notice}"))
+        editors = sorted(draft.editor_account_ids)
+        if not editors:
+            children.append(sl.paragraph(tr(t"draft-editors-none = Nobody else can edit this draft yet.")))
+        for account_id in editors:
+            name = self.names.get(account_id, "?")
+            children.append(
+                sd.v2.section(
+                    name,
+                    accessory=sd.v2.button(
+                        tr(t"draft-editors-remove = Remove"),
+                        partial(self._remove, account_id),
+                        key=f"remove-{account_id}",
+                    ),
+                )
+                if manages
+                else sd.v2.text(name)
+            )
+        if manages and len(editors) < MAX_DRAFT_EDITORS:
+            children.append(
+                sl.entities(
+                    key="draft-editor-invite",
+                    entity_type=sl.entity.EntityType.USER,
+                    on_change=self._invite,
+                    placeholder=tr(t"draft-editors-invite = Invite a Discord user to edit…"),
+                )
+            )
+        children.extend(
+            (
+                sd.v2.separator(),
+                done_row(
+                    self._done,
+                    *(
+                        ()
+                        if manages
+                        else (
+                            sl.action_control(
+                                tr(t"draft-editors-leave = Leave draft"), self._leave, key="leave", tone=sl.Tone.DANGER
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+        return (sl.block(*children, accent=sl.AccentRole.BRAND),)
+
+    async def _invite(self, event: sl.EntityEvent[sd.Request]) -> None:
+        target = event.selected[0]
+        if isinstance(target.id, int):
+            await self.workspace.add_editor(target.id)
+            await self.load_names()
+
+    async def _remove(self, account_id: int, event: sd.PressEvent) -> None:
+        await self.workspace.remove_editor(account_id)
+
+    async def _leave(self, event: sd.PressEvent) -> None:
+        await self.workspace.remove_editor(self.workspace._current().viewer_account_id)
+        self.left = not self.workspace.notice
 
     async def _done(self, event: sd.PressEvent) -> None:
         self.complete(event, None)

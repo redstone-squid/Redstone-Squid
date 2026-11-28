@@ -1,13 +1,15 @@
 """PostgreSQL persistence for synchronized submission drafts."""
 
 import json
+from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import Select, delete, exists, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
@@ -38,14 +40,15 @@ from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
+    DraftEditorLimitError,
     DraftNotFoundError,
     DraftStateConflictError,
 )
 from squid.core.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.core.submissions.models.entities import (
     SubmissionDraft,
-    SubmissionDraftAccess,
     SubmissionDraftChange,
+    SubmissionDraftEditor,
 )
 from squid.core.submissions.models.finalization import SubmissionFinalizationJob
 
@@ -91,7 +94,7 @@ class PostgresDraftRepository(DraftRepository):
         page = await order.page(
             session, _needing_attention(select(SubmissionDraft), now), selector, page_size=page_size, total=total or 0
         )
-        return replace(page, items=tuple(_to_stored(model) for model in page.items))
+        return replace(page, items=await _with_editors(session, page.items))
 
     @override
     async def list_active_for_account(
@@ -110,7 +113,13 @@ class PostgresDraftRepository(DraftRepository):
                 await session.scalars(
                     select(SubmissionDraft)
                     .where(
-                        SubmissionDraft.owner_account_id == account_id,
+                        or_(
+                            SubmissionDraft.owner_account_id == account_id,
+                            exists().where(
+                                SubmissionDraftEditor.draft_id == SubmissionDraft.id,
+                                SubmissionDraftEditor.account_id == account_id,
+                            ),
+                        ),
                         SubmissionDraft.status.in_(_ACTIVE_STATUSES),
                         SubmissionDraft.expires_at > now,
                     )
@@ -119,7 +128,7 @@ class PostgresDraftRepository(DraftRepository):
                 )
             ).all()
         )
-        return tuple(_to_stored(model) for model in models)
+        return await _with_editors(session, models)
 
     @override
     async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
@@ -162,7 +171,7 @@ class PostgresDraftRepository(DraftRepository):
                 model.inference_run_id,
             ):
                 raise DraftStateConflictError(existing.status.value, operation="create")
-            return _to_stored(existing)
+            return (await _with_editors(session, (existing,)))[0]
         count_query = (
             select(func.count())
             .select_from(SubmissionDraft)
@@ -177,13 +186,6 @@ class PostgresDraftRepository(DraftRepository):
         if (await session.scalar(count_query) or 0) >= capacity:
             raise DraftCapacityExceededError(capacity)
         session.add(model)
-        session.add(
-            SubmissionDraftAccess(
-                draft_id=model.id,
-                account_id=model.owner_account_id,
-                role="owner",
-            )
-        )
         return _to_stored(model)
 
     async def lock_edit(self, draft_id: UUID) -> StoredDraft:
@@ -204,7 +206,7 @@ class PostgresDraftRepository(DraftRepository):
     async def get(self, draft_id: UUID) -> StoredDraft | None:
         session = self._session()
         model = await session.get(SubmissionDraft, draft_id)
-        return _to_stored(model) if model is not None else None
+        return (await _with_editors(session, (model,)))[0] if model is not None else None
 
     @override
     async def replayed_change(
@@ -231,7 +233,7 @@ class PostgresDraftRepository(DraftRepository):
             return None
         _require_same_change(row[1], change, account_id if actor_account_id is None else actor_account_id)
         # Replay returns today's snapshot, not the snapshot when the edit was accepted.
-        return AppliedDraftChange(_to_stored(row[0]), replayed=True)
+        return AppliedDraftChange((await _with_editors(session, (row[0],)))[0], replayed=True)
 
     @override
     async def apply_change(
@@ -255,7 +257,7 @@ class PostgresDraftRepository(DraftRepository):
         )
         if replay is not None:
             _require_same_change(replay, change, account_id if actor_account_id is None else actor_account_id)
-            return AppliedDraftChange(_to_stored(model), replayed=True)
+            return AppliedDraftChange((await _with_editors(session, (model,)))[0], replayed=True)
 
         candidate = _to_stored(model).snapshot.apply(change)
         model.revision = candidate.revision
@@ -282,7 +284,7 @@ class PostgresDraftRepository(DraftRepository):
                 applied_at=updated_at,
             )
         )
-        return AppliedDraftChange(_to_stored(model))
+        return AppliedDraftChange((await _with_editors(session, (model,)))[0])
 
     @override
     async def upgrade_manifest(
@@ -300,7 +302,7 @@ class PostgresDraftRepository(DraftRepository):
         model = await self._locked(session, draft_id)
         self._require_owner(model, account_id)
         if model.schema_revision == target_schema_revision:
-            return AppliedDraftUpgrade(_to_stored(model), replayed=True)
+            return AppliedDraftUpgrade((await _with_editors(session, (model,)))[0], replayed=True)
         if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
         if model.revision != expected_revision:
@@ -315,7 +317,7 @@ class PostgresDraftRepository(DraftRepository):
         model.answers = _json_object(answers)
         model.updated_at = updated_at
         model.expires_at = expires_at
-        return AppliedDraftUpgrade(_to_stored(model))
+        return AppliedDraftUpgrade((await _with_editors(session, (model,)))[0])
 
     @override
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
@@ -351,6 +353,31 @@ class PostgresDraftRepository(DraftRepository):
         )
         await session.delete(model)
         return True
+
+    @override
+    async def add_editor(self, draft_id: UUID, account_id: int, *, limit: int) -> StoredDraft:
+        session = self._session()
+        model = await self._locked(session, draft_id)
+        current = (await _with_editors(session, (model,)))[0]
+        if account_id in current.editor_account_ids:
+            return current
+        if len(current.editor_account_ids) >= limit:
+            raise DraftEditorLimitError(limit)
+        await session.execute(
+            insert(SubmissionDraftEditor).values(draft_id=draft_id, account_id=account_id).on_conflict_do_nothing()
+        )
+        return replace(current, editor_account_ids=current.editor_account_ids | {account_id})
+
+    @override
+    async def remove_editor(self, draft_id: UUID, account_id: int) -> StoredDraft:
+        session = self._session()
+        model = await self._locked(session, draft_id)
+        await session.execute(
+            delete(SubmissionDraftEditor).where(
+                SubmissionDraftEditor.draft_id == draft_id, SubmissionDraftEditor.account_id == account_id
+            )
+        )
+        return (await _with_editors(session, (model,)))[0]
 
     @override
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
@@ -455,7 +482,22 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
     )
 
 
-def _to_stored(model: SubmissionDraft) -> StoredDraft:
+async def _with_editors(session: AsyncSession, models: Sequence[SubmissionDraft]) -> tuple[StoredDraft, ...]:
+    """Convert drafts, loading their editors in one query."""
+    editors: defaultdict[UUID, set[int]] = defaultdict(set)
+    if models:
+        rows = await session.execute(
+            select(SubmissionDraftEditor.draft_id, SubmissionDraftEditor.account_id).where(
+                SubmissionDraftEditor.draft_id.in_([model.id for model in models])
+            )
+        )
+        for draft_id, account_id in rows:
+            editors[draft_id].add(account_id)
+    return tuple(_to_stored(model, frozenset(editors[model.id])) for model in models)
+
+
+def _to_stored(model: SubmissionDraft, editor_account_ids: frozenset[int] = frozenset()) -> StoredDraft:
+    """Convert a draft row; callers that need editors use `_with_editors`."""
     return StoredDraft(
         snapshot=DraftSnapshot(
             id=model.id,
@@ -483,6 +525,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         preparation_attempt=model.preparation_attempt,
         inferred=model.inferred,
         submission_actor_account_id=model.submission_actor_account_id,
+        editor_account_ids=editor_account_ids,
     )
 
 

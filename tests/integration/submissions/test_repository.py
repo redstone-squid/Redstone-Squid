@@ -32,11 +32,11 @@ from squid.core.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
-from squid.core.submissions.errors import DraftStateConflictError
+from squid.core.submissions.errors import DraftEditorLimitError, DraftStateConflictError
 from squid.core.submissions.models.entities import (
     SubmissionDraft,
-    SubmissionDraftAccess,
     SubmissionDraftChange,
+    SubmissionDraftEditor,
 )
 from squid.core.submissions.models.finalization import SubmissionFinalizationJob
 from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
@@ -49,7 +49,7 @@ _TABLES = model_tables(
     Account,
     SubmissionDraft,
     SubmissionSuppliedAttachment,
-    SubmissionDraftAccess,
+    SubmissionDraftEditor,
     SubmissionDraftChange,
     SubmissionFinalizationJob,
     MediaUploadRecord,
@@ -120,7 +120,7 @@ def _change(*, key: str, operation_id: str) -> DraftChange:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("boolean_value", [False, True])
-async def test_create_adds_owner_grant_and_replays_change(
+async def test_create_replays_change(
     boolean_value: bool,
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
@@ -187,9 +187,7 @@ async def test_create_adds_owner_grant_and_replays_change(
                     expires_at=NOW.add(hours=1),
                 )
     async with async_session_factory() as session:
-        grants = await session.scalar(select(func.count()).select_from(SubmissionDraftAccess))
         changes = await session.scalar(select(func.count()).select_from(SubmissionDraftChange))
-    assert grants == 1
     assert changes == 1
 
 
@@ -627,3 +625,46 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
         drafts, lambda uow: uow.submission_drafts.list_attention(selector=FIRST_PAGE, page_size=1, now=NOW)
     )
     assert corrected.items == ()
+
+
+async def test_editors_load_with_the_draft_and_see_it_listed(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    async with async_session_factory.begin() as session:
+        editor = Account()
+        session.add(editor)
+        await session.flush()
+        editor_id = editor.id
+    await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
+
+    added = await transact(
+        repository, lambda uow: uow.submission_drafts.add_editor(DRAFT_ID, editor_id, limit=1), commit=True
+    )
+    again = await transact(
+        repository, lambda uow: uow.submission_drafts.add_editor(DRAFT_ID, editor_id, limit=1), commit=True
+    )
+    with pytest.raises(DraftEditorLimitError):
+        await transact(repository, lambda uow: uow.submission_drafts.add_editor(DRAFT_ID, account_id, limit=1))
+    loaded = await transact(repository, lambda uow: uow.submission_drafts.get(DRAFT_ID))
+    shared = await transact(
+        repository, lambda uow: uow.submission_drafts.list_active_for_account(editor_id, now=NOW, limit=10)
+    )
+
+    assert added.editor_account_ids == again.editor_account_ids == {editor_id}
+    assert loaded is not None
+    assert loaded.editor_account_ids == {editor_id}
+    assert [draft.snapshot.id for draft in shared] == [DRAFT_ID]
+    assert shared[0].editor_account_ids == {editor_id}
+
+    removed = await transact(
+        repository, lambda uow: uow.submission_drafts.remove_editor(DRAFT_ID, editor_id), commit=True
+    )
+    assert removed.editor_account_ids == frozenset()
+    assert (
+        await transact(
+            repository, lambda uow: uow.submission_drafts.list_active_for_account(editor_id, now=NOW, limit=10)
+        )
+        == ()
+    )

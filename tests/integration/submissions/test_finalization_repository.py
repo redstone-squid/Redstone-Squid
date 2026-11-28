@@ -59,8 +59,8 @@ from squid.core.submissions.infrastructure.finalization_repository import (
 )
 from squid.core.submissions.models.entities import (
     SubmissionDraft,
-    SubmissionDraftAccess,
     SubmissionDraftChange,
+    SubmissionDraftEditor,
 )
 from squid.core.submissions.models.finalization import (
     SubmissionFinalizationInput,
@@ -83,7 +83,7 @@ _TABLES = model_tables(
     Account,
     SubmissionDraft,
     SubmissionSuppliedAttachment,
-    SubmissionDraftAccess,
+    SubmissionDraftEditor,
     SubmissionDraftChange,
     DraftSchematicSource,
     DraftSchematicLink,

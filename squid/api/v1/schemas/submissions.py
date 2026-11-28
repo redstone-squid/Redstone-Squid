@@ -4,6 +4,7 @@ The form describes fields and constraints; how they are drawn is the client's
 decision.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Annotated, Literal, Self, cast
 from uuid import UUID
@@ -28,7 +29,7 @@ from squid.core.submissions.application import (
     FormOptionSet,
     StoredDraft,
 )
-from squid.core.submissions.application.drafts import DraftViewer
+from squid.core.submissions.application.drafts import MAX_DRAFT_EDITORS, DraftRole, DraftViewer
 from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
     DRAFT_CHANGE_KEY_MIN_LENGTH,
@@ -413,6 +414,7 @@ class DraftSummaryResponse(StrictSchema):
     """Compact active-draft metadata safe for cross-client discovery."""
 
     id: UUID
+    role: DraftRole
     inferred: bool
     schema_id: str
     schema_revision: int
@@ -430,10 +432,11 @@ class DraftSummaryResponse(StrictSchema):
     expires_at: datetime
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None) -> DraftSummaryResponse:
+    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None, account_id: int) -> DraftSummaryResponse:
         display_name = draft.snapshot.answers.get("display_name")
         return cls(
             id=draft.snapshot.id,
+            role=draft.role_of(account_id),
             inferred=draft.inferred,
             schema_id=draft.snapshot.schema_id,
             schema_revision=draft.snapshot.schema_revision,
@@ -452,9 +455,29 @@ class DraftSummaryResponse(StrictSchema):
 
 
 class DraftListResponse(StrictSchema):
-    """Bounded active drafts owned by one authenticated account."""
+    """Bounded active drafts one authenticated account owns or edits."""
 
     drafts: list[DraftSummaryResponse] = Field(max_length=10)
+
+
+class DraftEditorsResponse(StrictSchema):
+    """Accounts that can change a draft's answers, by public account ID."""
+
+    owner: UUID
+    editors: list[UUID] = Field(max_length=MAX_DRAFT_EDITORS)
+
+    @classmethod
+    def from_domain(cls, draft: StoredDraft, public_ids: Mapping[int, UUID]) -> DraftEditorsResponse:
+        return cls(
+            owner=public_ids[draft.snapshot.owner_account_id],
+            editors=sorted(public_ids[account_id] for account_id in draft.editor_account_ids),
+        )
+
+
+class DraftEditorRequest(StrictSchema):
+    """Invite an account, by public ID, to edit a draft."""
+
+    account_id: UUID
 
 
 class DraftChangeResponse(StrictSchema):

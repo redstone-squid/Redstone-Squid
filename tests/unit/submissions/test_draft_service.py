@@ -21,6 +21,7 @@ from squid.core.submissions.application import (
     StoredDraft,
     SubmissionDraftService,
 )
+from squid.core.submissions.application.drafts import MAX_DRAFT_EDITORS, DraftRole, DraftViewer
 from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
@@ -31,9 +32,12 @@ from squid.core.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
+from squid.core.submissions.domain.build_edit import DraftEditSource
 from squid.core.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
+    DraftEditorLimitError,
+    DraftNotShareableError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
     DraftValidationError,
@@ -77,7 +81,7 @@ class FakeDraftRepository:
                 (
                     draft
                     for draft in self.drafts.values()
-                    if draft.snapshot.owner_account_id == account_id
+                    if account_id in draft.account_ids
                     and draft.snapshot.status
                     in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
                     and draft.expires_at > now
@@ -172,6 +176,18 @@ class FakeDraftRepository:
         )
         self.drafts[draft_id] = updated
         return AppliedDraftUpgrade(updated)
+
+    async def add_editor(self, draft_id: UUID, account_id: int, *, limit: int) -> StoredDraft:
+        current = self.drafts[draft_id]
+        if account_id not in current.editor_account_ids and len(current.editor_account_ids) >= limit:
+            raise DraftEditorLimitError(limit)
+        self.drafts[draft_id] = replace(current, editor_account_ids=current.editor_account_ids | {account_id})
+        return self.drafts[draft_id]
+
+    async def remove_editor(self, draft_id: UUID, account_id: int) -> StoredDraft:
+        current = self.drafts[draft_id]
+        self.drafts[draft_id] = replace(current, editor_account_ids=current.editor_account_ids - {account_id})
+        return self.drafts[draft_id]
 
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         current = self.drafts.get(draft_id)
@@ -831,3 +847,86 @@ async def test_draft_access_requires_actor_even_when_account_owns_the_draft() ->
     assert unconfigured.value.public_detail() == (
         "Staff access to submission drafts is not configured for this service. Contact the service operator."
     )
+
+
+class _NoStaff:
+    async def require(self, subject: Actor, *nodes: object, uow: PermissionUnitOfWork | None = None) -> None:
+        require_check(
+            PermissionCheck(tuple(Decision(str(node), allowed=False, reason=Reason.DEFAULT) for node in nodes))
+        )
+
+
+async def _service_with_draft(repository: FakeDraftRepository, *, owner: int = 7) -> SubmissionDraftService:
+    service = SubmissionDraftService(
+        CheckedInFormManifestRegistry(),
+        now=lambda: NOW,
+        permissions=_NoStaff(),
+        uow_factory=partial(DraftScope, repository),
+    )
+    await service.create(
+        owner_account_id=owner,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
+        locale="en",
+        draft_id=DRAFT_ID,
+        context=ActingContext.direct(UserActor(account_id=owner)),
+    )
+    return service
+
+
+def _as(account_id: int) -> ActingContext:
+    return ActingContext.direct(UserActor(account_id=account_id))
+
+
+async def test_editors_change_answers_but_only_the_owner_submits_and_discards() -> None:
+    repository = FakeDraftRepository()
+    service = await _service_with_draft(repository)
+    with pytest.raises(PermissionDeniedError):
+        await service.get_accessible(DRAFT_ID, context=_as(8))
+
+    shared = await service.add_editor(DRAFT_ID, 8, context=_as(7))
+
+    assert shared.editor_account_ids == {8}
+    assert shared.viewer(8) == DraftViewer(DraftRole.EDITOR, can_edit=True, can_discard=False)
+    assert [draft.snapshot.id for draft in await service.list_active(context=_as(8))] == [DRAFT_ID]
+    changed = await service.apply_change(DRAFT_ID, _change(), context=_as(8), locale="en")
+    assert changed.draft.snapshot.owner_account_id == 7
+    assert repository.actors == [8]
+    with pytest.raises(DraftAccessDeniedError) as denied:
+        await service.get_accessible(DRAFT_ID, context=_as(8), owner_only=True)
+    assert denied.value.public_context == {"reason": "owner_required"}
+    with pytest.raises(DraftAccessDeniedError):
+        await service.delete(DRAFT_ID, context=_as(8))
+    with pytest.raises(DraftAccessDeniedError):
+        await service.add_editor(DRAFT_ID, 9, context=_as(8))
+
+
+async def test_owner_manages_editors_and_editors_can_only_leave() -> None:
+    repository = FakeDraftRepository()
+    service = await _service_with_draft(repository)
+    await service.add_editor(DRAFT_ID, 8, context=_as(7))
+    await service.add_editor(DRAFT_ID, 9, context=_as(7))
+
+    assert (await service.add_editor(DRAFT_ID, 7, context=_as(7))).editor_account_ids == {8, 9}
+    with pytest.raises(DraftAccessDeniedError):
+        await service.remove_editor(DRAFT_ID, 9, context=_as(8))
+    assert (await service.remove_editor(DRAFT_ID, 8, context=_as(8))).editor_account_ids == {9}
+    assert (await service.remove_editor(DRAFT_ID, 9, context=_as(7))).editor_account_ids == frozenset()
+    with pytest.raises(PermissionDeniedError):
+        await service.get_accessible(DRAFT_ID, context=_as(9))
+
+
+async def test_sharing_is_limited_and_excludes_build_edit_drafts() -> None:
+    repository = FakeDraftRepository()
+    service = await _service_with_draft(repository)
+    for account_id in range(100, 100 + MAX_DRAFT_EDITORS):
+        await service.add_editor(DRAFT_ID, account_id, context=_as(7))
+    with pytest.raises(DraftEditorLimitError):
+        await service.add_editor(DRAFT_ID, 99, context=_as(7))
+
+    repository.drafts[DRAFT_ID] = replace(
+        repository.drafts[DRAFT_ID], edit_source=DraftEditSource(build_id=1, revision=1, answers={})
+    )
+    with pytest.raises(DraftNotShareableError):
+        await service.add_editor(DRAFT_ID, 99, context=_as(7))

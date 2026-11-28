@@ -26,27 +26,26 @@ SUBMISSION_REFERENCES = (
     AccountReference("submission_revision_proposals", "approved_by_account_id"),
     AccountReference("submission_schematic_sources", "owner_account_id"),
     AccountReference("submission_schematic_sources", "uploaded_by_account_id"),
-    AccountReference("submission_draft_access", "account_id"),
+    AccountReference("submission_draft_editors", "account_id"),
     AccountReference("submission_draft_changes", "actor_account_id"),
     AccountReference("build_schematics", "rights_attested_by_account_id"),
 )
 
-# Keep the access row belonging to the draft's pre-merge owner when both accounts have access.
-# The joined CASE delete expresses that precedence once, before ownership references move.
-_COLLAPSE_DRAFT_ACCESS = """
-    DELETE FROM submission_draft_access AS access_row
-    WHERE access_row.id IN (
-        SELECT CASE
-            WHEN draft.owner_account_id = :absorbed THEN survivor_access.id
-            ELSE absorbed_access.id
-        END
-        FROM submission_draft_access AS survivor_access
-        JOIN submission_draft_access AS absorbed_access
-          ON absorbed_access.draft_id = survivor_access.draft_id
-        JOIN submission_drafts AS draft ON draft.id = survivor_access.draft_id
-        WHERE survivor_access.account_id = :survivor
-          AND absorbed_access.account_id = :absorbed
-    )
+# Before editor rows move, drop any that would duplicate an editor row or the draft's owner.
+_COLLAPSE_DRAFT_EDITORS = """
+    DELETE FROM submission_draft_editors AS editor
+    USING submission_drafts AS draft
+    WHERE draft.id = editor.draft_id
+      AND (
+        (editor.account_id = :absorbed AND (
+            draft.owner_account_id = :survivor
+            OR EXISTS (
+                SELECT 1 FROM submission_draft_editors AS other
+                WHERE other.draft_id = editor.draft_id AND other.account_id = :survivor
+            )
+        ))
+        OR (editor.account_id = :survivor AND draft.owner_account_id = :absorbed)
+      )
     """
 
 
@@ -89,7 +88,7 @@ async def merge_submissions(session: AsyncSession, context: AccountMergeContext)
             updated_at=func.now(),
         )
     )
-    await session.execute(text(_COLLAPSE_DRAFT_ACCESS), context.parameters)
+    await session.execute(text(_COLLAPSE_DRAFT_EDITORS), context.parameters)
     await move_account_references(session, SUBMISSION_REFERENCES, context)
 
 

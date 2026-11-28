@@ -1023,6 +1023,21 @@ export type DraftEditResult = {
 };
 
 /**
+ * DraftEditorRequest
+ */
+export type DraftEditorRequest = {
+    account_id: string;
+};
+
+/**
+ * DraftEditorsResponse
+ */
+export type DraftEditorsResponse = {
+    owner: string;
+    editors: Array<string>;
+};
+
+/**
  * DraftListResponse
  */
 export type DraftListResponse = {
@@ -1119,6 +1134,17 @@ export type DraftProgressResponse = {
 };
 
 /**
+ * DraftRole
+ *
+ * How an account reaches a draft.
+ *
+ * Owners and editors change answers. Only the owner submits, discards, upgrades the form,
+ * and manages editors. Staff reach every draft through `build.submission.edit`.
+ *
+ */
+export type DraftRole = 'owner' | 'editor' | 'staff';
+
+/**
  * DraftSchematicResponse
  */
 export type DraftSchematicResponse = {
@@ -1150,6 +1176,7 @@ export type DraftStatus = 'editing' | 'processing' | 'needs_attention' | 'submit
  */
 export type DraftSummaryResponse = {
     id: string;
+    role: DraftRole;
     inferred: boolean;
     schema_id: string;
     schema_revision: number;
@@ -1170,6 +1197,7 @@ export type DraftSummaryResponse = {
  * DraftViewer
  */
 export type DraftViewer = {
+    role: DraftRole;
     can_edit: boolean;
     can_discard: boolean;
 };
@@ -12123,6 +12151,176 @@ export type SubmissionAttemptGetResponses = {
 };
 
 export type SubmissionAttemptGetResponse = SubmissionAttemptGetResponses[keyof SubmissionAttemptGetResponses];
+
+export type SubmissionDraftEditorsListData = {
+    body?: never;
+    path: {
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/editors';
+};
+
+export type SubmissionDraftEditorsListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionDraftEditorsListError = SubmissionDraftEditorsListErrors[keyof SubmissionDraftEditorsListErrors];
+
+export type SubmissionDraftEditorsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: DraftEditorsResponse;
+};
+
+export type SubmissionDraftEditorsListResponse = SubmissionDraftEditorsListResponses[keyof SubmissionDraftEditorsListResponses];
+
+export type SubmissionDraftEditorsAddData = {
+    body: DraftEditorRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/editors';
+};
+
+export type SubmissionDraftEditorsAddErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionDraftEditorsAddError = SubmissionDraftEditorsAddErrors[keyof SubmissionDraftEditorsAddErrors];
+
+export type SubmissionDraftEditorsAddResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: DraftEditorsResponse;
+};
+
+export type SubmissionDraftEditorsAddResponse = SubmissionDraftEditorsAddResponses[keyof SubmissionDraftEditorsAddResponses];
+
+export type SubmissionDraftEditorsRemoveData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        draft_id: string;
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/editors/{account_id}';
+};
+
+export type SubmissionDraftEditorsRemoveErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionDraftEditorsRemoveError = SubmissionDraftEditorsRemoveErrors[keyof SubmissionDraftEditorsRemoveErrors];
+
+export type SubmissionDraftEditorsRemoveResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: DraftEditorsResponse;
+};
+
+export type SubmissionDraftEditorsRemoveResponse = SubmissionDraftEditorsRemoveResponses[keyof SubmissionDraftEditorsRemoveResponses];
 
 export type SubmissionMediaUploadData = {
     body: Blob | File;

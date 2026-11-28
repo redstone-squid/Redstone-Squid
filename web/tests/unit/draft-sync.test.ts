@@ -14,7 +14,7 @@ import type { DraftChangeRequest, StoredDraftResponse } from "@/generated/types.
 
 function draft(revision: number, answers: StoredDraftResponse["answers"]): StoredDraftResponse {
   return {
-    viewer: { can_edit: true, can_discard: true },
+    viewer: { role: "owner", can_edit: true, can_discard: true },
     id: "d1",
     schema_id: "door",
     schema_revision: 1,

@@ -258,7 +258,7 @@ class SubmissionFinalizationService:
         """
         actor = context.effective
         with context.scope():
-            current = await self._drafts.get_accessible(draft_id, context=context)
+            current = await self._drafts.get_accessible(draft_id, context=context, owner_only=True)
             if current.edit_source is not None:
                 if self.editor is None:
                     raise InvalidStateError
@@ -306,7 +306,7 @@ class SubmissionFinalizationService:
         )
         try:
             async with self._uow_factory() as uow:
-                latest = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                latest = await self._drafts.get_accessible_in(uow, draft_id, actor, owner_only=True)
             validated = await self._drafts.validate_snapshot(latest, locale=locale, context=context)
             if validated.draft.snapshot.revision != current.snapshot.revision:
                 raise DraftRevisionConflictError(
@@ -315,7 +315,7 @@ class SubmissionFinalizationService:
         except DraftValidationError as error:
             issues = _manifest_issues(error)
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                await self._drafts.get_accessible_in(uow, draft_id, actor, owner_only=True)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     current,
                     issues,
@@ -327,7 +327,7 @@ class SubmissionFinalizationService:
                 return result
         except DraftSchemaUnsupportedError:
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                await self._drafts.get_accessible_in(uow, draft_id, actor, owner_only=True)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     current,
                     (SubmissionAttentionIssue("submission", SubmissionAttentionReason.SCHEMA_UNSUPPORTED),),
@@ -341,7 +341,7 @@ class SubmissionFinalizationService:
         preparation = await self._preparation.prepare(validated, context=context)
         if isinstance(preparation, PreparationRejected | PreparationWaiting):
             async with self._uow_factory() as uow:
-                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                await self._drafts.get_accessible_in(uow, draft_id, actor, owner_only=True)
                 result = await uow.finalization_jobs.record_preparation_attention(
                     validated.draft,
                     preparation.issues,
@@ -353,7 +353,7 @@ class SubmissionFinalizationService:
                 await uow.commit()
                 return result
         async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
+            await self._drafts.get_accessible_in(uow, draft_id, actor, owner_only=True)
             result = await uow.finalization_jobs.enqueue(
                 validated.draft,
                 preparation.value,

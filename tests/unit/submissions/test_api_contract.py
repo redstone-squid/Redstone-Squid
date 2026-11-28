@@ -219,6 +219,14 @@ class FakeDrafts(SubmissionDraftCommands):
         account_id = context.effective.require_account_id()
         self.deleted = (draft_id, account_id)
 
+    @override
+    async def add_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        raise NotImplementedError
+
+    @override
+    async def remove_editor(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> StoredDraft:
+        raise NotImplementedError
+
 
 class FakeFinalization(SubmissionFinalizationCommands):
     editor = None
@@ -474,6 +482,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "drafts": [
             {
                 "id": draft_id,
+                "role": "owner",
                 "inferred": False,
                 "schema_id": "build_submission.v1",
                 "schema_revision": 2,
