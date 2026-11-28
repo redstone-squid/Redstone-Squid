@@ -62,7 +62,9 @@ const nav = [
         </NavBar>
       </Container>
     </header>
-    <Container as="main" id="main-content" class="grid content-start gap-8 py-12">
+    <!-- An explicit track keeps long pages from measuring all their content's intrinsic width
+         on every phone-width layout, as an implicit auto column does. -->
+    <Container as="main" id="main-content" class="grid grid-cols-1 content-start gap-8 py-12">
       <slot />
     </Container>
     <footer class="border-t border-line print:hidden">

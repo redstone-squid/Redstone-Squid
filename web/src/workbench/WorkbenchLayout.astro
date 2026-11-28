@@ -83,7 +83,9 @@ const groups = [
         <LanguageSelector />
       </div>
     </header>
-    <div class="mx-auto grid max-w-wide md:flex">
+    <!-- grid-cols-1, not the implicit auto column: sizing an auto track measures the whole
+         page's intrinsic width, which took seconds per layout on the long story pages. -->
+    <div class="mx-auto grid max-w-wide grid-cols-1 md:flex">
       <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:w-52 md:shrink-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
         <div class="mb-5 grid gap-3">
           {controls.map(({ key, label, current, options }) => (
