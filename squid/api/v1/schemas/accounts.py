@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
+from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
@@ -108,6 +109,15 @@ class ProfileDetail(BaseModel):
             hidden=profile.hidden,
             avatar=avatar,
         )
+
+
+class ProfileEditorDetail(ProfileDetail):
+    revision: int
+
+    @classmethod
+    def from_snapshot(cls, snapshot: AccountEditorSnapshot) -> ProfileEditorDetail:
+        profile = ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
+        return cls(**profile.model_dump(), revision=snapshot.account.revision)
 
 
 class AccountDetail(BaseModel):

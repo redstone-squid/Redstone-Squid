@@ -142,7 +142,8 @@ async def test_indexing_setting_belongs_to_account() -> None:
     response = await set_build_indexing.fn(
         accounts, _caller("account"), BuildIndexingRequest(enabled=True), _reservation=None
     )
-    assert response.discord_build_indexing_enabled
+    assert response.content.discord_build_indexing_enabled
+    assert response.headers["ETag"] == f'"account-1-r{response.content.revision}"'
 
 
 async def test_refresh_reports_a_rename_and_its_new_credit() -> None:

@@ -406,17 +406,19 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
             json={"category": "door", "origin": "web", "client_capabilities": ["repeatable_text"]},
         )
         draft_id = create_response.json()["id"]
-        change_response = await client.post(
-            f"/submissions/drafts/{draft_id}/changes",
-            json={
-                "base_revision": 0,
-                "client_instance_id": "paper:player-session",
-                "idempotency_key": "change-key-0001",
-                "operations": [
-                    {"operation_id": str(uuid4()), "field_id": "display_name", "kind": "set", "value": "Compact door"}
-                ],
-            },
-        )
+        change = {
+            "base_revision": 0,
+            "client_instance_id": "paper:player-session",
+            "idempotency_key": "change-key-0001",
+            "operations": [
+                {"operation_id": str(uuid4()), "field_id": "display_name", "kind": "set", "value": "Compact door"}
+            ],
+        }
+        headers = {"If-Match": create_response.headers["ETag"]}
+        change_path = f"/submissions/drafts/{draft_id}/changes"
+        change_response = await client.post(change_path, headers=headers, json=change)
+        stale = await client.post(change_path, headers=headers, json=change | {"idempotency_key": "change-key-0002"})
+        assert stale.status_code == 412
         upgrade_response = await client.post(
             f"/submissions/drafts/{draft_id}/manifest-upgrade", json={"base_revision": 1, "target_revision": 2}
         )
@@ -465,6 +467,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
     assert list_response.status_code == 200
+    assert upgrade_response.headers["ETag"] == get_response.headers["ETag"]
     assert upgrade_response.status_code == 200
     assert upgrade_response.json()["draft"]["schema_revision"] == 2
     assert list_response.json() == {

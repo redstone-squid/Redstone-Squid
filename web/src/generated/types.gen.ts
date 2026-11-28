@@ -1909,16 +1909,6 @@ export type PageAnchor = {
 };
 
 /**
- * Page[LinkedIdentityDetail]
- */
-export type PageLitestarDtoBackendLinkedIdentityDetail = {
-    items: Array<LinkedIdentityDetail>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
  * Page[TagSummary]
  */
 export type PageLitestarDtoBackendTagSummary = {
@@ -1933,6 +1923,16 @@ export type PageLitestarDtoBackendTagSummary = {
  */
 export type PageSquidApiV1MinecraftServersPublicServerSummary = {
     items: Array<PublicServerSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[IdentityDetail]
+ */
+export type PageSquidApiV1SchemasAccountsIdentityDetail = {
+    items: Array<IdentityDetail>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2336,6 +2336,19 @@ export type ProfileDetail = {
     links: Array<ProfileLinkDetail>;
     hidden: boolean;
     avatar: AvatarDetail | null;
+};
+
+/**
+ * ProfileEditorDetail
+ */
+export type ProfileEditorDetail = {
+    display_name: string | null;
+    bio: string | null;
+    pronouns: string | null;
+    links: Array<ProfileLinkDetail>;
+    hidden: boolean;
+    avatar: AvatarDetail | null;
+    revision: number;
 };
 
 /**
@@ -4783,7 +4796,7 @@ export type AccountProfileUpdateResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: ProfileDetail;
+    200: ProfileEditorDetail;
 };
 
 export type AccountProfileUpdateResponse = AccountProfileUpdateResponses[keyof AccountProfileUpdateResponses];
@@ -4846,7 +4859,7 @@ export type AccountIdentityListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendLinkedIdentityDetail;
+    200: PageSquidApiV1SchemasAccountsIdentityDetail;
 };
 
 export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
@@ -5299,7 +5312,7 @@ export type AccountProfileClearResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: ProfileDetail;
+    200: ProfileEditorDetail;
 };
 
 export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
@@ -5353,7 +5366,7 @@ export type AccountProfileGetResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: ProfileDetail;
+    200: ProfileEditorDetail;
 };
 
 export type AccountProfileGetResponse = AccountProfileGetResponses[keyof AccountProfileGetResponses];

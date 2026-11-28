@@ -2,9 +2,19 @@
 
 import re
 
+from litestar.datastructures import ResponseHeader
+
 from squid.core.edits.domain import EditTarget, LatestRevision, Revision
 from squid.core.errors import ConflictError, DomainError
 from squid.core.i18n import tr
+
+EDIT_ETAG = ResponseHeader(
+    name="ETag",
+    documentation_only=True,
+    required=True,
+    value='"target-key-r1"',
+    description="Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+)
 
 
 class RevisionRequiredError(DomainError):

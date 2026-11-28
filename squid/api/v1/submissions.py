@@ -46,7 +46,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.private_responses import private_response
-from squid.api.revisions import InvalidRevisionError, expected_revision, revision_etag
+from squid.api.revisions import EDIT_ETAG, InvalidRevisionError, expected_revision, revision_etag
 from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
@@ -444,6 +444,7 @@ async def form_options(
     "/drafts",
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="submission_draft_create",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -466,7 +467,7 @@ async def create_draft(
     caller: SubmissionCaller,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> StoredDraftResponse:
+) -> Response[StoredDraftResponse]:
     """Create a submission draft or prefill an edit draft from an approved source build."""
     origin = _submission_origin(caller)
     if data.origin is not origin:
@@ -482,22 +483,26 @@ async def create_draft(
             locale_for_request(request),
             context=caller.context(),
         )
-        return StoredDraftResponse.from_domain(draft, await drafts.progress(draft), caller.require_account_id())
-    draft = await drafts.create(
-        owner_account_id=caller.require_account_id(),
-        context=caller.context(),
-        category=data.category,
-        origin=origin,
-        client_capabilities=frozenset(data.client_capabilities),
-        locale=locale_for_request(request),
-        source_installation_id=caller.installation_id,
+    else:
+        draft = await drafts.create(
+            owner_account_id=caller.require_account_id(),
+            context=caller.context(),
+            category=data.category,
+            origin=origin,
+            client_capabilities=frozenset(data.client_capabilities),
+            locale=locale_for_request(request),
+            source_installation_id=caller.installation_id,
+        )
+    content = StoredDraftResponse.from_domain(draft, await drafts.progress(draft), caller.require_account_id())
+    return Response(
+        content, status_code=201, headers={"ETag": revision_etag(Revision(draft_target(content.id), content.revision))}
     )
-    return StoredDraftResponse.from_domain(draft, await drafts.progress(draft), caller.require_account_id())
 
 
 @get(
     "/drafts/{draft_id:uuid}",
     responses=responses(401, 403, 404, 422, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="submission_draft_get",
     security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
@@ -526,6 +531,7 @@ async def get_draft(
 @post(
     "/drafts/{draft_id:uuid}/changes",
     responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="submission_draft_change",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -574,6 +580,7 @@ async def change_draft(
 @post(
     "/drafts/{draft_id:uuid}/manifest-upgrade",
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="submission_draft_manifest_upgrade",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -595,7 +602,7 @@ async def upgrade_draft_manifest(
     context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> DraftManifestUpgradeResponse:
+) -> Response[DraftManifestUpgradeResponse]:
     """Upgrade an owned draft to the next checked-in form revision."""
     result = await drafts.upgrade_manifest(
         draft_id,
@@ -607,7 +614,10 @@ async def upgrade_draft_manifest(
     draft = StoredDraftResponse.from_domain(
         result.draft, await drafts.progress(result.draft), context.effective.require_account_id()
     )
-    return DraftManifestUpgradeResponse(draft=draft, replayed=result.replayed)
+    return Response(
+        DraftManifestUpgradeResponse(draft=draft, replayed=result.replayed),
+        headers={"ETag": revision_etag(Revision(draft_target(draft.id), draft.revision))},
+    )
 
 
 @post(

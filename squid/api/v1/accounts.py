@@ -25,21 +25,21 @@ from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, Servic
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
-from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
+from squid.api.revisions import EDIT_ETAG, RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.accounts import (
     AccountDetail,
     BuildIndexingRequest,
+    IdentityDetail,
     IdentityVisibilityRequest,
     MergeCodeDetail,
     MergeRequest,
     MinecraftIdentityRefresh,
-    ProfileDetail,
+    ProfileEditorDetail,
     ProfileUpdateRequest,
 )
 from squid.api.v1.schemas.creators import CreditClaimDetail
-from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
     PROFILE_EDIT,
@@ -152,6 +152,7 @@ ManageCaller = NamedDependency[SkipValidation[Caller]]
 @get(
     "/me",
     responses=responses(401, 403, 404, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_get",
     security=[WEB],
     opt=contract(cli=browser_only()),
@@ -163,24 +164,19 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> Response[AccountDeta
 
     An account ID is required; the caller does not need a Discord identity.
     """
-    response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
-    result = await _render_me(accounts, caller)
-    response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
-    return Response(content=result, headers=response_headers, status_code=200)
-
-
-async def _render_me(accounts: AccountService, caller: Caller) -> AccountDetail:
-    """Compose the self view from the account and its profile."""
-    account_id = caller.to_actor().require_account_id()
-    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
-    return AccountDetail.from_domain(snapshot.account, snapshot.profile)
+    snapshot = await accounts.editor_snapshot(caller.account_id, context=caller.context())
+    content = AccountDetail.from_domain(snapshot.account, snapshot.profile)
+    return Response(
+        content, headers={"ETag": revision_etag(Revision(account_target(caller.account_id), content.revision))}
+    )
 
 
 @put(
     "/me/discord-build-indexing",
     responses=responses(401, 403, 404, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_build_indexing_set",
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
@@ -194,15 +190,16 @@ async def set_build_indexing(
     data: JSONBody[BuildIndexingRequest],
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> AccountDetail:
+) -> Response[AccountDetail]:
     """Set automatic indexing for the caller's builds in participating Discord channels."""
     await accounts.set_discord_build_indexing(enabled=data.enabled, context=caller.context())
-    return await _render_me(accounts, caller)
+    return await get_me.fn(accounts, caller)
 
 
 @patch(
     "/me/profile",
     responses=responses(400, 401, 403, 404, 412, 422, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_profile_update",
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
@@ -222,7 +219,7 @@ async def update_profile(
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[ProfileDetail]:
+) -> Response[ProfileEditorDetail]:
     """Edit the caller's own public profile.
 
     Partial: an omitted field is left alone and an explicit `null` clears it, so a client that
@@ -243,7 +240,7 @@ async def update_profile(
     snapshot = await accounts.editor_snapshot(caller.account_id, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
     return Response(
-        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        content=ProfileEditorDetail.from_snapshot(snapshot),
         headers=response_headers,
         status_code=200,
     )
@@ -252,8 +249,8 @@ async def update_profile(
 @get(
     "/me/identities",
     responses=responses(401, 403, 404, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_identity_list",
-    return_dto=LinkedIdentityDTO,
     security=[WEB],
     opt=contract(cli=browser_only()),
     status_code=200,
@@ -266,22 +263,25 @@ async def list_identities(
     offset: OffsetParam = None,
     cursor: CursorParam = None,
     page_size: PageSizeParam = 50,
-) -> Page[AccountIdentity]:
+) -> Response[Page[IdentityDetail]]:
     """List every identity linked to the caller's account, hidden ones included.
 
     Unfiltered by visibility on purpose: you can only unhide what you can see listed.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    identities = await accounts.list_identities(context=caller.context())
+    snapshot = await accounts.editor_snapshot(caller.account_id, context=caller.context())
     page = sort.page(
-        identities,
+        snapshot.account.identities,
         selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         identifier=lambda row: row.id,
         created_at=lambda row: row.created_at,
     )
-    return Page.from_domain(page)
+    return Response(
+        Page[IdentityDetail].from_domain(page, IdentityDetail.from_domain),
+        headers={"ETag": revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))},
+    )
 
 
 @put(
@@ -496,6 +496,7 @@ async def refresh_minecraft_identity(
 @get(
     "/{account_id:str}/profile",
     responses=responses(400, 401, 403, 404, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_profile_get",
     security=[WEB],
     opt=contract(cli=browser_only()),
@@ -504,7 +505,7 @@ async def refresh_minecraft_identity(
 )
 async def get_profile(
     target: TargetAccount, accounts: Accounts, caller: NamedDependency[SkipValidation[Caller]]
-) -> Response[ProfileDetail]:
+) -> Response[ProfileEditorDetail]:
     """Read a profile and its revision, hidden fields included.
 
     Another account's profile needs `account.profile.moderate`.
@@ -513,7 +514,7 @@ async def get_profile(
     snapshot = await accounts.editor_snapshot(target, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(target), snapshot.account.revision))
     return Response(
-        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        content=ProfileEditorDetail.from_snapshot(snapshot),
         headers=response_headers,
         status_code=200,
     )
@@ -522,6 +523,7 @@ async def get_profile(
 @delete(
     "/{account_id:str}/profile",
     responses=responses(400, 401, 403, 404, 412, 422, 428, 503),
+    response_headers=[EDIT_ETAG],
     operation_id="account_profile_clear",
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
@@ -541,7 +543,7 @@ async def clear_profile(
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> Response[ProfileDetail]:
+) -> Response[ProfileEditorDetail]:
     """Clear profile content at the revision staff reviewed, retaining moderation attribution."""
     response_headers: dict[str, str] = {}
     if if_match is None:
@@ -558,7 +560,7 @@ async def clear_profile(
     snapshot = await accounts.editor_snapshot(target, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(target), snapshot.account.revision))
     return Response(
-        content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
+        content=ProfileEditorDetail.from_snapshot(snapshot),
         headers=response_headers,
         status_code=200,
     )

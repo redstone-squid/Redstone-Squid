@@ -684,6 +684,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -1136,6 +1144,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -1313,6 +1329,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -1320,7 +1344,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
+                  "$ref": "#/components/schemas/ProfileEditorDetail"
                 }
               }
             }
@@ -1541,6 +1565,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -1548,7 +1580,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.LinkedIdentityDetail_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.accounts.IdentityDetail_"
                 }
               }
             }
@@ -2934,6 +2966,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -2941,7 +2981,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
+                  "$ref": "#/components/schemas/ProfileEditorDetail"
                 }
               }
             }
@@ -3125,6 +3165,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -3132,7 +3180,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
+                  "$ref": "#/components/schemas/ProfileEditorDetail"
                 }
               }
             }
@@ -4657,6 +4705,14 @@
                 "required": false,
                 "deprecated": false
               },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -5007,6 +5063,14 @@
                   "type": "string"
                 },
                 "required": false,
+                "deprecated": false
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
                 "deprecated": false
               },
               "Request-Id": {
@@ -22082,6 +22146,14 @@
           "201": {
             "description": "Document created, URL follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -22601,6 +22673,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -22975,6 +23055,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -23215,6 +23303,14 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
+                "required": true,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -36300,47 +36396,6 @@
         "required": [],
         "title": "PageAnchor"
       },
-      "Page_litestar.dto._backend.LinkedIdentityDetail_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/LinkedIdentityDetail"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[LinkedIdentityDetail]"
-      },
       "Page_litestar.dto._backend.TagSummary_": {
         "properties": {
           "items": {
@@ -36422,6 +36477,47 @@
           "total"
         ],
         "title": "Page[PublicServerSummary]"
+      },
+      "Page_squid.api.v1.schemas.accounts.IdentityDetail_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityDetail"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[IdentityDetail]"
       },
       "Page_squid.api.v1.schemas.cli_auth.CliDeviceResponse_": {
         "properties": {
@@ -37921,6 +38017,73 @@
           "pronouns"
         ],
         "title": "ProfileDetail"
+      },
+      "ProfileEditorDetail": {
+        "properties": {
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bio": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pronouns": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileLinkDetail"
+            },
+            "type": "array"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "avatar": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AvatarDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "avatar",
+          "bio",
+          "display_name",
+          "hidden",
+          "links",
+          "pronouns",
+          "revision"
+        ],
+        "title": "ProfileEditorDetail"
       },
       "ProfileLink": {
         "properties": {

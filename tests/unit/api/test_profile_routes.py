@@ -198,6 +198,7 @@ class TestProfileUpdate:
 
         response = await _update_profile(ProfileUpdateRequest(), accounts, _caller())
 
+        assert response.headers["ETag"] == f'"account-1-r{response.content.revision}"'
         assert response.content.display_name == "Steve"
         assert response.content.avatar is not None
         assert response.content.avatar.provider is IdentityProvider.JAVA
@@ -219,8 +220,9 @@ class TestIdentities:
 
         response = await list_identities.fn(accounts, _caller())
 
-        assert [identity.id for identity in response.items] == [1, 2]
-        assert [identity.is_public for identity in response.items] == [True, False]
+        assert response.headers["ETag"] == '"account-1-r1"'
+        assert [identity.id for identity in response.content.items] == [1, 2]
+        assert [identity.is_public for identity in response.content.items] == [True, False]
 
     async def test_visibility_is_set_on_the_callers_own_account(self) -> None:
         accounts = _accounts()

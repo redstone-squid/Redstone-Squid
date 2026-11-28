@@ -2,21 +2,25 @@
 
 from types import SimpleNamespace
 from typing import cast, override
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from squid.api.security import Caller
-from squid.api.v1.builds import edit_build
+from squid.api.v1.builds import edit_build, get_build_form
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag
 from squid.core.builds.models import Build, DoorBuild
+from squid.core.edits.domain import RevisionConflictError
 from squid.core.errors import AuthorizationError
+from squid.core.submissions.application.forms import build_edit_manifest
 from squid.runtime import ApiServices
 from tests.support.build_edit_runner import BuildEditRecorder
+from tests.support.litestar import make_request
 from tests.unit.api.fakes import credential_nodes
 
 ACCOUNT = Caller(
@@ -59,6 +63,22 @@ class BuildRecorder(BuildService):
 
     def services(self) -> ApiServices:
         return cast(ApiServices, SimpleNamespace(builds=self, edits=self.runner))
+
+
+async def test_build_form_revision_guards_the_next_edit() -> None:
+    builds = BuildRecorder(result=persisted_build(status=BuildStatus.APPROVED))
+    queries = AsyncMock()
+    queries.get_public.return_value = builds.runner.build
+    services = AsyncMock()
+    services.submission_forms.edit_manifest.return_value = build_edit_manifest()
+    form = await get_build_form.fn(make_request({"headers": []}), 42, queries, services, ACCOUNT)
+    tag = form.headers["ETag"]
+    assert tag == f'"build-42-r{form.content.revision}"'
+
+    patch = BuildPatch(extra_user_info="changed")
+    await edit_build.fn(42, patch, builds.services(), ACCOUNT, uuid4(), tag)
+    with pytest.raises(RevisionConflictError):
+        await edit_build.fn(42, patch, builds.services(), ACCOUNT, uuid4(), tag)
 
 
 @pytest.mark.asyncio

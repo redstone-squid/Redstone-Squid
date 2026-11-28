@@ -28,10 +28,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 
-### Cross-cutting
-
-51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
-
 ## Finished
 
 ### Collections
@@ -151,6 +147,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 ### Cross-cutting
 
 50. **ProblemDetail field errors.** Validation failures include `context.fields: [{field, code, params}]`. Core reports domain field IDs, including fields on saved drafts. Request decoding reports JSON Pointers rooted at the request location. Request-wide failures have an empty list. Use the SDK’s `ValidationIssue` union and `FieldErrorCode` for exhaustive formatters. Multiple issues can target one control.
+51. **Editor revisions.** Build forms, draft creation and manifest upgrades return the ETag for the revision in the body. Profiles and linked identities share the account ETag. Send the tag unchanged on conditional writes. Draft changes use the draft’s numeric `base_revision`.
 52. **Cookie and origin strategy.** Decided: islands call the API on the site's own origin, where the gateway already routes `/v1`, and take the CSRF token from `GET /v1/auth/csrf`. No Astro proxy. See "Same-origin API" in [README.md](README.md). No API change needed.
 54. **A stable revision-conflict code.** Every stale-revision failure answers 412 with code `REVISION_CONFLICT`. This covers a stale `If-Match` or `base_revision`, a draft or build whose row moved under a change, and a lost commit race. Public context carries `expected` and `current` when the server knows them, plus `build_id` for builds and `changes` for a stale build edit draft. An `If-Match` tag for another item is a malformed request: it answers 412 `DOMAIN_ERROR`.
 59. **Resource addresses.** A resource lives at `/{collection}/{id}`, keyed by an ID that never changes. Names are found by lookup, never used as path keys.

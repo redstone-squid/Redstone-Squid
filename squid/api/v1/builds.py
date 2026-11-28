@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from litestar import Request, Response, Router, get, patch
+from litestar.datastructures import ResponseHeader
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody
@@ -33,7 +34,7 @@ from squid.api.pagination import (
     PageSizeParam,
     resolve_selector,
 )
-from squid.api.revisions import InvalidRevisionError
+from squid.api.revisions import EDIT_ETAG, InvalidRevisionError
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
@@ -125,7 +126,7 @@ async def edit_build(
         describe={404: "No approved build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="builds_get",
-    response_headers={"Cache-Control": "private, no-store"},
+    response_headers=[ResponseHeader(name="Cache-Control", value="private, no-store"), EDIT_ETAG],
     security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
@@ -181,20 +182,20 @@ async def get_build_history(
     responses=responses(401, 403, 404, 422, 503),
     guards=[requires(BUILD_SUBMISSION_EDIT)],
     security=[WEB],
-    response_headers={"Cache-Control": "private, no-store"},
+    response_headers=[ResponseHeader(name="Cache-Control", value="private, no-store"), EDIT_ETAG],
     operation_id="builds_edit_form_get",
     opt=contract(cli=browser_only()),
 )
 async def get_build_form(
     request: Request, build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
-) -> SavedBuildFormResponse:
+) -> Response[SavedBuildFormResponse]:
     """Read an approved build in the moderator editor's form vocabulary."""
     build = await build_queries.get_public(build_id, context=caller.context())
     manifest = await services.submission_forms.edit_manifest(
         locale=locale_for_request(request), context=caller.context()
     )
     saved = answers_from_build(build)
-    return SavedBuildFormResponse.model_validate(
+    content = SavedBuildFormResponse.model_validate(
         {
             "revision": build.revision,
             "category": build.category.value.lower(),
@@ -203,6 +204,7 @@ async def get_build_form(
             "unresolved": saved.unresolved,
         }
     )
+    return Response(content, headers={"ETag": build_etag(build)})
 
 
 @get(
