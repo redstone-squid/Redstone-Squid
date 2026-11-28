@@ -347,3 +347,35 @@
     }
   }
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:active-view-transition-type(page-forward, page-back) {
+    .pagination-results {
+      view-transition-name: pagination-results;
+    }
+
+    &::view-transition-old(root),
+    &::view-transition-old(pagination-results) {
+      display: none;
+    }
+
+    &::view-transition-new(root) {
+      animation: none;
+    }
+
+    &::view-transition-new(pagination-results) {
+      animation: pagination-enter var(--duration-fast) ease-out;
+    }
+  }
+
+  :root:active-view-transition-type(page-back)::view-transition-new(pagination-results) {
+    --page-travel: -1rem;
+  }
+}
+
+@keyframes pagination-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--page-travel, 1rem));
+  }
+}

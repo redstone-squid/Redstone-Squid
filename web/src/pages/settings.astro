@@ -55,7 +55,7 @@ const title = m.indexingTitle();
     {claims.items.length === 0 ? (
       <p>{m.creatorClaimsEmpty()}</p>
     ) : (
-      <ul>
+      <ul class="pagination-results">
         {claims.items.map((claim) => (
           <li>
             {claim.name} ·{" "}

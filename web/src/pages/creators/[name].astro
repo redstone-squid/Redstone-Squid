@@ -34,7 +34,7 @@ const builds = await load(
 );
 ---
 
-<CatalogueLayout title={summary.name} noindex={Object.keys(page).length > 0}>
+<CatalogueLayout title={summary.name} noindex={page.offset > 0}>
   <PageHeader title={summary.name} />
   <CreatorCredits
     claimNameId={summary.id}

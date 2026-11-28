@@ -39,7 +39,7 @@ const title = m.accountSubmissions();
   {page.items.length === 0 ? (
     <p>{m.submissionEmpty()}</p>
   ) : (
-    <List>
+    <List class="pagination-results">
       {page.items.map((row) => (
         <ListItem
           title={row.title ?? m.submissionBuildNumber({ id: row.build_id })}

@@ -206,18 +206,18 @@ function problem(request: Request, status: number, code: string): Response {
 function buildPage(url: URL): BuildsListResponse {
   if (url.searchParams.get("page_size") === "6")
     return { items: builds, total: builds.length, next: null, prev: null };
-  if (url.searchParams.get("cursor") === "builds-2") {
+  if (url.searchParams.get("offset") === "20") {
     return {
       items: [builds[2]],
       total: 3,
       next: null,
-      prev: { offset: null, cursor: "builds-2-back" },
+      prev: { offset: 0, cursor: null },
     };
   }
   return {
     items: builds.slice(0, 2),
     total: 3,
-    next: { offset: null, cursor: "builds-2" },
+    next: { offset: 20, cursor: null },
     prev: null,
   };
 }
@@ -225,15 +225,15 @@ function buildPage(url: URL): BuildsListResponse {
 function recordPage(url: URL): RecordsListResponse {
   if (url.searchParams.get("page_size") === "3")
     return { items: records, total: records.length, next: null, prev: null };
-  if (url.searchParams.get("cursor") === "records-1") {
+  if (url.searchParams.get("offset") === "20") {
     return {
       items: [records[1]],
       total: 2,
       next: null,
-      prev: { offset: null, cursor: "records-1-back" },
+      prev: { offset: 0, cursor: null },
     };
   }
-  return { items: [records[0]], total: 2, next: { offset: null, cursor: "records-1" }, prev: null };
+  return { items: [records[0]], total: 2, next: { offset: 20, cursor: null }, prev: null };
 }
 
 /**

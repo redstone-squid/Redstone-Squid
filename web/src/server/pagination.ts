@@ -1,27 +1,21 @@
 import type { PageAnchor } from "@/generated/types.gen";
 import { RouteNavigation } from "@/navigation/route";
 
-/** The query parameters that address one page of a listing. The API accepts at most one. */
-export type PageAddress = { cursor?: string; offset?: number };
+const pageSize = 20;
 
-/**
- * Read the page a URL addresses, preferring `cursor` over `offset`.
- * Invalid offsets are skipped, so a hand-edited link still renders a page. Cursors are opaque;
- * the API answers a damaged one with `INVALID_PAGE_CURSOR`.
- */
-export function readPageAddress(params: URLSearchParams, pageSize = 20): PageAddress {
-  const cursor = params.get("cursor")?.trim() ?? "";
-  if (cursor !== "") return { cursor };
-  const rawOffset = params.get("offset")?.trim() ?? "";
-  const page = Number(params.get("page"));
-  if (rawOffset === "" && (!Number.isSafeInteger(page) || page < 1)) return {};
-  const offset = rawOffset !== "" ? Number(rawOffset) : (page - 1) * pageSize;
-  return Number.isSafeInteger(offset) && offset >= 0 && offset <= 10_000 ? { offset } : {};
+/** Explicit offset zero selects numbered pagination on the first API request. */
+export function readPageAddress(params: URLSearchParams) {
+  const page = Number(params.get("page") ?? 1);
+  const offset = (page - 1) * pageSize;
+  return {
+    offset: Number.isSafeInteger(page) && offset >= 0 && offset <= 10_000 ? offset : 0,
+    page_size: pageSize,
+  };
 }
 
-/** The localized link to the page an API anchor points to, keeping the URL's other parameters. */
+/** Keep filters and locale when following an offset-mode API anchor. */
 export function pageHref(url: URL, anchor: PageAnchor): string {
-  type Address = { cursor: string; offset: number; page: number };
-  const nav = new RouteNavigation<Address>(url);
-  return nav.update({ page: null, cursor: anchor.cursor ?? null, offset: anchor.offset ?? null });
+  const page = (anchor.offset ?? 0) / pageSize + 1;
+  const nav = new RouteNavigation<{ page: number; cursor: string; offset: number }>(url);
+  return nav.update({ page: page === 1 ? null : page, cursor: null, offset: null });
 }

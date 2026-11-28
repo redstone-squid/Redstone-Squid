@@ -8,9 +8,7 @@ import { pageHref, readPageAddress } from "@/server/pagination";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const page = readPageAddress(Astro.url.searchParams);
-const loaded = await load(
-  recordsList({ client: Astro.locals.api, query: { ...page, page_size: 20 } }),
-);
+const loaded = await load(recordsList({ client: Astro.locals.api, query: page }));
 const { items, next, prev } = loaded;
 ---
 
@@ -18,7 +16,7 @@ const { items, next, prev } = loaded;
   title={m.recordsTitle()}
   description={m.recordsIntro()}
   canonicalPath="/records"
-  noindex={Object.keys(page).length > 0}
+  noindex={page.offset > 0}
 >
   <PageHeader title={m.recordsTitle()} />
   <RecordList

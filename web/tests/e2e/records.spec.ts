@@ -15,7 +15,7 @@ test("lists records and pages through them", async ({ page }) => {
 
   const pages = page.getByRole("navigation", { name: m.navPagination("en") });
   await pages.getByRole("link", { name: m.commonNext("en") }).click();
-  await expect(page).toHaveURL(/\/records\?cursor=records-1$/);
+  await expect(page).toHaveURL(/\/records\?page=2$/);
   await expect(page.getByRole("link", { name: extender })).toBeVisible();
   // Later pages repeat the first page's content in another order, so they are not indexed.
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");

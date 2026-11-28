@@ -26,7 +26,7 @@ const title = profile.hidden
   : (profile.display_name ?? profile.aliases?.[0]?.name ?? m.buildCreators());
 ---
 
-<CatalogueLayout {title} noindex={profile.hidden || Object.keys(page).length > 0}>
+<CatalogueLayout {title} noindex={profile.hidden || page.offset > 0}>
   <PageHeader {title} description={profile.bio ?? undefined} />
   {listing && (
     <CreatorCredits

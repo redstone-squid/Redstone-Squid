@@ -80,7 +80,7 @@ fields and bind it to the current URL with `route.at(url)`. Use `link` for a fre
 key), and `form` for the action, repeated hidden entries, and reset link. Destinations sharing
 a scope symbol inherit its resolved values. The workbench declares its appearance scope in
 `src/workbench/appearance.ts`; Patterns passes plain form props into its hydrated island.
-Pagination replaces its cursor fields together in `src/server/pagination.ts`.
+Pagination uses `?page=N` in links and explicit offsets in API requests.
 
 ## Adding a page
 
