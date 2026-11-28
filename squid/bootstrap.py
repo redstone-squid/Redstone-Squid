@@ -121,7 +121,9 @@ from squid.core.records.application import (
     RecordComputationService,
     RecordService,
 )
+from squid.core.records.application.preview import RecordPreviews
 from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.infrastructure.preview import PostgresPreviewReader
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.core.schematics.bootstrap import create_schematic_service
@@ -676,6 +678,12 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     return ApiServices(
         impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
         viewer_queries=views,
+        record_previews=RecordPreviews(
+            PostgresPreviewReader(db.async_session, graph.version_service),
+            graph.record_computation,
+            graph.submissions.drafts,
+            views,
+        ),
         submission_reviews=SubmissionReviews(views, graph.edits),
         settings=graph.settings,
         edits=graph.edits,

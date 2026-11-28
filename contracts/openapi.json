@@ -19458,6 +19458,306 @@
         }
       }
     },
+    "/v1/submissions/drafts/{draft_id}/record-preview": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "DraftRecordPreview",
+        "description": "Predict records for the saved draft revision.",
+        "operationId": "submission_draft_record_preview",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPreview"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/submissions/{submission_id}/record-preview": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "SubmissionRecordPreview",
+        "description": "Compare the reviewed revision with the current approved population.",
+        "operationId": "submission_record_preview",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "review_session_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPreview"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/submissions/{submission_id}/decision": {
       "post": {
         "tags": [
@@ -22273,12 +22573,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
+            "description": "Current finalization status.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22294,6 +22589,11 @@
                     }
                   ]
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -34057,6 +34357,48 @@
         ],
         "title": "MetadataSearchResult"
       },
+      "MetricDelta": {
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "candidate": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "holder": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "difference": {
+            "type": "number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate",
+          "difference",
+          "holder",
+          "metric",
+          "unit"
+        ],
+        "title": "MetricDelta"
+      },
       "MetricUnit": {
         "type": "string",
         "enum": [
@@ -35449,6 +35791,138 @@
         ],
         "title": "PollScope",
         "description": "How far a generic poll is published."
+      },
+      "PredictedRecord": {
+        "properties": {
+          "record_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category_key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/VersionScope"
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "holds",
+              "shares",
+              "ties_later",
+              "loses",
+              "undecided"
+            ]
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewGap"
+            },
+            "type": "array"
+          },
+          "current_holders": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewHolder"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_key",
+          "criterion",
+          "current_holders",
+          "missing",
+          "outcome",
+          "record_id",
+          "scope",
+          "title",
+          "version_id"
+        ],
+        "title": "PredictedRecord"
+      },
+      "PreviewGap": {
+        "properties": {
+          "fact": {
+            "$ref": "#/components/schemas/RecordFact"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "fact",
+          "fields"
+        ],
+        "title": "PreviewGap"
+      },
+      "PreviewHolder": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deltas": {
+            "items": {
+              "$ref": "#/components/schemas/MetricDelta"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "deltas",
+          "title"
+        ],
+        "title": "PreviewHolder"
       },
       "PrivacyNoticeDetail": {
         "properties": {
@@ -37949,6 +38423,44 @@
         ],
         "title": "RecordOperator",
         "description": "How a tag assignment satisfies a record-category predicate."
+      },
+      "RecordPreview": {
+        "properties": {
+          "revision": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/PredictedRecord"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evaluated_at",
+          "missing_fields",
+          "records",
+          "revision"
+        ],
+        "title": "RecordPreview"
       },
       "RecordResolution": {
         "properties": {

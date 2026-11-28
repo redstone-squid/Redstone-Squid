@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.builds.models import ExtenderBuild
 from squid.core.pagination import PageSelector
+from squid.core.records.application.measurements import fixed_metric_snapshot
 from squid.core.records.application.models import CategoryIdentity, RecordListFilters, RecordStatus
 from squid.core.records.domain import (
     BuildKind,
@@ -19,9 +20,8 @@ from squid.core.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
     PostgresRecordRepository,
-    _extender_candidate,
-    _fixed_metric_snapshot,
     _gap_from_row,
+    extender_candidate,
 )
 from squid.core.records.models import (
     MaterializationSource,
@@ -35,7 +35,7 @@ from tests.support.schema import model_table
 def test_fastest_holder_snapshot_includes_volume_and_timing() -> None:
     holder = Candidate(build_id=1, fixed_volume=80, timing_variants=(TimingVariant((10, None)),))
 
-    assert _fixed_metric_snapshot(RecordCriterion.FASTEST, holder) == {"volume": 80, "timing": [10, None]}
+    assert fixed_metric_snapshot(RecordCriterion.FASTEST, holder) == {"volume": 80, "timing": [10, None]}
 
 
 def test_requested_category_key_round_trips() -> None:
@@ -129,8 +129,8 @@ async def test_list_filters_are_applied_to_both_rows_and_count() -> None:
 def test_an_extender_without_measured_variants_competes_on_its_own_timings() -> None:
     extender = ExtenderBuild(id=1, orientation="Upward", extension_length=3, extension_time=4, retraction_time=6)
 
-    candidate = _extender_candidate(extender, ())
-    measured = _extender_candidate(extender, (TimingVariant((1, 2, None, None)),))
+    candidate = extender_candidate(extender, ())
+    measured = extender_candidate(extender, (TimingVariant((1, 2, None, None)),))
 
     assert candidate is not None
     assert measured is not None

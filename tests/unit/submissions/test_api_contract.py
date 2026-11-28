@@ -424,6 +424,22 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
         submit_response = await client.post(f"/submissions/drafts/{draft_id}/attempts")
         submission_response = await client.get(f"/submissions/drafts/{draft_id}/status")
+        conditional = await client.get(
+            f"/submissions/drafts/{draft_id}/status",
+            headers={"If-None-Match": "W/" + submission_response.headers["etag"]},
+        )
+        assert conditional.status_code == 304
+        assert conditional.content == b""
+        previous = finalization.snapshot
+        finalization.snapshot = replace(previous, status=FinalizationJobStatus.CLAIMED)
+        changed = await client.get(
+            f"/submissions/drafts/{draft_id}/status", headers={"If-None-Match": conditional.headers["etag"]}
+        )
+        assert changed.status_code == 200
+        assert changed.json()["draft_revision"] == submission_response.json()["draft_revision"]
+        assert changed.headers["etag"] != conditional.headers["etag"]
+        finalization.snapshot = previous
+        assert conditional.headers["etag"] == submission_response.headers["etag"]
         history_response = await client.get(f"/submissions/drafts/{draft_id}/attempts")
         detail_response = await client.get(f"/submissions/drafts/{draft_id}/attempts/{finalization.snapshot.job_id}")
         empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?offset=1")
@@ -475,6 +491,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert get_response.json()["answers"] == {"display_name": "Compact door"}
     assert submit_response.status_code == 202
     assert submit_response.json() == {
+        "submission_id": None,
         "draft_id": draft_id,
         "attempt_id": str(finalization.snapshot.job_id),
         "attempt_number": 1,
@@ -490,7 +507,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert empty_history.json()["items"] == []
     assert invalid_limit.status_code == 422
     assert finalization.submit_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID), "en")]
-    assert finalization.status_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID))]
+    assert finalization.status_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID))] * 3
     assert delete_response.status_code == 204
     assert drafts.deleted == (UUID(draft_id), ACCOUNT_ID)
 

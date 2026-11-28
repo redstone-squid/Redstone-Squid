@@ -3,22 +3,32 @@
 from decimal import Decimal
 from functools import partial
 from typing import override
+from unittest.mock import create_autospec
+from uuid import uuid4
 
 import anyio
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, AnonymousActor
+from squid.core.auth.application.viewer import ViewerQueries
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.models import ComputationBatch, RebuildSummary
+from squid.core.records.application.preview import RecordPreviews
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import BuildKind
+from squid.core.records.infrastructure.preview import PostgresPreviewReader
 from squid.core.records.models import Record, RecordHolder, RecordInputGeneration, RecordRecomputeQueueItem
+from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
+from squid.core.submissions.application.reviews import SubmissionDetail, SubmissionStatus, SubmissionSummary
+from squid.core.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.core.tags.models import UnitDefinition
+from squid.core.versions.application.services import VersionService
 from tests.support.build_edits import build_edit_session
 
 
@@ -174,3 +184,79 @@ async def test_tag_changes_advance_both_input_generations(
         assert after == {kind: generation + 1 for kind, generation in before.items()}
         kinds = set((await session.scalars(select(RecordRecomputeQueueItem.build_kind))).all())
         assert kinds == {BuildKind.DOOR, BuildKind.EXTENDER}
+
+
+async def test_predict_saved_draft_and_historical_edit_without_publishing(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    incumbent = await seed_door(sessions)
+    computation = RecordComputationService(uow_factory=partial(SqlAlchemyUnitOfWork, sessions))
+    ctx = ActingContext.direct(AnonymousActor())
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ctx)
+    drafts = create_autospec(SubmissionDraftService, instance=True)
+    views = create_autospec(ViewerQueries, instance=True)
+    previews = RecordPreviews(
+        PostgresPreviewReader(sessions, create_autospec(VersionService, instance=True)), computation, drafts, views
+    )
+    now = Instant.now()
+    key = uuid4()
+    drafts.get_accessible.return_value = StoredDraft(
+        DraftSnapshot(
+            id=key,
+            owner_account_id=1,
+            schema_id="build",
+            schema_revision=1,
+            category="door",
+            revision=4,
+            answers={
+                "door_orientation": "door",
+                "opening_width": 2,
+                "opening_height": 2,
+                "capture_width": 2,
+                "capture_height": 3,
+                "capture_depth": 1,
+            },
+        ),
+        SubmissionOrigin.WEB,
+        now,
+        now,
+        now,
+    )
+    result = await previews.draft(key, context=ctx)
+    smallest = next(row for row in result.records if row.criterion == "smallest" and row.version_id is None)
+    assert result.revision == 4
+    assert smallest.outcome == "holds"
+    assert smallest.record_id is not None
+    assert [holder.build_id for holder in smallest.current_holders] == [incumbent]
+    assert next(delta.difference for delta in smallest.current_holders[0].deltas if delta.metric == "volume") == -94
+    first = next(row for row in result.records if row.criterion == "first")
+    assert first.outcome == "undecided"
+    assert first.missing[0].fields == ("completion",)
+    drafts.get_accessible.assert_awaited_once_with(key, context=ctx)
+    views.submission.return_value = SubmissionDetail(
+        SubmissionSummary(
+            key,
+            incumbent,
+            None,
+            "edit",
+            SubmissionStatus.PENDING,
+            now.to_stdlib(),
+            published=True,
+            decided_revision=None,
+        ),
+        1,
+        42,
+        {"dimensions": [2, 3, 1]},
+        1,
+        {},
+    )
+    archived = await previews.submission(key, 42, context=ctx)
+    views.submission.assert_awaited_once_with(key, context=ctx, review_session_id=42)
+    edited = next(row for row in archived.records if row.criterion == "smallest")
+    assert edited.outcome == "holds"
+    assert edited.current_holders == smallest.current_holders
+    async with sessions() as session:
+        stored = await session.get(DoorBuild, incumbent)
+        assert stored is not None
+        assert stored.width == 10

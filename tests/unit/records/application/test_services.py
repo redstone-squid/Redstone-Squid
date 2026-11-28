@@ -51,6 +51,7 @@ from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLea
 from squid.core.records.application.range_ports import RangePublicationRepository, RangePublicationUnitOfWork
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
@@ -334,6 +335,34 @@ def _door(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("volume", "day", "outcome"),
+    [(9, 2, "holds"), (10, 1, "shares"), (10, 2, "ties_later"), (11, 1, "loses"), (10, None, "undecided")],
+)
+async def test_prediction_uses_publication_precedence(volume: int, day: int | None, outcome: str) -> None:
+    holder = _door(1, volume=10, opening=4, restrictions=())
+    proposed = _door(2, volume=volume, opening=4, restrictions=())
+    proposed = replace(
+        proposed,
+        candidate=replace(proposed.candidate, completion_at=datetime(2020, 1, day, tzinfo=UTC) if day else None),
+    )
+    service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates((holder,)), FakeRuns()))
+    snapshot = RecordSnapshot(
+        rules_revision_id=1,
+        kind=BuildKind.DOOR,
+        version_ids=(None,),
+        sources=(holder,),
+        requested=(),
+        captured_at=datetime.now(UTC),
+    )
+    rows = await service.predict(snapshot, proposed, {}, {1: "Current holder"})
+    row = next(row for row in rows if row.criterion == RecordCriterion.SMALLEST)
+    assert row.outcome == outcome
+    assert row.current_holders[0].title == "Current holder"
+    if day is None:
+        assert any(gap.fields == ("completion",) for gap in row.missing)
+
+
 async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None:
     flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
     observerless = CandidateTag(id=2, kind=RecordTagRole.RESTRICTION, name="Observerless", restriction_type="component")

@@ -9,6 +9,7 @@ finalization attempt that produces a build.
 
 from dataclasses import dataclass
 from hashlib import sha256
+from time import monotonic, time
 from typing import Annotated, Literal, Protocol, cast
 from uuid import UUID
 
@@ -65,8 +66,10 @@ from squid.core.actors import ActingContext
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
+from squid.core.observability import record_histogram
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.pagination import Page as ResultPage
+from squid.core.records.application.preview import RecordPreview
 from squid.core.submissions.application import (
     AppliedDraftUpgrade,
     DraftPreparationSnapshot,
@@ -642,6 +645,11 @@ async def submit_draft(
     "/drafts/{draft_id:uuid}/status",
     responses={
         **responses(401, 403, 404, 422, 503),
+        200: ResponseSpec(
+            SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult,
+            generate_examples=False,
+            description="Current finalization status.",
+        ),
         304: ResponseSpec(None, description="Finalization status is unchanged."),
     },
     operation_id="submission_finalization_get",
@@ -661,8 +669,9 @@ async def get_draft_submission(
     finalization: Finalization,
     context: SubmissionContext,
     if_none_match: Annotated[str | None, HeaderParameter(name="If-None-Match")] = None,
-) -> Response[SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult]:
+) -> Response[bytes]:
     """Return the current attempt or a conditional response after checking ownership."""
+    started = monotonic()
     snapshot = await finalization.status(draft_id, context=context)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
@@ -672,12 +681,25 @@ async def get_draft_submission(
         result = DraftPreparationResponse.from_domain(snapshot)
     else:
         result = SubmissionAttemptResponse.from_domain(snapshot)
-    digest = sha256(encode_json(result)).hexdigest()
-    etag = f'"{digest}"'
+    body = encode_json(result if isinstance(result, DraftEditResult) else result.model_dump(mode="json"))
+    etag = f'"{sha256(body).hexdigest()}"'
     headers = {"ETag": etag}
-    if if_none_match and any(tag.strip().removeprefix("W/") in {etag, "*"} for tag in if_none_match.split(",")):
-        return Response(status_code=304, content=None, headers=headers)
-    return Response(content=result, headers=headers)
+    unchanged = if_none_match is not None and any(
+        tag.strip().removeprefix("W/") in {etag, "*"} for tag in if_none_match.split(",")
+    )
+    record_histogram(
+        "squid.submissions.status.read_seconds",
+        monotonic() - started,
+        attributes={"conditional": if_none_match is not None, "unchanged": unchanged},
+    )
+    if unchanged:
+        return Response(status_code=304, content=b"", headers=headers)
+    if if_none_match and isinstance(snapshot, FinalizationJobSnapshot) and snapshot.completed_at is not None:
+        record_histogram(
+            "squid.submissions.status.completion_observed_seconds",
+            max(0.0, time() - snapshot.completed_at.to_stdlib().timestamp()),
+        )
+    return Response(content=body, headers=headers, media_type="application/json")
 
 
 @get(
@@ -871,10 +893,47 @@ async def decide_submission(
     )
 
 
+@get(
+    "/drafts/{draft_id:uuid}/record-preview",
+    operation_id="submission_draft_record_preview",
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
+    responses=responses(401, 403, 404, 422, 503),
+    dependencies={"context": Provide(authenticated_submission_context)},
+)
+@private_response
+async def draft_record_preview(
+    draft_id: FromPath[UUID], services: Services, context: SubmissionContext
+) -> RecordPreview:
+    """Predict records for the saved draft revision."""
+    return await services.record_previews.draft(draft_id, context=context)
+
+
+@get(
+    "/{submission_id:uuid}/record-preview",
+    operation_id="submission_record_preview",
+    security=[WEB],
+    opt=contract(cli=transport_only()),
+    responses=responses(401, 403, 404, 422, 503),
+    dependencies={"context": Provide(submission_reader)},
+)
+@private_response
+async def submission_record_preview(
+    submission_id: FromPath[UUID],
+    services: Services,
+    context: SubmissionContext,
+    review_session_id: FromQuery[int | None] = None,
+) -> RecordPreview:
+    """Compare the reviewed revision with the current approved population."""
+    return await services.record_previews.submission(submission_id, review_session_id, context=context)
+
+
 router = Router(
     path="/submissions",
     tags=["submissions"],
     route_handlers=[
+        draft_record_preview,
+        submission_record_preview,
         decide_submission,
         submission_review_queue,
         list_submissions,

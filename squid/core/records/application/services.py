@@ -56,6 +56,7 @@ from squid.core.records.application.ports import (
     RecordUnitOfWork,
     StoredRecord,
 )
+from squid.core.records.application.preview import PredictedRecord, RecordKey, predicted_record
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
     BuildKind,
@@ -197,6 +198,47 @@ class RecordComputationService:
         # finishes, so repeated cancelled requests cannot spawn unbounded work.
         return await anyio.to_thread.run_sync(self.compute_snapshot, snapshot, limiter=self._compute_limiter)
 
+    async def predict(
+        self,
+        snapshot: RecordSnapshot,
+        proposed: CandidateBuild,
+        identities: dict[RecordKey, UUID],
+        titles: dict[int, str | None],
+    ) -> tuple[PredictedRecord, ...]:
+        """Resolve categories twice, before and after replacing the proposed build."""
+
+        def compare() -> tuple[PredictedRecord, ...]:
+            build_id = proposed.candidate.build_id
+            competitors = (source for source in snapshot.sources if source.candidate.build_id != build_id)
+            after = replace(snapshot, sources=(*competitors, proposed))
+            rows: list[PredictedRecord] = []
+            for version in snapshot.version_ids:
+                scoped = tuple(
+                    source for source in snapshot.sources if version is None or version in source.version_ids
+                )
+                for key, category in self.scope_categories(after, version).categories.items():
+                    if not any(candidate.build_id == build_id for candidate in category.candidates):
+                        continue
+                    previous = self.requested_category(category.identity, scoped, competing_only=True)
+                    existing = (
+                        {record.criterion: record for record in self._resolve_category(snapshot, version, previous)}
+                        if previous
+                        else {}
+                    )
+                    rows.extend(
+                        predicted_record(
+                            record,
+                            existing.get(record.criterion),
+                            build_id,
+                            identities.get((version, key, record.criterion)),
+                            titles,
+                        )
+                        for record in self._resolve_category(after, version, category, include_empty=True)
+                    )
+            return tuple(sorted(rows, key=lambda row: (row.version_id or 0, row.category_key, row.criterion)))
+
+        return await anyio.to_thread.run_sync(compare, limiter=self._compute_limiter)
+
     def compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
         """Calculate a batch using only detached in-memory inputs."""
         prior = snapshot.prior
@@ -273,7 +315,12 @@ class RecordComputationService:
         )
 
     def _resolve_category(
-        self, snapshot: RecordSnapshot, version_id: int | None, category: CategoryCandidates
+        self,
+        snapshot: RecordSnapshot,
+        version_id: int | None,
+        category: CategoryCandidates,
+        *,
+        include_empty: bool = False,
     ) -> list[ComputedRecordResult]:
         """Resolve each criterion of a category, leaving out criteria without competitors."""
         kind = snapshot.kind
@@ -309,7 +356,7 @@ class RecordComputationService:
                 )
             else:
                 resolution = _resolve_record(criterion, kind, category.candidates)
-            if not resolution:
+            if not resolution and not include_empty:
                 continue
             records.append(
                 ComputedRecordResult(

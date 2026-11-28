@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from itertools import batched, pairwise, zip_longest
+from itertools import batched, pairwise
 from typing import Any, cast
 from uuid import UUID
 
@@ -39,6 +39,7 @@ from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.core.records.application.measurements import metric_snapshot
 from squid.core.records.application.metrics import holder_metrics
 from squid.core.records.application.models import (
     ALL_RECORDS,
@@ -73,7 +74,6 @@ from squid.core.records.domain import (
     RecordFact,
     TimingVariant,
     VersionScope,
-    reduce_timing_variants,
 )
 from squid.core.records.domain.door_evidence import LiveDoorConfiguration
 from squid.core.records.domain.events import RecordChange, RecordChangeKind, RecordRunPublished
@@ -201,7 +201,7 @@ class PostgresRecordRepository:
         doors = tuple((await session.execute(statement)).unique().scalars())
         timings = await self._door_timings(tuple(door.id for door in doors if door.expansion is None))
         return tuple(
-            _door_candidate(door, timings.get(door.id, ()), size="variable" if door.expansion is not None else None)
+            door_candidate(door, timings.get(door.id, ()), size="variable" if door.expansion is not None else None)
             for door in doors
         )
 
@@ -535,7 +535,7 @@ class PostgresRecordRepository:
                     result_id=result.id,
                     build_id=build_id,
                     rank=1,
-                    metric_snapshot=_metric_snapshot(computed, candidate),
+                    metric_snapshot=metric_snapshot(computed, candidate),
                     title=computed.title.title,
                     subtitle=computed.title.subtitle,
                     completion_at=_holder_completion(computed, candidate),
@@ -558,7 +558,7 @@ class PostgresRecordRepository:
                     predecessor_id=None,
                     held_from=Instant(period.held_from),
                     held_until=Instant(period.held_until) if period.held_until is not None else None,
-                    metric_snapshot=_metric_snapshot(computed, candidates_by_id[build_id]),
+                    metric_snapshot=metric_snapshot(computed, candidates_by_id[build_id]),
                 )
                 session.add(history)
                 chain.append(history)
@@ -1064,7 +1064,7 @@ class PostgresRecordRepository:
         doors = tuple((await session.execute(statement)).unique().scalars())
         timing_by_build = await self._door_timings(tuple(door.id for door in doors if door.expansion is None))
         return tuple(
-            _door_candidate(
+            door_candidate(
                 door, timing_by_build.get(door.id, ()), size="variable" if door.expansion is not None else None
             )
             for door in doors
@@ -1087,7 +1087,7 @@ class PostgresRecordRepository:
         return tuple(
             candidate
             for extender in extenders
-            if (candidate := _extender_candidate(extender, timing_by_build.get(extender.id, ()))) is not None
+            if (candidate := extender_candidate(extender, timing_by_build.get(extender.id, ()))) is not None
         )
 
     async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[RecordDefinition, ...]:
@@ -1260,7 +1260,7 @@ class PostgresRecordRepository:
         return {build_id: tuple(variants) for build_id, variants in grouped.items()}
 
 
-def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size: str | None = None) -> CandidateBuild:
+def door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size: str | None = None) -> CandidateBuild:
     # Incomplete builds can be saved, but cannot establish a comparable door category.
     assert door.orientation is not None
     assert size is not None or (door.door_width is not None and door.door_height is not None)
@@ -1305,7 +1305,7 @@ def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size:
     )
 
 
-def _extender_candidate(
+def extender_candidate(
     extender: ExtenderBuild,
     timing: tuple[TimingVariant, ...],
 ) -> CandidateBuild | None:
@@ -1422,46 +1422,6 @@ def _holder_completion(computed: ComputedRecordResult, candidate: Candidate) -> 
     dates = {c.completion_at for c in _holder_configurations(computed, candidate.build_id)}
     date = next(iter(dates)) if len(dates) == 1 else None
     return Instant(date) if date is not None else None
-
-
-def _metric_snapshot(computed: ComputedRecordResult, candidate: Candidate) -> dict[str, object]:
-    configurations = _holder_configurations(computed, candidate.build_id)
-    if computed.door_evidence is not None:
-        metrics = tuple(
-            _fixed_metric_snapshot(
-                computed.criterion,
-                Candidate(c.build_id, c.completion_at, c.volume, tuple(TimingVariant(v) for v in c.timing_variants)),
-            )
-            for c in configurations
-        )
-        snapshot: dict[str, object] = {
-            "opening": list(computed.door_evidence.evaluation.opening),
-            "configuration_ids": [c.id for c in configurations],
-        }
-        # A measurement is known only when every possible winning configuration agrees.
-        for key in ("volume", "completion_at"):
-            values = [metric[key] for metric in metrics if key in metric]
-            if values:
-                snapshot[key] = values[0] if all(value == values[0] for value in values) else None
-        timings = [metric["timing"] for metric in metrics]
-        if timings:
-            snapshot["timing"] = None
-            if all(isinstance(timing, list) for timing in timings):
-                vectors = cast(list[list[int | None]], timings)
-                snapshot["timing"] = [
-                    first if all(value == first for value in rest) else None for first, *rest in zip_longest(*vectors)
-                ]
-        return snapshot
-    return _fixed_metric_snapshot(computed.criterion, candidate)
-
-
-def _fixed_metric_snapshot(criterion: RecordCriterion, candidate: Candidate) -> dict[str, object]:
-    snapshot: dict[str, object] = {"volume": candidate.fixed_volume}
-    if criterion is RecordCriterion.FIRST:
-        snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
-    reduction = reduce_timing_variants(candidate.timing_variants)
-    snapshot["timing"] = list(reduction.timing.values) if reduction.timing is not None else None
-    return snapshot
 
 
 def _stored_gaps(result: RecordResult) -> tuple[CandidateGap, ...]:

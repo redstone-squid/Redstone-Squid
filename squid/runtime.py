@@ -65,6 +65,7 @@ from squid.core.records.application import (
     RecordComputationService,
     RecordService,
 )
+from squid.core.records.application.preview import RecordPreviews
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.core.search.application import SearchEmbeddingService, SearchService
@@ -153,6 +154,7 @@ class ApiServices:
     versions: VersionService
     votes: VoteService
     impersonation: ImpersonationService
+    record_previews: RecordPreviews
     submission_reviews: SubmissionReviews
     viewer_queries: ViewerQueries
     published_build_media: PublishedBuildMedia | None = None

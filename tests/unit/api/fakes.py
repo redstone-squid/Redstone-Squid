@@ -79,6 +79,7 @@ from squid.core.records.application.models import (
     RecordListFilters,
     RecordListSort,
 )
+from squid.core.records.application.preview import RecordPreviews
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangePublication
 from squid.core.records.domain import BuildKind
@@ -858,6 +859,7 @@ def build_services(
     """
     return ApiServices(
         impersonation=create_autospec(ImpersonationService, instance=True),
+        record_previews=create_autospec(RecordPreviews, instance=True),
         submission_reviews=create_autospec(SubmissionReviews, instance=True),
         viewer_queries=create_autospec(ViewerQueries, instance=True),
         settings=RuntimeSettingsStub(),
