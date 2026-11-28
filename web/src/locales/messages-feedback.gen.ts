@@ -254,15 +254,19 @@ export function storySpinnerDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Shape of content loading in an island. */
+/** A placeholder that shows the shape of the content being loaded. */
 export function storySkeletonDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Shape of content loading in an island.";
+      return "A placeholder that shows the shape of the content being loaded.";
     case "zh-CN":
-      return "组件加载时显示的内容轮廓。";
+      return "加载时用占位图形勾勒出内容的轮廓。";
     case "en-XA":
-      return "[" + "Šĥåþé öƒ çöñţéñţ ļöåđîñĝ îñ åñ îšļåñđ." + "················]";
+      return (
+        "[" +
+        "Å þļåçéĥöļđéŕ ţĥåţ šĥöŵš ţĥé šĥåþé öƒ ţĥé çöñţéñţ ƀéîñĝ ļöåđéđ." +
+        "··························]"
+      );
   }
 }
 

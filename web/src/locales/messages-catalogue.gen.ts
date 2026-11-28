@@ -13,66 +13,58 @@ export function storySchematicViewer(locale: Locale = getLocale()): string {
   }
 }
 
-/** The production SchematicViewer with a small piston door. Opening it needs the API's resource pack on this origin. */
+/** Explore a piston door in 3D. */
 export function storySchematicViewerDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The production SchematicViewer with a small piston door. Opening it needs the API's resource pack on this origin.";
+      return "Explore a piston door in 3D.";
     case "zh-CN":
-      return "生产环境的 SchematicViewer，展示一个小型活塞门。打开它需要同源 API 提供的资源包。";
+      return "在 3D 视图中查看活塞门。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥé þŕöđûçţîöñ ŠçĥéɱåţîçṼîéŵéŕ ŵîţĥ å šɱåļļ þîšţöñ đööŕ. Öþéñîñĝ îţ ñééđš ţĥé ÅÞÎ'š ŕéšöûŕçé þåçķ öñ ţĥîš öŕîĝîñ." +
-        "··············································]"
-      );
+      return "[" + "Éẋþļöŕé å þîšţöñ đööŕ îñ 3Đ." + "············]";
   }
 }
 
-/** A build's image in a fixed frame. Only HTTPS and same-origin images are shown. */
+/** Shows the build image or a placeholder if the image is unavailable. */
 export function storyBuildpreviewDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A build's image in a fixed frame. Only HTTPS and same-origin images are shown.";
+      return "Shows the build image or a placeholder if the image is unavailable.";
     case "zh-CN":
-      return "固定画框中的作品图片，只显示 HTTPS 和同源图片。";
+      return "显示作品图片；没有可用图片时显示占位图。";
     case "en-XA":
       return (
         "[" +
-        "Å ƀûîļđ'š îɱåĝé îñ å ƒîẋéđ ƒŕåɱé. Öñļý ĤŢŢÞŠ åñđ šåɱé-öŕîĝîñ îɱåĝéš åŕé šĥöŵñ." +
-        "································]"
+        "Šĥöŵš ţĥé ƀûîļđ îɱåĝé öŕ å þļåçéĥöļđéŕ îƒ ţĥé îɱåĝé îš ûñåṽåîļåƀļé." +
+        "···························]"
       );
   }
 }
 
-/** Creators, size, and opening time, shown under build cards and the featured build. */
+/** The build’s creators, dimensions, and opening time. */
 export function storyBuildfactsDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Creators, size, and opening time, shown under build cards and the featured build.";
+      return "The build’s creators, dimensions, and opening time.";
     case "zh-CN":
-      return "作者、尺寸和开启时间，显示在作品卡片和特别展示的作品下方。";
+      return "作品的创作者、尺寸和开启时间。";
     case "en-XA":
-      return (
-        "[" +
-        "Çŕéåţöŕš, šîžé, åñđ öþéñîñĝ ţîɱé, šĥöŵñ ûñđéŕ ƀûîļđ çåŕđš åñđ ţĥé ƒéåţûŕéđ ƀûîļđ." +
-        "·································]"
-      );
+      return "[" + "Ţĥé ƀûîļđ’š çŕéåţöŕš, đîɱéñšîöñš, åñđ öþéñîñĝ ţîɱé." + "·····················]";
   }
 }
 
-/** A build in listings and on record pages. Missing facts mark a build that cannot be compared yet. */
+/** A preview of a build with its creators, dimensions, and opening time. */
 export function storyBuildcardDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A build in listings and on record pages. Missing facts mark a build that cannot be compared yet.";
+      return "A preview of a build with its creators, dimensions, and opening time.";
     case "zh-CN":
-      return "列表和纪录页中的作品。缺失的信息表示该作品暂时无法比较。";
+      return "作品预览，附有创作者、尺寸和开启时间。";
     case "en-XA":
       return (
         "[" +
-        "Å ƀûîļđ îñ ļîšţîñĝš åñđ öñ ŕéçöŕđ þåĝéš. Ṁîššîñĝ ƒåçţš ɱåŕķ å ƀûîļđ ţĥåţ çåññöţ ƀé çöɱþåŕéđ ýéţ." +
-        "·······································]"
+        "Å þŕéṽîéŵ öƒ å ƀûîļđ ŵîţĥ îţš çŕéåţöŕš, đîɱéñšîöñš, åñđ öþéñîñĝ ţîɱé." +
+        "····························]"
       );
   }
 }
@@ -107,18 +99,18 @@ export function storyFeaturedbuildDescription(locale: Locale = getLocale()): str
   }
 }
 
-/** A record in listings. Shared holders, ties, and the current-version scope appear only when they apply. */
+/** Shows the measurements that define a record, such as volume or opening time. */
 export function storyRecordcardDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A record in listings. Shared holders, ties, and the current-version scope appear only when they apply.";
+      return "Shows the measurements that define a record, such as volume or opening time.";
     case "zh-CN":
-      return "列表中的纪录。共同保持者、并列和仅当前版本的范围只在适用时出现。";
+      return "显示判定纪录所用的数据，例如体积或开启时间。";
     case "en-XA":
       return (
         "[" +
-        "Å ŕéçöŕđ îñ ļîšţîñĝš. Šĥåŕéđ ĥöļđéŕš, ţîéš, åñđ ţĥé çûŕŕéñţ-ṽéŕšîöñ šçöþé åþþéåŕ öñļý ŵĥéñ ţĥéý åþþļý." +
-        "·········································]"
+        "Šĥöŵš ţĥé ɱéåšûŕéɱéñţš ţĥåţ đéƒîñé å ŕéçöŕđ, šûçĥ åš ṽöļûɱé öŕ öþéñîñĝ ţîɱé." +
+        "·······························]"
       );
   }
 }

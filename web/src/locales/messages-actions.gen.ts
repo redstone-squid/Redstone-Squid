@@ -14,15 +14,15 @@ export function storyNoNextPage(locale: Locale = getLocale()): string {
   }
 }
 
-/** A command, or with href a link styled as one. */
+/** Starts an action or takes you to another page. */
 export function storyButtonDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A command, or with href a link styled as one.";
+      return "Starts an action or takes you to another page.";
     case "zh-CN":
-      return "执行命令，设置 href 后显示为按钮样式的链接。";
+      return "执行操作或跳转到其他页面。";
     case "en-XA":
-      return "[" + "Å çöɱɱåñđ, öŕ ŵîţĥ ĥŕéƒ å ļîñķ šţýļéđ åš öñé." + "··················]";
+      return "[" + "Šţåŕţš åñ åçţîöñ öŕ ţåķéš ýöû ţö åñöţĥéŕ þåĝé." + "···················]";
   }
 }
 

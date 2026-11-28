@@ -1306,15 +1306,15 @@ export function storyCurrentStep(locale: Locale = getLocale()): string {
   }
 }
 
-/** The outcome of a form, shown after its redirect. */
+/** Shows the result after you submit a form. */
 export function storyFlashnoticeDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The outcome of a form, shown after its redirect.";
+      return "Shows the result after you submit a form.";
     case "zh-CN":
-      return "表单提交并重定向后显示的结果。";
+      return "提交表单后显示操作结果。";
     case "en-XA":
-      return "[" + "Ţĥé öûţçöɱé öƒ å ƒöŕɱ, šĥöŵñ åƒţéŕ îţš ŕéđîŕéçţ." + "····················]";
+      return "[" + "Šĥöŵš ţĥé ŕéšûļţ åƒţéŕ ýöû šûƀɱîţ å ƒöŕɱ." + "·················]";
   }
 }
 

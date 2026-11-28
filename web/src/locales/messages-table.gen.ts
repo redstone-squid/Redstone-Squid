@@ -2,15 +2,15 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** A table of rows sorted by the server. */
+/** Compare rows and change their sort order. */
 export function storyDataTableDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A table of rows sorted by the server.";
+      return "Compare rows and change their sort order.";
     case "zh-CN":
-      return "由服务器排序的表格。";
+      return "对比各行数据并更改排序。";
     case "en-XA":
-      return "[" + "Å ţåƀļé öƒ ŕöŵš šöŕţéđ ƀý ţĥé šéŕṽéŕ." + "···············]";
+      return "[" + "Çöɱþåŕé ŕöŵš åñđ çĥåñĝé ţĥéîŕ šöŕţ öŕđéŕ." + "·················]";
   }
 }
 
