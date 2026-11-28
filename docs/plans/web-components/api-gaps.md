@@ -27,7 +27,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Creators and accounts
 
-27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
+27. **Staff account picker.** Add a staff-only `accounts` source to `GET /v1/suggest/accounts?q=&limit=` for X5 and X6. Use the standard suggestion fields: the account ID as `value`, the display name as `label`, and a short `description` to distinguish accounts with the same name.
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
 53. **Merge code normalization.** `POST /v1/accounts/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
