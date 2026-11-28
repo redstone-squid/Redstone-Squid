@@ -6,6 +6,8 @@ which Astro renders statically unless a page hydrates them with a `client:` dire
 site reads the Python API through an SDK generated from `../contracts/openapi.json`. Use bun
 for every command.
 
+When implementing pages, stop and notify the user if there are API changes that should be done, instead of hacking around it.
+
 ## Layout
 
 | Directory        | Owns                                                                     | May import                                                                  |
