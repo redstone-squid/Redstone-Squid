@@ -67,7 +67,12 @@
       src !== null && "invisible group-has-[>img[hidden]]:visible",
     )}
   >
-    <Glyph class={fallback === "label" ? "size-8" : "size-1/2 max-w-8"} aria-hidden="true" />
+    <!-- An icon-only fallback centres itself on the frame: a percentage size inside the
+         auto-sized grid row would not resolve, leaving the icon off-centre. -->
+    <Glyph
+      class={fallback === "label" ? "size-8" : "absolute inset-0 m-auto size-1/2 max-h-8 max-w-8"}
+      aria-hidden="true"
+    />
     <span class={cn(fallback === "icon" && "sr-only")}>{fallbackLabel}</span>
   </div>
   <!-- eslint-enable svelte/no-inline-styles -->
