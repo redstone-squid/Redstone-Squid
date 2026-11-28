@@ -35,6 +35,7 @@ from squid.api.idempotency import edit_operation_id, reserve_edit_request, reser
 from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.revisions import EDIT_ETAG, RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
+from squid.api.v1.auth import signed_out_response
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.accounts import (
     AccountDetail,
@@ -56,7 +57,7 @@ from squid.core.accounts.application.edits import (
     ProfileValues,
     account_target,
 )
-from squid.core.accounts.domain import AccountMerge, MergePreview, PublicCreatorProfile
+from squid.core.accounts.domain import AccountMerge, CreditRetention, MergePreview, PublicCreatorProfile
 from squid.core.accounts.errors import AccountIdentityNotFoundError, AccountNotFoundError
 from squid.core.accounts.models import AccountIdentity
 from squid.core.builds.application.queries import CreatorStats
@@ -204,6 +205,38 @@ async def export_me(
     caller.browser_binding()
     download = await services.account_exports.download(caller.require_account_id(), file_format)
     return export_response("account", download)
+
+
+@delete(
+    "/me",
+    status_code=204,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="account_delete",
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
+)
+async def delete_me(
+    credits: FromQuery[CreditRetention],
+    accounts: Accounts,
+    caller: ManageCaller,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
+    """Delete the caller's account and sign out.
+
+    Requires a browser sign-in from the last ten minutes; otherwise 403
+    `RECENT_SIGN_IN_REQUIRED` asks the user to sign in again. Returns 409
+    `ACCOUNT_DELETION_BLOCKED`, with counts in its context, while the account has
+    submissions under review or votes it opened that are still open.
+
+    Approved builds, ballots, and reviews stay, attributed to no one. `credits`
+    either keeps the credited names as plain text or removes the credits. Offer
+    `GET /accounts/me/export` first: nothing erased here can be recovered.
+    """
+    await accounts.delete_account(caller.recent_account_proof(), credits, context=caller.context())
+    return signed_out_response()
 
 
 @put(
@@ -680,6 +713,7 @@ router = Router(
     route_handlers=[
         credited_builds,
         get_me,
+        delete_me,
         export_me,
         own_credit_claims,
         account_creator_stats,

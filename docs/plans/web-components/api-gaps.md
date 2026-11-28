@@ -6,9 +6,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ## Not finished
 
-### Creators and accounts
-
-28. **Account deletion.** A2 can download account records through `GET /v1/accounts/me/export` in JSON or zipped CSV. `DELETE /v1/accounts/me` follows [the account deletion plan](../account-deletion.md).
+None.
 
 ## Finished
 
@@ -83,6 +81,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 25. **Creator builds (P13).** Filter `GET /v1/builds` by `account_id` or `creator_name_id`. Each build appears once. Each credit carries a stable `credit_id`, its printed name and a nullable public `account_id`.
 26. **Credit claims (P13, A3, X4).** Send `{credit_ids: [...]}` to `POST /v1/creator-aliases/{id}/claims`. Applicants read `GET /v1/accounts/me/claims`. Staff read pending claims oldest first at `GET /v1/claims` and post decisions to `/v1/claims/{id}/approve` or `/reject`. Approval takes the selected `credit_ids` and requires `reassign: true` to replace an existing owner. Later builds under the same name are unaffected. Historical links migrate as automatic attributions, with conflicting credits left unassigned.
 27. **Staff account picker (X5, X6).** `GET /v1/suggest/accounts?q=&limit=` suggests public account UUIDs by name, linked handle or exact ID for callers with `account.profile.moderate` or `perm.subject.inspect`.
+28. **Account deletion (A2).** `GET /v1/accounts/me/export` downloads account records in JSON or zipped CSV. `DELETE /v1/accounts/me?credits=keep_name|remove` deletes the account and clears the session cookies. It returns 403 `RECENT_SIGN_IN_REQUIRED` when the browser sign-in is over ten minutes old, and 409 `ACCOUNT_DELETION_BLOCKED` with `pending_submissions` and `open_votes` counts while reviews are open. See [account deletion](../../account-deletion.md).
 53. **Merge codes (A3).** Preview and completion accept lowercase, whitespace and hyphens in a merge code.
 
 ### Notifications

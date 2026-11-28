@@ -80,6 +80,11 @@ async def logout(
     if caller.kind != "account" or token is None or web_auth is None:
         raise AuthenticationError
     await web_auth.logout(token, context=caller.context())
+    return signed_out_response()
+
+
+def signed_out_response() -> Response[None]:
+    """Return an empty 204 that clears the browser session and CSRF cookies."""
     response = Response(content=None, status_code=204)
     response.set_cookie("__Host-squid_session", "", max_age=0, path="/", secure=True, httponly=True, samesite="lax")
     response.set_cookie("squid_csrf", "", max_age=0, path="/", secure=True, samesite="lax")

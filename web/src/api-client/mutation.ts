@@ -67,6 +67,7 @@ export class BrowserApi {
 // that the visitor cannot act on share the generic message, shown with the error reference.
 const errorMessages = {
   ACCOUNT_ALREADY_LINKED: null,
+  ACCOUNT_DELETION_BLOCKED: null,
   ACCOUNT_IDENTITY_NOT_FOUND: m.errorGone,
   ACCOUNT_NOT_FOUND: m.errorGone,
   ALIAS_ALREADY_ADDED: null,
@@ -106,6 +107,7 @@ const errorMessages = {
   NOT_FOUND: m.errorGone,
   PERSISTENCE_ERROR: m.errorGeneric,
   RATE_LIMITED: m.errorRateLimited,
+  RECENT_SIGN_IN_REQUIRED: null,
   RECORD_NOT_FOUND: m.errorGone,
   RESTRICTION_NOT_FOUND: m.errorGone,
   REVISION_CONFLICT: m.errorConflict,
