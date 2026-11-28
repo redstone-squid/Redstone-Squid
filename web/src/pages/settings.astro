@@ -69,8 +69,8 @@ const title = m.indexingTitle();
       </ul>
     )}
     <Pagination
-      prevHref={claims.prev ? pageHref(Astro.url, claims.prev) + "#claims" : null}
-      nextHref={claims.next ? pageHref(Astro.url, claims.next) + "#claims" : null}
+      prevHref={claims.prev ? `${pageHref(Astro.url, claims.prev)}#claims` : null}
+      nextHref={claims.next ? `${pageHref(Astro.url, claims.next)}#claims` : null}
       labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
     />
   </Section>
