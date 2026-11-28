@@ -22,6 +22,7 @@ from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.domain import BuildCategory, BuildStatus
+from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.repository import BuildRepository
 from squid.core.builds.models import Build, BuildLink, DoorBuild, ExtenderBuild
@@ -1259,3 +1260,58 @@ async def test_version_lookup_handles_empty_duplicate_and_missing_names(
         assert len(versions) == 1
         with pytest.raises(InvalidBuildError, match=r"Java 1.21.99"):
             await BuildRepository._get_versions(session, ["Java 1.21.0", "Java 1.21.99"])
+
+
+async def test_review_outcome_notifies_every_maintainer(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    submitter_id = await seed_account_and_version(migrated_session_factory)
+    async with build_edit_session(migrated_session_factory) as session:
+        creator = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+        designer = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+        session.add_all([creator, designer])
+        await session.flush()
+        session.add_all(
+            [
+                AccountIdentity(account_id=creator.id, provider=IdentityProvider.DISCORD, subject="700000000000000011"),
+                AccountIdentity(
+                    account_id=designer.id, provider=IdentityProvider.DISCORD, subject="700000000000000012"
+                ),
+                *(
+                    NotificationProfile(account_id=account_id, web_enabled=True, dm_enabled=False)
+                    for account_id in (submitter_id, creator.id, designer.id)
+                ),
+            ]
+        )
+        creator_id = creator.id
+    build = submission_build(BuildCategory.OTHER, submitter_id)
+    build.submission_status = BuildStatus.REJECTED
+    build.credits = [
+        Credit(name="Creator", kind=CreditKind.DISCORD, subject="700000000000000011"),
+        Credit(name="Designer", kind=CreditKind.DISCORD, subject="700000000000000012", role=CreditRole.DESIGNER),
+    ]
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+    )
+    assert build.id is not None
+    async with migrated_session_factory.begin() as session:
+        event = DomainEvent(event_type="build.denied", aggregate_kind="build", aggregate_id=build.id)
+        session.add(event)
+        await session.flush()
+        event_id = event.id
+    async with migrated_session_factory() as session:
+        stored = await session.get_one(DomainEvent, event_id)
+        session.expunge(stored)
+
+    notifications = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(notifications, lambda uow: uow.notifications.materialize(stored), commit=True)
+
+    async with migrated_session_factory() as session:
+        recipients = set(
+            (
+                await session.scalars(
+                    select(InboxNotification.account_id).where(InboxNotification.event_id == event_id)
+                )
+            ).all()
+        )
+    assert recipients == {submitter_id, creator_id}
