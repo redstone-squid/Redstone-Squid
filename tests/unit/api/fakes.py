@@ -94,6 +94,7 @@ from squid.core.search.application.results import SearchPage
 from squid.core.search.domain import SearchRequest
 from squid.core.search.domain.query import SearchQuery
 from squid.core.submissions.application import FormOptionSet, SubmissionFormService, build_submission_manifest
+from squid.core.submissions.application.decisions import SubmissionReviews
 from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
 from squid.core.submissions.application.finalization import (
     FinalizationJobSnapshot,
@@ -857,6 +858,7 @@ def build_services(
     """
     return ApiServices(
         impersonation=create_autospec(ImpersonationService, instance=True),
+        submission_reviews=create_autospec(SubmissionReviews, instance=True),
         viewer_queries=create_autospec(ViewerQueries, instance=True),
         settings=RuntimeSettingsStub(),
         edits=MockEditRunner(),

@@ -59,10 +59,8 @@ from squid.api.v1.schemas.submissions import (
     SubmissionAttemptResponse,
 )
 from squid.core.actors import ActingContext
-from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
-from squid.core.builds.domain import BuildStatus
 from squid.core.edits.application import EditRunner
-from squid.core.edits.domain import EditCommand, EditValues, Revision
+from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.pagination import Page as ResultPage
@@ -852,20 +850,9 @@ async def decide_submission(
     operation_id: NamedDependency[UUID],
 ) -> SubmissionDetail:
     """Apply a review decision to the displayed candidate revision."""
-    detail = await services.viewer_queries.submission(submission_id, context=context)
-    if detail.submission.kind != "new_build":
-        raise AuthorizationError
-    status = BuildStatus.APPROVED if data.decision == "approve" else BuildStatus.REJECTED
-    await services.edits.execute(
-        EditCommand(
-            BUILD_STATUS_EDIT,
-            (Revision(build_target(detail.submission.build_id), data.revision),),
-            EditValues.of({"submission_status": status.value, "feedback": data.feedback}),
-            operation_id,
-        ),
-        context=context,
+    return await services.submission_reviews.decide(
+        submission_id, data.revision, data.decision, data.feedback, operation_id, context=context
     )
-    return await services.viewer_queries.submission(submission_id, context=context)
 
 
 router = Router(

@@ -142,6 +142,7 @@ from squid.core.starboard.application.edits import (
     StarboardEdit,
 )
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
+from squid.core.submissions.application.decisions import SubmissionReviews
 from squid.core.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.core.submissions.bootstrap import SubmissionServices
 from squid.core.suggestions.application import SuggestionService
@@ -671,9 +672,11 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     if encryption is None:
         msg = "The API runtime requires an idempotency response-encryption keyring."
         raise RuntimeError(msg)
+    views = ViewerQueries(graph.uow_factory, graph.permissions)
     return ApiServices(
         impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
-        viewer_queries=ViewerQueries(graph.uow_factory, graph.permissions),
+        viewer_queries=views,
+        submission_reviews=SubmissionReviews(views, graph.edits),
         settings=graph.settings,
         edits=graph.edits,
         builds=graph.builds,

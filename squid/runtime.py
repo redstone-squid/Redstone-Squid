@@ -77,6 +77,7 @@ from squid.core.submissions.application import (
     SubmissionFormService,
 )
 from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
+from squid.core.submissions.application.decisions import SubmissionReviews
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.core.submissions.application.intake import SubmissionAttachmentIntake
 from squid.core.submissions.application.recalculation import RecalculationProposalService
@@ -152,6 +153,7 @@ class ApiServices:
     versions: VersionService
     votes: VoteService
     impersonation: ImpersonationService
+    submission_reviews: SubmissionReviews
     viewer_queries: ViewerQueries
     published_build_media: PublishedBuildMedia | None = None
 

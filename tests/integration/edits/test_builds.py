@@ -14,6 +14,7 @@ from whenever import Instant
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
+from squid.core.auth.application.viewer import ViewerQueries
 from squid.core.auth.infrastructure.viewer import PostgresViewerRepository
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.category_edits import BUILD_CATEGORY_EDIT, BuildCategoryEdit
@@ -49,6 +50,7 @@ from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.models import DoorTimingVariant
 from squid.core.submissions.application.build_drafts import BuildDraftEditor
+from squid.core.submissions.application.decisions import SubmissionReviews
 from squid.core.submissions.application.drafts import SubmissionDraftService
 from squid.core.submissions.application.forms import CheckedInFormManifestRegistry
 from squid.core.submissions.domain import DraftChange, DraftChangeKey, FieldOperation, FieldOperationKind
@@ -249,6 +251,9 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
         assert detail.submission.decided_revision == updated.revision
         assert detail.base_revision == current.revision
         assert detail.reviewed_facts["description"] == "original"
+        assert detail.vote_session_id is not None
+        assert await views.submission(submission.id, creator.id, detail.vote_session_id) == detail
+        assert await views.submission(submission.id, creator.id, detail.vote_session_id + 1) is None
         assert await views.submission(submission.id, owner.account_id) is None
         assert [row.id for row in (await views.submissions(creator.id, FIRST_PAGE, 10)).items] == [submission.id]
         assert [row.build_id for row in (await views.portfolio(creator.id, FIRST_PAGE, 10)).items] == [build.id]
@@ -442,6 +447,30 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.description == "newer"
+
+
+async def test_submission_decision_returns_the_reviewed_facts_and_feedback(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    _, _, owner, build = await setup(sessions)
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    permissions = PermissionService(uow_factory=factory)
+    views = ViewerQueries(factory, permissions)
+    reviews = SubmissionReviews(views, EditExecutor(factory, {BUILD_STATUS_EDIT: BuildStatusEdit(permissions)}))
+    async with sessions() as session:
+        identifier = await session.scalar(select(BuildSubmission.id).where(BuildSubmission.build_id == build.id))
+    assert identifier is not None
+    moderator = ActingContext.direct(UserActor(account_id=owner.account_id, is_bot_owner=True))
+    result = await reviews.decide(
+        identifier, build.revision, "reject", "Show the reset cycle.", uuid4(), context=moderator
+    )
+    assert result.submission.status == "rejected"
+    assert result.review_revision == build.revision
+    assert result.reviewed_facts["description"] == "original"
+    assert (await views.submission(identifier, context=ActingContext.direct(owner))).feedback == "Show the reset cycle."
+    with pytest.raises(RevisionConflictError):
+        await reviews.decide(identifier, build.revision, "approve", None, uuid4(), context=moderator)
 
 
 async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
