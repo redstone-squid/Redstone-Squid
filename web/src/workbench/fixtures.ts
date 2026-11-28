@@ -1,3 +1,5 @@
+import { storyBlocks } from "@/locales/messages-forms.gen";
+import { recordCriterionLabel } from "@/locales/vocabulary.gen";
 import { omit } from "es-toolkit";
 import * as m from "@/locales/messages.gen";
 import type {
@@ -173,7 +175,20 @@ const criteria: RecordCriterion[] = [
   "smallest_fastest",
 ];
 export const recordPerCriterion = () =>
-  criteria.map((criterion, index) => record(20 + index, m.storyFastestFlushDoor(), { criterion }));
+  criteria.map((criterion, index) =>
+    record(20 + index, `${recordCriterionLabel(criterion)} ${m.storyFlushPistonDoor()}`, {
+      criterion,
+      metrics: {
+        opening_time: { value: 8, unit: "game_ticks", display: m.buildTicks({ ticks: 8 }) },
+        volume: { value: 64, unit: "blocks", display: `64 ${storyBlocks()}` },
+        completion_at: {
+          value: "2026-01-12",
+          unit: "date",
+          display: "2026-01-12",
+        },
+      },
+    }),
+  );
 
 function detail(
   summary: PublicRecordSummary,
