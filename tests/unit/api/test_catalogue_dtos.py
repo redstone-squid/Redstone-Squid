@@ -122,6 +122,7 @@ async def test_search_fields_describe_syntax_without_storage_or_coercion_details
         "unit": None,
         "scopes": ["builds"],
         "supports_range": True,
+        "multi_valued": False,
         "supports_sort": True,
         "metric": False,
         "choices": None,
