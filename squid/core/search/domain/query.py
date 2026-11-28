@@ -131,6 +131,34 @@ class BooleanExpression:
             msg = tr(t"search-boolean-minimum-operands = Boolean expressions require at least two operands")
             raise ValidationError(msg)
 
+    def switched_selection(self, index: int) -> QueryExpression | None:
+        """Switch sibling equality filters on one multi-valued field between AND and OR.
+
+        An AND group may also contain unrelated constraints after normalization.
+        Only the first selected value owns the switch.
+        """
+        first = self.operands[index]
+        if not isinstance(first, FieldExpression) or not first.field.multi_valued:
+            return None
+        indices = [
+            i
+            for i, item in enumerate(self.operands)
+            if isinstance(item, FieldExpression)
+            and item.field == first.field
+            and item.operator is ComparisonOperator.EQUAL
+            and not isinstance(item.value, RangeValue)
+        ]
+        if len(indices) < 2 or index != indices[0]:
+            return None
+        if self.operator is BooleanOperator.OR and len(indices) != len(self.operands):
+            return None
+        other = BooleanOperator.OR if self.operator is BooleanOperator.AND else BooleanOperator.AND
+        group = BooleanExpression(other, tuple(self.operands[i] for i in indices))
+        return combine_clauses(
+            self.operator,
+            *(group if i == index else item for i, item in enumerate(self.operands) if i == index or i not in indices),
+        )
+
 
 type QueryExpression = TextExpression | FieldExpression | PresenceExpression | NotExpression | BooleanExpression
 

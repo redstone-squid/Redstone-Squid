@@ -17,6 +17,7 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 # Examples are also parsed in tests so the reference cannot drift from the query language.
 BUILD_EXAMPLES = (
     (tr(t"search-example-compact = Compact doors"), "door width<=5 height<=6"),
+    (tr(t"search-example-tags = Narrow builds with either tag"), "width<=5 tag:any(slim,seamless)"),
     (tr(t"search-example-exclude = Exclude a restriction"), "door NOT restriction:observerless"),
     (tr(t"search-example-dates = Completion date range"), "completion_at:[2025-01-01 TO 2026-01-01]"),
 )

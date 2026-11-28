@@ -23,6 +23,7 @@ from squid.core.search.application.fields import FieldRegistry
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.query import (
+    BooleanExpression,
     BooleanOperator,
     ComparisonOperator,
     FieldExpression,
@@ -129,6 +130,9 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     def render(self) -> tuple[GuidedNode, ...]:
         nodes: list[GuidedNode] = [self._controls()]
         clauses = self.clauses
+        root = self.query.parsed.expression
+        if isinstance(root, BooleanExpression | NotExpression):
+            nodes.append(sl.paragraph(self.query.parsed.normalized))
         if clauses:
             nodes.append(
                 sl.region(
@@ -208,6 +212,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 sl.choices(
                     *(sl.choice(label, key=value) for value, label in values),
                     key=f"{field.name}.value-choice",
+                    maximum=len(values),
                     on_change=partial(self._choose_menu_value, field),
                 ),
                 sl.action_controls(presence, change, key="filter-step"),
@@ -237,6 +242,29 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             form = self._field_form(operand.field, operand, negated=negated)
         else:
             form = self._text_form(operand, negated=negated)
+        root = self.query.parsed.expression
+        assert root is not None
+        path, _ = query_leaves(root)[index]
+        parent = root
+        for step in path[:-1]:
+            if isinstance(parent, NotExpression):
+                parent = parent.operand
+            else:
+                assert isinstance(parent, BooleanExpression)
+                parent = parent.operands[step]
+        switch = []
+        if path and isinstance(parent, BooleanExpression):
+            replacement = parent.switched_selection(path[-1])
+            if replacement is not None:
+                switch.append(
+                    sl.action_control(
+                        tr(t"guided-search-use-all = Match all of these values")
+                        if parent.operator is BooleanOperator.OR
+                        else tr(t"guided-search-use-any = Match any of these values"),
+                        partial(self._switch_selection, path[:-1], replacement),
+                        key=f"switch-{index}",
+                    )
+                )
         return sl.action_controls(
             sl.form(
                 filter_label(item, self.creators),
@@ -249,9 +277,18 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 partial(self._remove, index),
                 key=f"remove-{index}",
             ),
+            *switch,
             key=f"clause-{index}",
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
+
+    async def _switch_selection(
+        self, path: tuple[int, ...], replacement: QueryExpression, _event: sd.PressEvent[RedstoneSquid]
+    ) -> None:
+        root = self.query.parsed.expression
+        assert root is not None
+        self._set_expression(replace_clause(root, path, replacement))
+        await self._refresh()
 
     def _query_form(self, query: str) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         return sl.forms.FormSpec[sd.Request[Any, Any]](
@@ -497,7 +534,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
             async def chosen(action: sl.ActionEvent, values: tuple[Suggestion, ...]) -> None:
                 if values:
-                    await self._add_choice(field, values[0].value, action)
+                    await self._add_choices(field, tuple(value.value for value in values), action)
 
             name = field.display_name
             picker = await self._picker(
@@ -505,6 +542,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 VALUE_SOURCES[field.name],
                 chosen,
                 key="value-lookup",
+                maximum=_PICKER_PAGE_SIZE,
                 label=lambda value: value.label,
                 search_label=tr(t"guided-search-search-values = Search {name}"),
             )
@@ -518,14 +556,16 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.pending_clauses = ()
 
     async def _choose_menu_value(self, field: FieldDefinition, event: sl.ChoiceEvent) -> None:
-        if len(event.selected) == 1:
-            await self._add_choice(field, event.selected[0], event)
+        await self._add_choices(field, tuple(event.selected), event)
 
-    async def _add_choice(self, field: FieldDefinition, raw: str, event: sl.ActionEvent) -> None:
-        value = FieldRegistry.coerce(field, raw, scope=self.scope)
-        await self._apply_filter(
-            field, FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)), event
-        )
+    async def _add_choices(self, field: FieldDefinition, values: tuple[str, ...], event: sl.ActionEvent) -> None:
+        clauses = []
+        for raw in values:
+            value = FieldRegistry.coerce(field, raw, scope=self.scope)
+            clauses.append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)))
+        group = combine_clauses(BooleanOperator.OR, *clauses)
+        if group is not None:
+            await self._apply_filter(field, group, event)
 
     async def _sort_picked(self, _event: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
         # Keep the sort panel open with nothing marked, so another order is one choice away.
@@ -559,7 +599,8 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         elif self.filter_picker is not None:
             self.filter_picker.picked = ()
         self._append(*additions)
-        event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
+        first_value = len(self.clauses) - len(query_leaves(addition))
+        event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{first_value}"))
         await self._refresh()
 
     async def _remove(self, index: int, _event: sd.PressEvent[RedstoneSquid]) -> None:

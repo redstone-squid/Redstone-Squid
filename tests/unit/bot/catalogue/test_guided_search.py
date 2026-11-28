@@ -422,3 +422,34 @@ async def test_add_several_bounds_then_change_fields_without_closing_panel(monke
         assert screen.selected is None
         assert screen.filter_picker is None
         assert ui.control("field").payload["label"] == "Add filter"
+
+
+@pytest.mark.parametrize("source", ["width<=5 AND (tag:slim OR tag:seamless)", "width<=5 tag:any(slim,seamless)"])
+async def test_switch_tag_group_and_keep_width(source: str) -> None:
+    screen = editor(source)
+    async with stage(screen, owner=object()) as ui:
+        await ui.press("switch-1")
+        assert screen.query.text == "width<=5 AND tag:slim AND tag:seamless"
+        await ui.press("switch-1")
+        assert screen.query.text == "width<=5 AND (tag:slim OR tag:seamless)"
+        await ui.press("remove-1")
+        await ui.press("remove-1")
+        assert screen.query.text == "width<=5"
+        ui.assert_within_limits()
+
+
+async def test_choose_multiple_tags_then_require_both(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("tag", "Tag"),)),
+        ("approved_showcase_tags", (Candidate.create("slim", "Slim"), Candidate.create("seamless", "Seamless"))),
+    )
+    screen = editor("width<=5")
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press("field")
+        await _choose(ui, "filter-lookup", "tag")
+        await _choose(ui, "value-lookup", "slim", "seamless")
+        assert screen.query.text == 'width<=5 AND (tag:"slim" OR tag:"seamless")'
+        await ui.press("switch-1")
+        assert screen.query.text == 'width<=5 AND tag:"slim" AND tag:"seamless"'
+        ui.assert_within_limits()

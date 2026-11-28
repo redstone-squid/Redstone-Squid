@@ -443,3 +443,35 @@ async def test_width_histogram_counts_each_matching_document_once_per_bin(
     query = SearchQueryParser(DEFAULT_FIELD_REGISTRY, scope=request.scope).parse(request.query)
     async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
         assert await uow.search.histogram(request, query, "width") == [(1, 3, 2), (39, 41, 1)]
+
+
+async def test_width_and_tag_selection(
+    search_tables: None, async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with async_session_factory.begin() as session:
+        for key, width, tags in [
+            (1, 3, ("slim",)),
+            (2, 5, ("seamless",)),
+            (3, 4, ("slim", "seamless")),
+            (4, 6, ("slim", "seamless")),
+        ]:
+            await _index(
+                session,
+                "build",
+                str(key),
+                str(key),
+                status="approved",
+                values=(
+                    FieldValue("width", Decimal(width)),
+                    *(FieldValue("tag", tag) for tag in tags),
+                ),
+            )
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    for query, expected in [
+        ("width<=5 tag:any(slim,seamless)", {"1", "2", "3"}),
+        ("width<=5 AND (tag:slim OR tag:seamless)", {"1", "2", "3"}),
+        ("width<=5 tag:all(slim,seamless)", {"3"}),
+        ("width<=5 AND tag:slim AND tag:seamless", {"3"}),
+    ]:
+        page = await search(backend, request(query, page_size=10))
+        assert {hit.title for hit in page.hits} == expected
