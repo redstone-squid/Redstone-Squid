@@ -447,6 +447,134 @@ export function storyNewCreator(locale: Locale = getLocale()): string {
   }
 }
 
+/** What a submission would do to the records, compared with the builds approved today. */
+export function storyRecordpredictionDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "What a submission would do to the records, compared with the builds approved today.";
+    case "zh-CN":
+      return "与目前已通过的作品相比，一份投稿会对纪录造成什么影响。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ŵĥåţ å šûƀɱîššîöñ ŵöûļđ đö ţö ţĥé ŕéçöŕđš, çöɱþåŕéđ ŵîţĥ ţĥé ƀûîļđš åþþŕöṽéđ ţöđåý." +
+        "··································]"
+      );
+  }
+}
+
+/** A submission as its submitter and reviewers see it, with the review vote and its forms. */
+export function storySubmissionreviewDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A submission as its submitter and reviewers see it, with the review vote and its forms.";
+    case "zh-CN":
+      return "投稿人和审核者看到的投稿页面，包括审核投票及其表单。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å šûƀɱîššîöñ åš îţš šûƀɱîţţéŕ åñđ ŕéṽîéŵéŕš šéé îţ, ŵîţĥ ţĥé ŕéṽîéŵ ṽöţé åñđ îţš ƒöŕɱš." +
+        "···································]"
+      );
+  }
+}
+
+/** Every outcome */
+export function storyEveryOutcome(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Every outcome";
+    case "zh-CN":
+      return "所有结果";
+    case "en-XA":
+      return "[" + "Éṽéŕý öûţçöɱé" + "······]";
+  }
+}
+
+/** Facts still missing */
+export function storyFactsStillMissing(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Facts still missing";
+    case "zh-CN":
+      return "仍缺少信息";
+    case "en-XA":
+      return "[" + "Ƒåçţš šţîļļ ɱîššîñĝ" + "········]";
+  }
+}
+
+/** No applicable categories */
+export function storyNoCategories(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No applicable categories";
+    case "zh-CN":
+      return "没有适用的类别";
+    case "en-XA":
+      return "[" + "Ñö åþþļîçåƀļé çåţéĝöŕîéš" + "··········]";
+  }
+}
+
+/** Reviewer, vote open */
+export function storyReviewerVoteOpen(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Reviewer, vote open";
+    case "zh-CN":
+      return "审核者，投票进行中";
+    case "en-XA":
+      return "[" + "Ŕéṽîéŵéŕ, ṽöţé öþéñ" + "········]";
+  }
+}
+
+/** Voter who has voted */
+export function storyVoterWhoHasVoted(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Voter who has voted";
+    case "zh-CN":
+      return "已投票的投票者";
+    case "en-XA":
+      return "[" + "Ṽöţéŕ ŵĥö ĥåš ṽöţéđ" + "········]";
+  }
+}
+
+/** Submitter's view */
+export function storySubmittersView(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submitter's view";
+    case "zh-CN":
+      return "投稿人视角";
+    case "en-XA":
+      return "[" + "Šûƀɱîţţéŕ'š ṽîéŵ" + "·······]";
+  }
+}
+
+/** Approved and published */
+export function storyApprovedAndPublished(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Approved and published";
+    case "zh-CN":
+      return "已通过并发布";
+    case "en-XA":
+      return "[" + "Åþþŕöṽéđ åñđ þûƀļîšĥéđ" + "·········]";
+  }
+}
+
+/** Rejected with feedback */
+export function storyRejectedWithFeedback(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Rejected with feedback";
+    case "zh-CN":
+      return "已拒绝，附反馈";
+    case "en-XA":
+      return "[" + "Ŕéĵéçţéđ ŵîţĥ ƒééđƀåçķ" + "·········]";
+  }
+}
+
 export {
   storyCopperBolt55,
   storyEmpty,

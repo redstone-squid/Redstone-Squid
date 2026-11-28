@@ -2932,6 +2932,18 @@ export function storyPendingReviewByStaff(locale: Locale = getLocale()): string 
   }
 }
 
+/** A fast flush 5×5 door. */
+export function storyAFastFlush55Door(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A fast flush 5×5 door.";
+    case "zh-CN":
+      return "一扇快速的 5×5 平墙门。";
+    case "en-XA":
+      return "[" + "Å ƒåšţ ƒļûšĥ 5×5 đööŕ." + "·········]";
+  }
+}
+
 /** Layout */
 export function storyLayout(locale: Locale = getLocale()): string {
   switch (locale) {

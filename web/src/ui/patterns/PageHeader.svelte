@@ -42,9 +42,13 @@
   {#if notice}{@render notice()}{/if}
   <div class="flex min-w-0 items-start gap-4">
     {#if media}<div class="shrink-0">{@render media()}</div>{/if}
-    <div class="grid min-w-0 flex-1 gap-2 @xl:grid-cols-[minmax(0,1fr)_auto] @xl:gap-x-4">
+    <div
+      class="grid min-w-0 flex-1 grid-cols-1 gap-2 @xl:grid-cols-[minmax(0,1fr)_auto] @xl:gap-x-4"
+    >
       <div class="min-w-0"><Heading level={1} {size} {eyebrow} focusTarget>{title}</Heading></div>
-      {#if description}<p class="max-w-prose text-fg-muted @xl:col-start-1">{description}</p>{/if}
+      {#if description}<p class="max-w-prose wrap-break-word text-fg-muted @xl:col-start-1">
+          {description}
+        </p>{/if}
       {#if meta}<div class="flex flex-wrap items-center gap-2 @xl:col-start-1">
           {@render meta()}
         </div>{/if}

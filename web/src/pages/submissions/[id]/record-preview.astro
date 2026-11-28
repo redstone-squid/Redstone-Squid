@@ -1,5 +1,7 @@
 ---
-import RecordPrediction from "@/layouts/RecordPrediction.astro";
+import RecordPrediction from "@/features/submissions/RecordPrediction.svelte";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import * as m from "@/locales/messages.gen";
 import { submissionRecordPreview } from "@/generated/sdk.gen";
 import { load } from "@/server/api";
 import { requireSession } from "@/server/session";
@@ -17,4 +19,6 @@ const preview = await load(
 );
 ---
 
-<RecordPrediction {preview} />
+<CatalogueLayout title={m.predictionTitle()} noindex>
+  <RecordPrediction {preview} />
+</CatalogueLayout>

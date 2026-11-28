@@ -1027,5 +1027,15 @@
   "story-no-holders": "88420230beadd7b5fd3121d2714f2adb87843b1a77241f29773429b9eefeb40f",
   "story-builds-and-records": "0acf1c26d8a0e3d554ced82b508ad487109c166ce56b615421c70a11d921b458",
   "story-claiming-credits": "94df9b33c39dfbf720d68cbcf72f3f6ef1f508925cdc0eae7749189421be81ef",
-  "story-new-creator": "685040983f7836b97496ea26261fe7ac2cf5814cfa04bcc7e909f408edf7f6f6"
+  "story-new-creator": "685040983f7836b97496ea26261fe7ac2cf5814cfa04bcc7e909f408edf7f6f6",
+  "story-recordprediction-description": "a9f4ef85d63ddde1ba1763fa404ffe46f8b2e0be99a0831f75f97a68c804d90e",
+  "story-submissionreview-description": "98ad69e74e9fb86d21b6bd91fb7c4e1c9d2ed114eb38ce5ff43861fc478ccc10",
+  "story-every-outcome": "6a4ec2d5e4f6abc7ff3a86eaf4159e1fdbb6c233bae0e8dbb73b359a25c41057",
+  "story-facts-still-missing": "be087cdbce40dce4e7540c75a9b3b15b8319cabd86b251269fb36aef667c9c39",
+  "story-no-categories": "8bdc866f5a44791eaff16e4a895c4dfa976705693078c5a5087b54cf65083c17",
+  "story-reviewer-vote-open": "f0f8f7b4a72a2a77ea05168d60032131597413da688cbde9b23e19756c5a136f",
+  "story-voter-who-has-voted": "d7ab62325d1d25e880bb34200dbc3d728f7e9915164d1380012173bd61b81208",
+  "story-submitters-view": "6279fc920c1a235babf27683c43dc1e082523e67b44df6391253463a9b12a0a5",
+  "story-approved-and-published": "70cf4a3a6256220f9390afc12ab903f8d66fbe79aca8cd057d4df4cd70ecdd99",
+  "story-rejected-with-feedback": "7c5cf45df326694c54bcbdda691b54a812bad33d37e2975e7d17be94d10637f2"
 }

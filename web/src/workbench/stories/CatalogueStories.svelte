@@ -11,6 +11,8 @@
   import RecordDetail from "@/features/catalogue/RecordDetail.svelte";
   import RecordList from "@/features/catalogue/RecordList.svelte";
   import SchematicViewer from "@/features/catalogue/SchematicViewer.svelte";
+  import RecordPrediction from "@/features/submissions/RecordPrediction.svelte";
+  import SubmissionReview from "@/features/submissions/SubmissionReview.svelte";
   import List from "@/ui/data/List.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import {
@@ -20,6 +22,7 @@
     recordPerCriterion,
     recordScenarios,
   } from "@/workbench/fixtures";
+  import { predictionScenarios, submissionScenarios } from "@/workbench/submission-fixtures";
   import Story from "./Story.svelte";
   import Variant from "./Variant.svelte";
 
@@ -27,6 +30,8 @@
   const records = recordScenarios();
   const details = recordDetailScenarios();
   const creator = creatorFixtures();
+  const submissions = submissionScenarios();
+  const predictions = predictionScenarios();
   // Whole pages sit in a frame, so their page headers read as part of the specimen.
   const pageFrame = "min-w-0 rounded-md border border-dashed border-line-strong p-4";
 </script>
@@ -214,6 +219,41 @@
       <CreatorCredits stats={creator.newcomer} builds={[]} prevHref={null} nextHref={null} />
     </div>
   </Variant>
+</Story>
+
+<Story
+  name="RecordPrediction"
+  source="features/submissions/RecordPrediction.svelte"
+  description={m.storyRecordpredictionDescription()}
+>
+  <Variant label={m.storyEveryOutcome()}>
+    <div class={pageFrame}><RecordPrediction preview={predictions.outcomes} /></div>
+  </Variant>
+  <Variant label={m.storyFactsStillMissing()}>
+    <div class={pageFrame}><RecordPrediction preview={predictions.missingFacts} /></div>
+  </Variant>
+  <Variant label={m.storyNoCategories()}>
+    <div class={pageFrame}><RecordPrediction preview={predictions.empty} /></div>
+  </Variant>
+</Story>
+
+<Story
+  name="SubmissionReview"
+  source="features/submissions/SubmissionReview.svelte"
+  description={m.storySubmissionreviewDescription()}
+>
+  {#each [[m.storyReviewerVoteOpen(), submissions.reviewer], [m.storyVoterWhoHasVoted(), submissions.voted], [m.storySubmittersView(), submissions.submitter], [m.storyApprovedAndPublished(), submissions.published], [m.storyRejectedWithFeedback(), submissions.rejected]] as const as [label, scenario] (label)}
+    <Variant {label}>
+      <div class={pageFrame}>
+        <SubmissionReview
+          title={scenario.detail.submission.title ?? ""}
+          detail={scenario.detail}
+          vote={scenario.vote}
+          previewHref="#recordprediction"
+        />
+      </div>
+    </Variant>
+  {/each}
 </Story>
 
 <Story
