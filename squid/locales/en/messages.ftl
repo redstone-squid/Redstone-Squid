@@ -589,20 +589,20 @@ accounts-application-presentation-discord-user = Discord user { $discord_id }
 # squid/core/accounts/models.py:213
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject }.
 
-# squid/core/accounts/errors.py:360
+# squid/core/accounts/errors.py:359
 accounts-check-uuid-try-again = Check the UUID and try again.
 
 # squid/core/accounts/errors.py:320
-accounts-creator-already-credited = **{ $name }** is already credited to the creator known as **{ $holder_name }**.
+accounts-creator-already-credited = A **{ $name }** credit already belongs to **{ $holder_name }**.
 
 # squid/core/accounts/errors.py:284
-accounts-creator-name-already-claimed = Creator name already claimed
+accounts-creator-name-already-claimed = Build credit already assigned
 
 # squid/core/accounts/errors.py:266
 accounts-creator-name-check = Check the spelling against the creator list on a build you worked on.
 
 # squid/core/accounts/errors.py:283
-accounts-creator-name-claimed = That creator name is already claimed by another account.
+accounts-creator-name-claimed = A selected build credit already belongs to another account.
 
 # squid/core/accounts/errors.py:263
 accounts-creator-name-not-found = Creator name not found
@@ -647,9 +647,9 @@ accounts-errors-account-already-linked = Account already linked
 accounts-errors-account-not-found = Account not found.
 
 # squid/core/accounts/errors.py:287
-accounts-errors-ask-staff-to-review-the-claim-if = Ask staff to review the claim if you believe the name is yours.
+accounts-errors-ask-staff-to-review-the-claim-if = Ask staff to review the claim if you believe you worked on the build.
 
-# squid/core/accounts/errors.py:331
+# squid/core/accounts/errors.py:330
 accounts-errors-claim-not-found = Claim not found
 
 # squid/core/accounts/errors.py:215
@@ -706,7 +706,7 @@ accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 # squid/core/accounts/domain/profiles.py:102
 accounts-link-label-required = Every link needs a label.
 
-# squid/core/accounts/errors.py:347
+# squid/core/accounts/errors.py:346
 accounts-link-minecraft-first = Link a Minecraft account first, then try again.
 
 # squid/core/accounts/errors.py:158
@@ -739,19 +739,19 @@ accounts-merge-proof-required = Both accounts must be authenticated again before
 # squid/core/accounts/errors.py:138
 accounts-merge-reauthenticate = Authenticate both accounts again, then retry the merge.
 
-# squid/core/accounts/errors.py:357
+# squid/core/accounts/errors.py:356
 accounts-minecraft-account-not-found = Minecraft account not found.
 
-# squid/core/accounts/errors.py:343
+# squid/core/accounts/errors.py:342
 accounts-minecraft-account-required = You do not have a Minecraft account linked.
 
-# squid/core/accounts/errors.py:374
+# squid/core/accounts/errors.py:373
 accounts-minecraft-account-service = The Minecraft account service is temporarily unavailable.
 
-# squid/core/accounts/errors.py:344
+# squid/core/accounts/errors.py:343
 accounts-no-minecraft-account-linked = No Minecraft account linked
 
-# squid/core/accounts/errors.py:330
+# squid/core/accounts/errors.py:329
 accounts-no-pending-claim-matches-id = No pending claim matches that ID.
 
 # squid/core/accounts/errors.py:211
@@ -784,7 +784,7 @@ accounts-profile-link-limit = A profile may have at most { $limit } links, got {
 # squid/core/accounts/errors.py:136
 accounts-recent-account-proof-required = Recent account proof required
 
-# squid/core/accounts/errors.py:379
+# squid/core/accounts/errors.py:378
 accounts-retry-soon = Try again in a few minutes.
 
 # squid/core/accounts/application/presentation.py:15
@@ -878,7 +878,7 @@ artifacts-artifactstore-requires-object = S3ArtifactStore requires an S3 object-
 # squid/core/auth/application/services.py:66
 auth-key-pepper-required = API key pepper must not be empty.
 
-# squid/bot/accounts/claims.py:234
+# squid/bot/accounts/claims.py:243
 bot-claims-view-value =
     { "*" }*{ $heading }**
     { $detail }
@@ -1618,7 +1618,7 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/chrome.py:268
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/accounts/cog.py:118
+# squid/bot/accounts/cog.py:121
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
 # squid/bot/accounts/creator_page.py:69
@@ -2155,40 +2155,40 @@ catalogue-search-help-close = Close help
 # squid/core/catalogue/domain/titles.py:67
 catalogue-title-token-blank = A title token cannot be blank.
 
-# squid/bot/accounts/claims.py:210
+# squid/bot/accounts/claims.py:219
 claims-closed-uncredited = Closed { $claimant }'s claim on **{ $name }** without crediting it.
 
-# squid/bot/accounts/claims.py:251
+# squid/bot/accounts/claims.py:260
 claims-reapproval-warning = Approving again reassigns the selected credits from them.
 
-# squid/bot/accounts/claims.py:169
+# squid/bot/accounts/claims.py:178
 claims-resolve-forbidden = You are no longer allowed to resolve creator claims.
 
-# squid/bot/accounts/claims.py:85
+# squid/bot/accounts/claims.py:87
 claims-review-empty = No creator credit claims are awaiting review.
 
-# squid/bot/accounts/claims.py:138
+# squid/bot/accounts/claims.py:145
 claims-review-heading = Creator credit claims awaiting review
 
-# squid/bot/accounts/claims.py:121
+# squid/bot/accounts/claims.py:128
 claims-view-approve = Approve
 
-# squid/bot/accounts/claims.py:230, squid/bot/accounts/claims.py:246
+# squid/bot/accounts/claims.py:239, squid/bot/accounts/claims.py:255
 claims-view-claim = Claim #{ $claim_id } — { $name }
 
-# squid/bot/accounts/claims.py:208
-claims-view-credited-to = Credited **{ $name }** to { $claimant }.
+# squid/bot/accounts/claims.py:217
+claims-view-credited-to = Approved the selected **{ $name }** credits for { $claimant }.
 
-# squid/bot/accounts/claims.py:233
+# squid/bot/accounts/claims.py:242
 claims-view-opened = { $claimant } — opened { $age }
 
-# squid/bot/accounts/claims.py:75
+# squid/bot/accounts/claims.py:77
 claims-view-page-of-in-total = Page { $page } of { $pages } — { $total } in total
 
-# squid/bot/accounts/claims.py:131
+# squid/bot/accounts/claims.py:138
 claims-view-reject = Reject
 
-# squid/bot/accounts/claims.py:119
+# squid/bot/accounts/claims.py:126
 claims-view-take-the-name = Reassign credits
 
 # squid/core/cli_auth/errors.py:66
@@ -2900,19 +2900,19 @@ creator-page-credited-as = Select a name to see the builds credited to it.
 # squid/bot/accounts/cog.py:67, squid/bot/accounts/creator_page.py:57
 creator-page-fallback-name = Creator
 
-# squid/bot/submission/ui/credits.py:110, squid/bot/submission/ui/credits.py:137
+# squid/bot/submission/ui/credits.py:110, squid/bot/submission/ui/credits.py:150
 credits-add = Add credit
 
-# squid/bot/submission/ui/credits.py:135
+# squid/bot/submission/ui/credits.py:148
 credits-add-discord = Choose Discord user
 
 # squid/bot/submission/ui/credits.py:108
 credits-add-name = Add name or Minecraft player
 
-# squid/bot/submission/ui/credits.py:151, squid/bot/submission/ui/credits.py:257
+# squid/bot/submission/ui/credits.py:164, squid/bot/submission/ui/credits.py:275
 credits-add-reference = Add identity reference
 
-# squid/bot/submission/ui/credits.py:141
+# squid/bot/submission/ui/credits.py:154
 credits-discord-user = Discord user
 
 # squid/bot/submission/ui/credits.py:63
@@ -2921,8 +2921,14 @@ credits-edit = Edit credit
 # squid/bot/submission/ui/credits.py:114
 credits-kind = Name type
 
-# squid/bot/submission/ui/credits.py:279, squid/bot/submission/ui/credits.py:69
+# squid/bot/submission/ui/credits.py:297, squid/bot/submission/ui/credits.py:69
 credits-name = Display name
+
+# squid/bot/submission/ui/credits.py:242
+credits-no-profile = No public account matched that search.
+
+# squid/bot/submission/ui/credits.py:132
+credits-nominate = Credit a public account (optional)
 
 # squid/bot/submission/ui/credits.py:126
 credits-player-name = Name or username
@@ -2930,28 +2936,31 @@ credits-player-name = Name or username
 # squid/bot/submission/ui/credits.py:78
 credits-profile = Profile
 
+# squid/bot/submission/ui/credits.py:133
+credits-profile-query = Search by name or public account ID
+
 # squid/bot/submission/ui/credits.py:57
 credits-proposed-account = Proposed profile: { $profile_id }
 
-# squid/bot/submission/ui/credits.py:275
+# squid/bot/submission/ui/credits.py:293
 credits-reference = Identity reference
 
-# squid/bot/submission/ui/credits.py:270
+# squid/bot/submission/ui/credits.py:288
 credits-reference-bedrock = Minecraft Bedrock XUID
 
-# squid/bot/submission/ui/credits.py:262
+# squid/bot/submission/ui/credits.py:280
 credits-reference-discord = Discord user ID
 
-# squid/bot/submission/ui/credits.py:264
+# squid/bot/submission/ui/credits.py:282
 credits-reference-discord-name = Discord username
 
-# squid/bot/submission/ui/credits.py:276
+# squid/bot/submission/ui/credits.py:294
 credits-reference-help = Paste the ID or username for the identity type you chose.
 
-# squid/bot/submission/ui/credits.py:267
+# squid/bot/submission/ui/credits.py:285
 credits-reference-java = Minecraft Java UUID
 
-# squid/bot/submission/ui/credits.py:260
+# squid/bot/submission/ui/credits.py:278
 credits-reference-type = Identity type
 
 # squid/bot/submission/ui/credits.py:95
@@ -2960,7 +2969,7 @@ credits-remove = Remove credit
 # squid/bot/submission/ui/credits.py:27
 credits-role = Contribution
 
-# squid/bot/submission/ui/credits.py:176
+# squid/bot/submission/ui/credits.py:189
 credits-select = Select a name or public profile
 
 # squid/bot/submission/ui/credits.py:49

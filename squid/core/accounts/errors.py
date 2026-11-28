@@ -280,13 +280,13 @@ class AliasAlreadyClaimedError(ConflictError):
     The internal account ID remains in diagnostic context.
     """
 
-    default_message = tr(t"accounts-creator-name-claimed = That creator name is already claimed by another account.")
-    default_title = tr(t"accounts-creator-name-already-claimed = Creator name already claimed")
+    default_message = tr(t"accounts-creator-name-claimed = A selected build credit already belongs to another account.")
+    default_title = tr(t"accounts-creator-name-already-claimed = Build credit already assigned")
     default_code = ErrorCode.ALIAS_ALREADY_CLAIMED
     default_resource = "creator_alias"
     default_end_user_action = tr(
         t"accounts-errors-ask-staff-to-review-the-claim-if = Ask staff to review the claim if you believe "
-        t"the name is yours."
+        t"you worked on the build."
     )
 
     def __init__(
@@ -318,8 +318,7 @@ class AliasAlreadyClaimedError(ConflictError):
         return self.with_context(
             public_context={"holder_name": holder_name},
             message=md_tr(
-                t"accounts-creator-already-credited = **{name}** is already credited "
-                t"to the creator known as **{holder_name}**.",
+                t"accounts-creator-already-credited = A **{name}** credit already belongs to **{holder_name}**.",
             ),
         )
 

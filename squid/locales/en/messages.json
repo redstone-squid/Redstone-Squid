@@ -2009,11 +2009,11 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:360"
+      "squid/core/accounts/errors.py:359"
     ]
   },
   "accounts-creator-already-credited": {
-    "fingerprint": "991ac86369d268d27bbb9ef38ca55012550b0cccaf5baf29af4f67d825d5b9fe",
+    "fingerprint": "4498dec0e36cd4eabed86c997a9d13c1b65f4cabc27f014845ec84d0737e4379",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -2033,7 +2033,7 @@
     ]
   },
   "accounts-creator-name-already-claimed": {
-    "fingerprint": "2a33859446475eb23e2f830c1ee3e2f48c9ba8904b8a1b45cd79f3b941acd85e",
+    "fingerprint": "8c012b5f978969966f2704d4d938d5216b0489c9f5ff20392bcf0fbeedfe22e2",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -2051,7 +2051,7 @@
     ]
   },
   "accounts-creator-name-claimed": {
-    "fingerprint": "7bf9347bef053c12e10508a6166437a2f551552b091986a3574a2c63526e8eb9",
+    "fingerprint": "d482448ec90d81a102cdab7470090b1069c57f1e3963a4fe46730f19539ee7d0",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -2165,7 +2165,7 @@
     ]
   },
   "accounts-errors-ask-staff-to-review-the-claim-if": {
-    "fingerprint": "8c1ed38c5a09f1fe67c1865d4af2c5770e74c226dd79438b603403c3906d167f",
+    "fingerprint": "f7194325dea459874153470ad319fa442ea93601f6b97e7ec879b66c423a3f76",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -2179,7 +2179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:331"
+      "squid/core/accounts/errors.py:330"
     ]
   },
   "accounts-errors-consent-required": {
@@ -2362,7 +2362,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:347"
+      "squid/core/accounts/errors.py:346"
     ]
   },
   "accounts-link-prompt-expired": {
@@ -2467,7 +2467,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:357"
+      "squid/core/accounts/errors.py:356"
     ]
   },
   "accounts-minecraft-account-required": {
@@ -2476,7 +2476,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:343"
+      "squid/core/accounts/errors.py:342"
     ]
   },
   "accounts-minecraft-account-service": {
@@ -2485,7 +2485,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:374"
+      "squid/core/accounts/errors.py:373"
     ]
   },
   "accounts-no-minecraft-account-linked": {
@@ -2494,7 +2494,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:344"
+      "squid/core/accounts/errors.py:343"
     ]
   },
   "accounts-no-pending-claim-matches-id": {
@@ -2503,7 +2503,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:330"
+      "squid/core/accounts/errors.py:329"
     ]
   },
   "accounts-privacy-consent-required": {
@@ -2635,7 +2635,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/errors.py:379"
+      "squid/core/accounts/errors.py:378"
     ]
   },
   "accounts-unidentified-account-internal": {
@@ -2947,7 +2947,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:234"
+      "squid/bot/accounts/claims.py:243"
     ]
   },
   "bot-consent-build": {
@@ -5385,7 +5385,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/cog.py:118"
+      "squid/bot/accounts/cog.py:121"
     ]
   },
   "bot-verify-hidden-creator-page": {
@@ -7125,7 +7125,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:210"
+      "squid/bot/accounts/claims.py:219"
     ]
   },
   "claims-reapproval-warning": {
@@ -7134,7 +7134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:251"
+      "squid/bot/accounts/claims.py:260"
     ]
   },
   "claims-resolve-forbidden": {
@@ -7143,7 +7143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:169"
+      "squid/bot/accounts/claims.py:178"
     ]
   },
   "claims-review-empty": {
@@ -7152,7 +7152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:85"
+      "squid/bot/accounts/claims.py:87"
     ]
   },
   "claims-review-heading": {
@@ -7161,7 +7161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:138"
+      "squid/bot/accounts/claims.py:145"
     ]
   },
   "claims-view-approve": {
@@ -7170,7 +7170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:121"
+      "squid/bot/accounts/claims.py:128"
     ]
   },
   "claims-view-claim": {
@@ -7190,12 +7190,12 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:230",
-      "squid/bot/accounts/claims.py:246"
+      "squid/bot/accounts/claims.py:239",
+      "squid/bot/accounts/claims.py:255"
     ]
   },
   "claims-view-credited-to": {
-    "fingerprint": "5b1471d6ed6b74018732b84d1bbef53e8dee84bc9ab7aace6fd2a581f9d67041",
+    "fingerprint": "6e67d73f08dbc970e844683d72a5e97db131c3295df6d341c0c4a22d0df1278d",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -7211,7 +7211,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:208"
+      "squid/bot/accounts/claims.py:217"
     ]
   },
   "claims-view-opened": {
@@ -7231,7 +7231,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:233"
+      "squid/bot/accounts/claims.py:242"
     ]
   },
   "claims-view-page-of-in-total": {
@@ -7256,7 +7256,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:75"
+      "squid/bot/accounts/claims.py:77"
     ]
   },
   "claims-view-reject": {
@@ -7265,7 +7265,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:131"
+      "squid/bot/accounts/claims.py:138"
     ]
   },
   "claims-view-take-the-name": {
@@ -7274,7 +7274,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:119"
+      "squid/bot/accounts/claims.py:126"
     ]
   },
   "cli-auth-account-approve-cli": {
@@ -9493,7 +9493,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/ui/credits.py:110",
-      "squid/bot/submission/ui/credits.py:137"
+      "squid/bot/submission/ui/credits.py:150"
     ]
   },
   "credits-add-discord": {
@@ -9502,7 +9502,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:135"
+      "squid/bot/submission/ui/credits.py:148"
     ]
   },
   "credits-add-name": {
@@ -9520,8 +9520,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:151",
-      "squid/bot/submission/ui/credits.py:257"
+      "squid/bot/submission/ui/credits.py:164",
+      "squid/bot/submission/ui/credits.py:275"
     ]
   },
   "credits-discord-user": {
@@ -9530,7 +9530,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:141"
+      "squid/bot/submission/ui/credits.py:154"
     ]
   },
   "credits-edit": {
@@ -9557,8 +9557,26 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:279",
+      "squid/bot/submission/ui/credits.py:297",
       "squid/bot/submission/ui/credits.py:69"
+    ]
+  },
+  "credits-no-profile": {
+    "fingerprint": "8ae1669b6d184177e114306b6da847793830b42d269526c1b511c93e8989f084",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/credits.py:242"
+    ]
+  },
+  "credits-nominate": {
+    "fingerprint": "6eb2bcf33a565a4936736973bfbc9f45390a01940cdf56e89b001cd0404a9603",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/credits.py:132"
     ]
   },
   "credits-player-name": {
@@ -9577,6 +9595,15 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/ui/credits.py:78"
+    ]
+  },
+  "credits-profile-query": {
+    "fingerprint": "5a8f3f0c91ac6678a05a0c99621d7b59c115677fbfdfb5e476fa9e0a1fff2dc8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/credits.py:133"
     ]
   },
   "credits-proposed-account": {
@@ -9600,7 +9627,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:275"
+      "squid/bot/submission/ui/credits.py:293"
     ]
   },
   "credits-reference-bedrock": {
@@ -9609,7 +9636,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:270"
+      "squid/bot/submission/ui/credits.py:288"
     ]
   },
   "credits-reference-discord": {
@@ -9618,7 +9645,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:262"
+      "squid/bot/submission/ui/credits.py:280"
     ]
   },
   "credits-reference-discord-name": {
@@ -9627,7 +9654,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:264"
+      "squid/bot/submission/ui/credits.py:282"
     ]
   },
   "credits-reference-help": {
@@ -9636,7 +9663,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:276"
+      "squid/bot/submission/ui/credits.py:294"
     ]
   },
   "credits-reference-java": {
@@ -9645,7 +9672,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:267"
+      "squid/bot/submission/ui/credits.py:285"
     ]
   },
   "credits-reference-type": {
@@ -9654,7 +9681,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:260"
+      "squid/bot/submission/ui/credits.py:278"
     ]
   },
   "credits-remove": {
@@ -9681,7 +9708,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/credits.py:176"
+      "squid/bot/submission/ui/credits.py:189"
     ]
   },
   "credits-title": {

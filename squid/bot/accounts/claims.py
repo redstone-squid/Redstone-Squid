@@ -1,6 +1,8 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from functools import partial
+from itertools import batched
 from typing import Any, override
 from uuid import UUID
 
@@ -104,14 +106,19 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         credits = None
         if self.selected is not None and self.selected.selected_credits:
             targets = self.selected.selected_credits
-            credits = sl.choices(
-                *(sl.choice(f"Build #{item['build_id']}", key=key, description=key) for key, item in targets.items()),
-                key="selected-credits",
-                selection=tuple(targets) if self.included is None else self.included,
-                on_change=self._select_credits,
-                minimum=0,
-                maximum=len(targets),
-            )
+            included = set(targets if self.included is None else self.included)
+            pages = [
+                sl.choices(
+                    *(sl.choice(f"Build #{targets[key]['build_id']}", key=key, description=key) for key in page),
+                    key=f"selected-credits-{index}",
+                    selection=tuple(key for key in page if key in included),
+                    on_change=partial(self._select_credits, page),
+                    minimum=0,
+                    maximum=len(page),
+                )
+                for index, page in enumerate(batched(targets, 25, strict=False))
+            ]
+            credits = sl.region(*pages, key="credit-pages", title="", page_size=1)
         buttons: list[sl.semantic.ActionControl[sd.Request]] = []
         if ACCOUNT_CLAIM_APPROVE in self.grants:
             buttons.append(
@@ -151,8 +158,10 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         self.selected_id = int(event.selected[0])
         self.reassign_armed = None
 
-    async def _select_credits(self, event: sd.ChoiceEvent) -> None:
-        self.included = tuple(event.selected)
+    async def _select_credits(self, page: tuple[str, ...], event: sd.ChoiceEvent) -> None:
+        assert self.selected is not None
+        previous = self.selected.selected_credits if self.included is None else self.included
+        self.included = tuple(key for key in previous if key not in page) + tuple(event.selected)
         self.reassign_armed = None
 
     async def _approve(self, event: sd.PressEvent) -> None:
@@ -205,7 +214,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         name = resolved.alias_name
         claimant = present_claimant(resolved)
         message = (
-            md_tr(t"claims-view-credited-to = Credited **{name}** to {claimant}.")
+            md_tr(t"claims-view-credited-to = Approved the selected **{name}** credits for {claimant}.")
             if approve
             else md_tr(
                 t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.",

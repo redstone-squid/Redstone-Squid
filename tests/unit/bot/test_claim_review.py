@@ -128,10 +128,21 @@ async def test_selecting_a_claim_enables_decisions() -> None:
     assert component.reassign_armed is None
 
 
+async def test_selecting_a_page_of_credits_keeps_other_pages_selected() -> None:
+    claim = make_claim(7)
+    claim.selected_credits = {str(UUID(int=i)): {"build_id": i, "account_id": None} for i in range(1, 27)}
+    component = make_component((claim,)).component
+    await choose(component, "claim", "7")
+    payload = commit_render(make_layout_bot().ui.mount(component, access=sd.Owner(7), timeout=300)).to_components()
+    assert "Build #25" in str(payload)
+    await choose(component, "selected-credits-0", str(UUID(int=1)))
+    assert set(component.included or ()) == {str(UUID(int=1)), str(UUID(int=26))}
+
+
 @pytest.mark.parametrize(
     ("approve", "expected"),
     [
-        pytest.param(True, "Credited **Notch** to @555.", id="approve"),
+        pytest.param(True, "Approved the selected **Notch** credits for @555.", id="approve"),
         pytest.param(False, "Closed @555's claim on **Notch** without crediting it.", id="reject"),
     ],
 )
@@ -169,7 +180,7 @@ async def test_a_held_name_explains_the_conflict_then_requires_deliberate_reassi
         ("approve", 7, AUTHOR_ID, False),
         ("approve", 7, AUTHOR_ID, True),
     ]
-    assert second.notices == [("Credited **Notch** to @555.", sl.interactions.Visibility.PUBLIC)]
+    assert second.notices == [("Approved the selected **Notch** credits for @555.", sl.interactions.Visibility.PUBLIC)]
 
 
 async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_name(

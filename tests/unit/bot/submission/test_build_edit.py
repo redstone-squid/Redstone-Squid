@@ -15,12 +15,13 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.contextual import ContextualSearches, search_autocomplete
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
+from squid.bot.submission.ui.credits import CreditEditor
 from squid.bot.submission.ui.expandable_size import DoorSizeEditor
 from squid.bot.submission.ui.sections import SectionEditorScreen, modal_chunks, present_chunk_form
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.builds.application import BuildService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
-from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.domain.credits import name_credits, read_credits
 from squid.core.builds.domain.expandable_size import ExpandableSize
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
@@ -102,6 +103,23 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     assert workspace.patch().attributes() == {"version_spec": "1.21"}
     assert workspace.answers["credits"] == []
     assert workspace.answers["version_compatibility"] == "1.21"
+
+
+@pytest.mark.usefixtures("discord_screen_context")
+async def test_profile_nomination_preserves_the_separately_entered_credit_name() -> None:
+    profile_id = "12345678-1234-4321-8765-123456789abc"
+    profile = SuggestionSource("creator_profiles", StaticProvider.labelled(((profile_id, "Alice"),)))
+    workspace = editor(DoorBuild(id=1, submission_status=BuildStatus.PENDING, submitter_account_id=1)).workspace
+    async with stage(CreditEditor(workspace, "credits"), owner=object()) as ui:
+        ui.interaction.client.services = SimpleNamespace(
+            suggestions=SuggestionService(SuggestionRegistry.of((profile,)))
+        )
+        form = await ui.press_for_form("add-name")
+        await form.submit({"kind": "name", "name": "RedFox", "profile_query": "Alice", "role": "creator"})
+        await ui.select("credit-match", ["0"])
+    credits = read_credits(workspace.answers["credits"])
+    assert credits[0].name == "RedFox"
+    assert str(credits[0].proposed_account_id) == profile_id
 
 
 @pytest.mark.parametrize("registered", [True, False])

@@ -753,11 +753,6 @@ class AccountRepository:
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
 
-    @staticmethod
-    async def _public_account_id(session: AsyncSession, account_id: int) -> uuid.UUID | None:
-        """Resolve an account's public creator identity, for naming a conflict safely."""
-        return await session.scalar(select(Account.public_account_id).where(Account.id == account_id))
-
     def _reservation_holds(self, row: VerificationCodeModel, token: str) -> bool:
         """Whether *token* is the live hold on *row*."""
         if row.reserved_token is None or row.reserved_until is None:

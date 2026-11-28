@@ -35,7 +35,7 @@ def edit_credit(credit: Credit, name: str, role: CreditRole) -> Credit:
 
 
 class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
-    matches: tuple[Credit, ...] = sl.state(())
+    matches: tuple[tuple[Credit, str], ...] = sl.state(())
     match_revision: int = sl.state(0)
 
     def __init__(self, workspace: AnswerWorkspace, field_id: str) -> None:
@@ -125,6 +125,19 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                             sl.forms.TextField(
                                 key="name", label=tr(t"credits-player-name = Name or username"), maximum=120
                             ),
+                            *(
+                                (
+                                    sl.forms.TextField(
+                                        key="profile_query",
+                                        label=tr(t"credits-nominate = Credit a public account (optional)"),
+                                        placeholder=tr(t"credits-profile-query = Search by name or public account ID"),
+                                        required=False,
+                                        maximum=120,
+                                    ),
+                                )
+                                if self.workspace.can_nominate_accounts
+                                else ()
+                            ),
                             role_field(),
                         ),
                     ),
@@ -161,7 +174,7 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                 sd.v2.select(
                     *(
                         sd.v2.option(
-                            match.name[:100],
+                            label[:100],
                             str(index),
                             description=(
                                 f"Public profile · {match.proposed_account_id}"
@@ -169,7 +182,7 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                                 else "Credited name"
                             ),
                         )
-                        for index, match in enumerate(self.matches)
+                        for index, (match, label) in enumerate(self.matches)
                     ),
                     on_select=self._pick,
                     key="credit-match",
@@ -179,7 +192,7 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
         return tuple(nodes)
 
     async def _pick(self, event: sd.SelectionEvent) -> None:
-        credit = self.matches[int(event.values[0])]
+        credit, _ = self.matches[int(event.values[0])]
         credits = tuple(read_credits(self.workspace.answers.get(self.field_id, [])))
         await self._save(event.transaction, (*credits, credit), self.match_revision)
         self.matches = ()
@@ -207,23 +220,28 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
             username=name if kind is not CreditKind.NAME else None,
             role=cast(CreditRole, event.values["role"]),
         )
-        if kind is CreditKind.NAME and self.workspace.can_nominate_accounts:
-            client = cast(AppRequest, event.context).client
-            service = client.services.suggestions
-            choices = [credit]
-            for source in ("creators", "creator_profiles"):
+        profile_query = str(event.values.get("profile_query") or "").strip()
+        if self.workspace.can_nominate_accounts and (kind is CreditKind.NAME or profile_query):
+            service = cast(AppRequest, event.context).client.services.suggestions
+            choices = [] if profile_query else [(credit, credit.name)]
+            sources = ("creator_profiles",) if profile_query else ("creators", "creator_profiles")
+            for source in sources:
                 result = await service.suggest(
-                    SuggestionRequest(source, query=name, limit=10), context=ActingContext.current()
+                    SuggestionRequest(source, query=profile_query or name, limit=10), context=ActingContext.current()
                 )
                 for match in result.items:
-                    choice = replace(
-                        credit,
-                        name=match.label,
-                        proposed_account_id=UUID(match.value) if source == "creator_profiles" else None,
+                    choice = (
+                        replace(credit, proposed_account_id=UUID(match.value))
+                        if source == "creator_profiles"
+                        else replace(credit, name=match.label)
                     )
-                    if choice not in choices:
-                        choices.append(choice)
-            if len(choices) > 1:
+                    if (choice, match.label) not in choices:
+                        choices.append((choice, match.label))
+            if not choices:
+                self.matches = ()
+                await event.notice(tr(t"credits-no-profile = No public account matched that search."))
+                return
+            if profile_query or len(choices) > 1:
                 self.matches = tuple(choices)
                 self.match_revision = revision
                 return
