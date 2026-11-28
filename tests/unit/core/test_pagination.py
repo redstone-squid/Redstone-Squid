@@ -5,7 +5,8 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.pagination import InvalidPageCursorError, PageAnchor, PageCursor, offset_page
+from squid.core.pagination import FIRST_PAGE, InvalidPageCursorError, PageAnchor, PageCursor, offset_page
+from squid.core.versions.domain.models import MinecraftVersion, VersionEntry, VersionListSort
 
 
 def test_offset_page_addresses_both_neighbours_by_offset() -> None:
@@ -58,3 +59,22 @@ def test_a_token_with_a_mistyped_id_is_rejected() -> None:
 
     with pytest.raises(InvalidPageCursorError):
         PageCursor.decode(forged.encode())
+
+
+@pytest.mark.parametrize("sort", list(VersionListSort))
+def test_materialized_catalogue_can_seek_past_a_deleted_boundary(sort: VersionListSort) -> None:
+    rows = [VersionEntry(i, MinecraftVersion("Java", 1, 20, 6 - i)) for i in range(1, 6)]
+    first = sort.page(rows, selector=FIRST_PAGE, page_size=2)
+    assert first.next is not None
+    rows.remove(first.items[-1])
+    second = sort.page(rows, selector=first.next.selector(), page_size=2)
+    assert second.total == 4
+    assert len(second.items) == 2
+    assert set(second.items).isdisjoint(first.items)
+    assert second.prev is not None
+    assert sort.page(rows, selector=second.prev.selector(), page_size=2).items == first.items[:1]
+    other = VersionListSort.ID if sort is VersionListSort.RELEASE else VersionListSort.RELEASE
+    with pytest.raises(InvalidPageCursorError):
+        other.page(rows, selector=first.next.selector(), page_size=2)
+    empty = sort.page([], selector=first.next.selector(), page_size=2)
+    assert (empty.items, empty.total, empty.next, empty.prev) == ((), 0, None, None)

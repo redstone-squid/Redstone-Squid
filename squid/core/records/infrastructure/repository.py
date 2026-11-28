@@ -992,23 +992,30 @@ class PostgresRecordRepository:
         """Release the failed leases this worker still owns for a later retry."""
         await self._recompute_queue.fail_batch(lease.claim_tokens, error=error, session=self._session())
 
-    async def list_recompute_queue(self) -> Sequence[RecomputeItem]:
+    async def list_recompute_queue(self, *, selector: PageSelector, page_size: int) -> Page[RecomputeItem]:
         queue = RecordRecomputeQueueItem
-        rows = await self._session().scalars(select(queue).order_by(queue.enqueued_at, queue.id))
-        return tuple(
-            RecomputeItem(
-                id=row.id,
-                kind=row.build_kind,
-                target=row.target,
-                build_id=row.build_id,
-                record_id=row.record_id,
-                reasons=tuple(row.reasons),
-                enqueued_at=row.enqueued_at.to_stdlib(),
-                attempts=row.attempts,
-                last_error=row.last_error,
-                claimed=row.claimed_at is not None,
-            )
-            for row in rows
+        session = self._session()
+        total = await session.scalar(select(func.count()).select_from(queue))
+        page = await KeysetOrder("oldest", queue.enqueued_at, queue.id, descending=False).page(
+            session, select(queue), selector, page_size=page_size, total=total or 0
+        )
+        return replace(
+            page,
+            items=tuple(
+                RecomputeItem(
+                    id=row.id,
+                    kind=row.build_kind,
+                    target=row.target,
+                    build_id=row.build_id,
+                    record_id=row.record_id,
+                    reasons=tuple(row.reasons),
+                    enqueued_at=row.enqueued_at.to_stdlib(),
+                    attempts=row.attempts,
+                    last_error=row.last_error,
+                    claimed=row.claimed_at is not None,
+                )
+                for row in page.items
+            ),
         )
 
     async def list_drift(self, *, selector: PageSelector = FIRST_PAGE, page_size: int) -> Page[RecordDrift]:

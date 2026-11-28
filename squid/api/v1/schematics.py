@@ -26,6 +26,7 @@ from squid.core.actors import ActingContext
 from squid.core.pagination import ChronologicalSort
 from squid.core.schematics.application.attachments import AttachmentListSort
 from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
+from squid.core.schematics.application.jobs import VideoListFilters
 from squid.core.schematics.errors import SchematicNotFoundError, SchematicSupportUnavailableError
 
 
@@ -313,7 +314,7 @@ async def list_own_schematic_videos(
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     page = await schematics.videos.list_videos(
-        schematic_id=schematic_id,
+        filters=VideoListFilters(schematic_id),
         selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=caller.context(),

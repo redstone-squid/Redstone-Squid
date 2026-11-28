@@ -10,6 +10,7 @@ and the optional query name exposes it as a search field. Numeric assignments us
 the definition's canonical unit even when another unit is chosen for display.
 """
 
+from collections.abc import Sequence
 from decimal import Decimal
 from enum import StrEnum
 
@@ -34,6 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
+from squid.core.pagination import Page, PageSelector, collection_page
 from squid.core.persistence.base import Base
 from squid.core.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin, SlugMixin
 from squid.core.persistence.revisions import Revisioned
@@ -473,3 +475,14 @@ def display_conversion_scale(canonical: UnitDefinition | None, display: UnitDefi
 class TagListSort(StrEnum):
     ID = "id"
     DISPLAY = "display"
+
+    def page(self, rows: Sequence[TagDefinition], *, selector: PageSelector, page_size: int) -> Page[TagDefinition]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (row.default_display_order, row.display_name),
+            key_types=(int, str),
+        )

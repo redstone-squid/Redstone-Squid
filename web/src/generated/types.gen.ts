@@ -518,13 +518,6 @@ export type ClaimSelection = {
 export type ClaimStatus = 'pending' | 'approved' | 'rejected';
 
 /**
- * CliDeviceListResponse
- */
-export type CliDeviceListResponse = {
-    devices: Array<CliDeviceResponse>;
-};
-
-/**
  * CliDeviceResponse
  */
 export type CliDeviceResponse = {
@@ -1610,13 +1603,6 @@ export type InstallationCreateRequest = {
 };
 
 /**
- * InstallationListResponse
- */
-export type InstallationListResponse = {
-    installations: Array<InstallationResponse>;
-};
-
-/**
  * InstallationResponse
  */
 export type InstallationResponse = {
@@ -1923,6 +1909,16 @@ export type PageAnchor = {
 };
 
 /**
+ * Page[LinkedIdentityDetail]
+ */
+export type PageLitestarDtoBackendLinkedIdentityDetail = {
+    items: Array<LinkedIdentityDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[TagSummary]
  */
 export type PageLitestarDtoBackendTagSummary = {
@@ -1943,6 +1939,16 @@ export type PageSquidApiV1MinecraftServersPublicServerSummary = {
 };
 
 /**
+ * Page[CliDeviceResponse]
+ */
+export type PageSquidApiV1SchemasCliAuthCliDeviceResponse = {
+    items: Array<CliDeviceResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[CreditClaimDetail]
  */
 export type PageSquidApiV1SchemasCreatorsCreditClaimDetail = {
@@ -1957,6 +1963,26 @@ export type PageSquidApiV1SchemasCreatorsCreditClaimDetail = {
  */
 export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
     items: Array<ErrorReportSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[InstallationResponse]
+ */
+export type PageSquidApiV1SchemasMinecraftAuthInstallationResponse = {
+    items: Array<InstallationResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[NotificationSubscriptionDetail]
+ */
+export type PageSquidApiV1SchemasNotificationsNotificationSubscriptionDetail = {
+    items: Array<NotificationSubscriptionDetail>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2097,6 +2123,16 @@ export type PageSquidCoreBuildsHistoryPublicBuildRevision = {
  */
 export type PageSquidCoreRecordsApplicationModelsPublicRecordSummary = {
     items: Array<PublicRecordSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[RecomputeItem]
+ */
+export type PageSquidCoreRecordsApplicationModelsRecomputeItem = {
+    items: Array<RecomputeItem>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -4731,7 +4767,21 @@ export type AccountProfileUpdateResponse = AccountProfileUpdateResponses[keyof A
 export type AccountIdentityListData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/accounts/me/identities';
 };
 
@@ -4749,6 +4799,10 @@ export type AccountIdentityListErrors = {
      */
     404: ProblemDetail;
     /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -4764,7 +4818,7 @@ export type AccountIdentityListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<LinkedIdentityDetail>;
+    200: PageLitestarDtoBackendLinkedIdentityDetail;
 };
 
 export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
@@ -6374,7 +6428,21 @@ export type CliSessionExchangeResponse = CliSessionExchangeResponses[keyof CliSe
 export type CliDevicesListData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/cli/auth/devices';
 };
 
@@ -6392,6 +6460,10 @@ export type CliDevicesListErrors = {
      */
     403: ProblemDetail;
     /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -6407,7 +6479,7 @@ export type CliDevicesListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: CliDeviceListResponse;
+    200: PageSquidApiV1SchemasCliAuthCliDeviceResponse;
 };
 
 export type CliDevicesListResponse = CliDevicesListResponses[keyof CliDevicesListResponses];
@@ -6749,7 +6821,21 @@ export type DiagnosticsErrorGetResponse = DiagnosticsErrorGetResponses[keyof Dia
 export type PaperInstallationsListData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/minecraft/auth/paper/installations';
 };
 
@@ -6767,6 +6853,10 @@ export type PaperInstallationsListErrors = {
      */
     403: ProblemDetail;
     /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -6782,7 +6872,7 @@ export type PaperInstallationsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: InstallationListResponse;
+    200: PageSquidApiV1SchemasMinecraftAuthInstallationResponse;
 };
 
 export type PaperInstallationsListResponse = PaperInstallationsListResponses[keyof PaperInstallationsListResponses];
@@ -7480,6 +7570,19 @@ export type NotificationSubscriptionsListData = {
          * Only list follows of this creator or record.
          */
         subject_id?: string | null;
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
     };
     url: '/v1/accounts/me/notifications/subscriptions';
 };
@@ -7513,7 +7616,7 @@ export type NotificationSubscriptionsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<NotificationSubscriptionDetail>;
+    200: PageSquidApiV1SchemasNotificationsNotificationSubscriptionDetail;
 };
 
 export type NotificationSubscriptionsListResponse = NotificationSubscriptionsListResponses[keyof NotificationSubscriptionsListResponses];
@@ -9442,7 +9545,21 @@ export type RecordsRequestBackstopResponses = {
 export type RecordsRecomputeQueueData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/records/recompute-queue';
 };
 
@@ -9475,7 +9592,7 @@ export type RecordsRecomputeQueueResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<RecomputeItem>;
+    200: PageSquidCoreRecordsApplicationModelsRecomputeItem;
 };
 
 export type RecordsRecomputeQueueResponse = RecordsRecomputeQueueResponses[keyof RecordsRecomputeQueueResponses];
@@ -12073,7 +12190,21 @@ export type SubmissionRevisionHistoryData = {
     path: {
         message_id: number;
     };
-    query?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/submissions/revisions/source/{message_id}';
 };
 
@@ -12094,7 +12225,7 @@ export type SubmissionRevisionHistoryResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<RecalculationProposalResponse>;
+    200: PageSquidApiV1SubmissionRecalculationsRecalculationProposalResponse;
 };
 
 export type SubmissionRevisionHistoryResponse = SubmissionRevisionHistoryResponses[keyof SubmissionRevisionHistoryResponses];

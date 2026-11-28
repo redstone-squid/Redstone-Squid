@@ -80,7 +80,12 @@ from squid.core.submissions.application import (
 )
 from squid.core.submissions.application.edits import change_command, draft_target
 from squid.core.submissions.application.finalization import DraftEditor
-from squid.core.submissions.application.reviews import SubmissionDetail, SubmissionStatus, SubmissionSummary
+from squid.core.submissions.application.reviews import (
+    SubmissionDetail,
+    SubmissionListFilters,
+    SubmissionStatus,
+    SubmissionSummary,
+)
 from squid.core.submissions.domain import FormManifest, FormProgress, SubmissionOrigin
 from squid.core.submissions.domain.build_edit import DraftEditResult
 
@@ -814,7 +819,10 @@ async def list_submissions(
 ) -> Page[SubmissionSummary]:
     """List the signed-in account's submissions, newest first."""
     page = await services.viewer_queries.submissions(
-        resolve_selector(offset=offset, cursor=cursor, sort=sort), page_size, status=status, context=context
+        resolve_selector(offset=offset, cursor=cursor, sort=sort),
+        page_size,
+        filters=SubmissionListFilters(status),
+        context=context,
     )
     return Page.from_domain(page)
 

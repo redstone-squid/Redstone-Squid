@@ -66,7 +66,7 @@ from squid.core.notifications import NotificationPreferences, NotificationServic
 from squid.core.notifications.application import Inbox
 from squid.core.notifications.domain import ALL_INBOX_ITEMS, InboxListFilters
 from squid.core.notifications.models import NotificationSubscription
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
+from squid.core.pagination import FIRST_PAGE, ChronologicalSort, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionAdministrationService, PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.core.permissions.application.ports import PermissionSubject
@@ -785,9 +785,15 @@ class MockSubmissionRevisions(RecalculationProposalService):
 
     @override
     async def list_for_source(
-        self, source_message_id: int, *, context: ActingContext
-    ) -> tuple[RecalculationProposal, ...]:
-        return ()
+        self,
+        source_message_id: int,
+        *,
+        context: ActingContext,
+        sort: ChronologicalSort = ChronologicalSort.NEWEST,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+    ) -> Page[RecalculationProposal]:
+        return Page((), 0, None, None)
 
     @override
     async def get(self, proposal_id: UUID, *, context: ActingContext) -> RecalculationProposal:

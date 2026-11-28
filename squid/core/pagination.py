@@ -105,6 +105,28 @@ class ChronologicalSort(StrEnum):
     NEWEST = "newest"
     OLDEST = "oldest"
 
+    def page[T](
+        self,
+        rows: Sequence[T],
+        *,
+        selector: PageSelector,
+        page_size: int,
+        identifier: Callable[[T], int | UUID],
+        created_at: Callable[[T], Instant],
+        id_type: type[int] | type[UUID] = int,
+    ) -> Page[T]:
+        direction = -1 if self is ChronologicalSort.NEWEST else 1
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=identifier,
+            id_type=id_type,
+            display_key=lambda row: (direction * created_at(row).timestamp(unit="nanosecond"),),
+            key_types=(int,),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class PageSelector:

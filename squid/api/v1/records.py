@@ -324,9 +324,22 @@ async def request_backstop(
     security=[SERVICE, WEB, DEVICE],
     opt=contract(cli=transport_only(), scopes=("record.entry.inspect",)),
 )
-async def recompute_queue(records: Records, caller: CurrentCaller) -> tuple[RecomputeItem, ...]:
+async def recompute_queue(
+    records: Records,
+    caller: CurrentCaller,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[RecomputeItem]:
     """List pending and failed recompute requests, oldest first, with each one's last error."""
-    return tuple(await records.recompute_queue(context=caller.context()))
+    return Page.from_domain(
+        await records.recompute_queue(
+            selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
+            page_size=page_size,
+            context=caller.context(),
+        )
+    )
 
 
 @get(

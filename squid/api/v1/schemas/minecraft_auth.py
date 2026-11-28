@@ -111,12 +111,6 @@ class InstallationResponse(StrictSchema):
         )
 
 
-class InstallationListResponse(StrictSchema):
-    """All Paper installations owned by the signed-in account."""
-
-    installations: list[InstallationResponse]
-
-
 class IssuedInstallationResponse(StrictSchema):
     """Installation metadata and its one-time plaintext secret."""
 

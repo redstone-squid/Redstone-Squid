@@ -1,11 +1,14 @@
 """Bot authorization domain values."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from typing import ClassVar, Self, override
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
+from squid.core.pagination import Page, PageSelector, collection_page
+from squid.core.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid_i18n import Text
 
 
@@ -178,15 +181,50 @@ class RoleListSort(StrEnum):
     ID = "id"
     HIGHEST_RANK = "highest_rank"
 
+    def page(self, rows: Sequence[PermissionRole], *, selector: PageSelector, page_size: int) -> Page[PermissionRole]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (-row.rank, row.slug),
+            key_types=(int, str),
+        )
+
 
 class GrantListSort(StrEnum):
     ID = "id"
     OLDEST = "oldest"
 
+    def page(self, rows: Sequence[PermissionGrant], *, selector: PageSelector, page_size: int) -> Page[PermissionGrant]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
+            key_types=(str,),
+        )
+
 
 class AssignmentListSort(StrEnum):
     ID = "id"
     OLDEST = "oldest"
+
+    def page(
+        self, rows: Sequence[PermissionRoleAssignment], *, selector: PageSelector, page_size: int
+    ) -> Page[PermissionRoleAssignment]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
+            key_types=(str,),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,3 +233,10 @@ class GuildListFilters:
 
 
 ALL_GUILDS = GuildListFilters()
+
+
+@dataclass(frozen=True, slots=True)
+class PermissionSubjectFilters:
+    account_id: int | None = None
+    discord_role_id: int | None = None
+    guild_id: int | None = None

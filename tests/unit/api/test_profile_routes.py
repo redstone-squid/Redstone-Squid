@@ -219,8 +219,8 @@ class TestIdentities:
 
         response = await list_identities.fn(accounts, _caller())
 
-        assert [identity.id for identity in response] == [1, 2]
-        assert [identity.is_public for identity in response] == [True, False]
+        assert [identity.id for identity in response.items] == [1, 2]
+        assert [identity.is_public for identity in response.items] == [True, False]
 
     async def test_visibility_is_set_on_the_callers_own_account(self) -> None:
         accounts = _accounts()

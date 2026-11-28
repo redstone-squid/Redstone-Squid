@@ -27,7 +27,7 @@ from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import SchematicPublication, SchematicService
-from squid.core.schematics.application.jobs import SchematicJobService
+from squid.core.schematics.application.jobs import SchematicJobService, VideoListFilters
 from squid.core.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
 from squid.core.schematics.application.storage import SchematicStorageService
 from squid.core.schematics.domain.models import (
@@ -847,10 +847,16 @@ async def test_video_listing_keeps_the_callers_jobs_for_files_their_attachment_s
     await submit(10, door_id, "f" * 64)
     newer = await submit(10, lamp_id, lamp)
 
-    listed = await jobs.list_videos(10, schematic_id=None, selector=FIRST_PAGE, page_size=1, context=context)
+    listed = await jobs.list_videos(
+        10, filters=VideoListFilters(None), selector=FIRST_PAGE, page_size=1, context=context
+    )
     assert ([job.id for job in listed.items], listed.total) == ([newer], 2)
     assert listed.next is not None
-    rest = await jobs.list_videos(10, schematic_id=None, selector=listed.next.selector(), page_size=1, context=context)
+    rest = await jobs.list_videos(
+        10, filters=VideoListFilters(None), selector=listed.next.selector(), page_size=1, context=context
+    )
     assert [job.id for job in rest.items] == [older]
-    one = await jobs.list_videos(10, schematic_id=door_id, selector=FIRST_PAGE, page_size=20, context=context)
+    one = await jobs.list_videos(
+        10, filters=VideoListFilters(door_id), selector=FIRST_PAGE, page_size=20, context=context
+    )
     assert [job.id for job in one.items] == [older]

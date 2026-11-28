@@ -244,8 +244,8 @@ class FakeRuns:
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
         self.failed = (lease.kind, error)
 
-    async def list_recompute_queue(self) -> Sequence[RecomputeItem]:
-        return ()
+    async def list_recompute_queue(self, *, selector: PageSelector, page_size: int) -> Page[RecomputeItem]:
+        return Page((), 0, None, None)
 
     async def list_drift(self, *, selector: PageSelector = FIRST_PAGE, page_size: int) -> Page[RecordDrift]:
         return offset_page((), offset=selector.offset, page_size=page_size)

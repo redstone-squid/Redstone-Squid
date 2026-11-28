@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from squid.core.actors import ActingContext
+from squid.core.permissions.domain.models import ALL_GUILDS, GuildListFilters
 from squid.core.permissions.models import PermissionRole
 from squid.core.starboard.domain import EDITABLE_SETTINGS
 from squid.core.starboard.models import StarboardConfig
@@ -27,7 +28,9 @@ class GuildStarboards(Protocol):
 class PermissionRoles(Protocol):
     """Read the permission roles visible from a guild."""
 
-    async def roles(self, *, context: ActingContext, guild_id: int | None = None) -> Sequence[PermissionRole]: ...
+    async def roles(
+        self, *, context: ActingContext, filters: GuildListFilters = ALL_GUILDS
+    ) -> Sequence[PermissionRole]: ...
 
 
 class StarboardNameProvider:
@@ -74,7 +77,7 @@ class PermissionRoleProvider:
                 terms=(role.name, role.slug),
                 kind="permission_role",
             )
-            for role in await self._roles.roles(guild_id=guild_id, context=ActingContext.current())
+            for role in await self._roles.roles(filters=GuildListFilters(guild_id), context=ActingContext.current())
         )
 
 

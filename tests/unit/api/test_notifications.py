@@ -286,7 +286,7 @@ async def test_subscriptions_filter_by_subject_and_name_their_subjects() -> None
 
     response = await list_subscriptions.fn(notifications, ACCOUNT, kind=SubscriptionKind.CREATOR, subject_id=creator)
 
-    (item,) = response.content
+    (item,) = response.content.items
     assert (item.id, item.subject_label, item.subject_href, item.filter_summary) == (
         1,
         "Some Builder",

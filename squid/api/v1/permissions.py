@@ -39,7 +39,7 @@ from squid.api.v1.schemas.permissions import (
     SubjectRequest,
 )
 from squid.core.errors import ValidationError
-from squid.core.pagination import ChronologicalSort, collection_page
+from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain import CATALOGUE, Effect
 from squid.core.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
@@ -56,6 +56,7 @@ from squid.core.permissions.domain.models import (
     GrantSubject,
     GuildListFilters,
     PatternMode,
+    PermissionSubjectFilters,
     RoleListSort,
 )
 from squid.core.validation import FieldErrorCode, SimpleIssue
@@ -80,13 +81,8 @@ class IncludedRoleRequest(BaseModel):
     role_id: int
 
 
-class SubjectQuery:
+class SubjectQuery(PermissionSubjectFilters):
     """The subject named by `account_id`, or by `guild_id` with `discord_role_id`."""
-
-    def __init__(self, account: int | None, discord_role_id: int | None, guild_id: int | None) -> None:
-        self.account_id = account
-        self.discord_role_id = discord_role_id
-        self.guild_id = guild_id
 
     @classmethod
     async def read(
@@ -179,19 +175,9 @@ async def list_grants(
     query = await SubjectQuery.read(services, caller, account_id, discord_role_id, guild_id)
     grants = await admin.rules_for(
         context=caller.context(),
-        account_id=query.account_id,
-        discord_role_id=query.discord_role_id,
-        guild_id=query.guild_id,
+        filters=query,
     )
-    page = collection_page(
-        grants,
-        selector=resolve_selector(offset=offset, cursor=cursor),
-        sort=sort,
-        page_size=page_size,
-        identifier=lambda row: row.id,
-        display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
-        key_types=(str,),
-    )
+    page = sort.page(grants, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     accounts = await _accounts(
         services,
         caller,
@@ -232,7 +218,7 @@ async def create_grant(
     stored = next(
         grant
         for grant in await admin.rules_for(
-            context=caller.context(), account_id=subject.account_id, discord_role_id=subject.discord_role_id
+            context=caller.context(), filters=PermissionSubjectFilters(subject.account_id, subject.discord_role_id)
         )
         if grant.pattern == data.pattern and grant.scope_guild_id == scope
     )
@@ -275,17 +261,9 @@ async def list_roles(
     offset: OffsetParam = None,
 ) -> Page[RoleDetail]:
     """List global roles, and one guild's own roles when `guild_id` is given, highest rank first."""
-    roles = await admin.roles(context=caller.context(), guild_id=_int(guild_id))
+    roles = await admin.roles(context=caller.context(), filters=GuildListFilters(_int(guild_id)))
     return Page[RoleDetail].from_domain(
-        collection_page(
-            roles,
-            selector=resolve_selector(offset=offset, cursor=cursor),
-            sort=sort,
-            page_size=page_size,
-            identifier=lambda row: row.id,
-            display_key=lambda row: (-row.rank, row.slug),
-            key_types=(int, str),
-        ),
+        sort.page(roles, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size),
         RoleDetail.of,
     )
 
@@ -469,19 +447,9 @@ async def list_assignments(
     query = await SubjectQuery.read(services, caller, account_id, discord_role_id, guild_id)
     assignments = await admin.assignments_for(
         context=caller.context(),
-        account_id=query.account_id,
-        discord_role_id=query.discord_role_id,
-        guild_id=query.guild_id,
+        filters=query,
     )
-    page = collection_page(
-        assignments,
-        selector=resolve_selector(offset=offset, cursor=cursor),
-        sort=sort,
-        page_size=page_size,
-        identifier=lambda row: row.id,
-        display_key=lambda row: (row.granted_at.format_iso(unit="nanosecond"),),
-        key_types=(str,),
-    )
+    page = sort.page(assignments, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     accounts = await _accounts(
         services, caller, (id_ for row in page.items for id_ in (row.subject_account_id, row.granted_by_account_id))
     )
@@ -517,7 +485,7 @@ async def create_assignment(
     stored = next(
         row
         for row in await admin.assignments_for(
-            context=caller.context(), account_id=subject.account_id, discord_role_id=subject.discord_role_id
+            context=caller.context(), filters=PermissionSubjectFilters(subject.account_id, subject.discord_role_id)
         )
         if row.role_id == role.id and row.scope_guild_id == scope
     )

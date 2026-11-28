@@ -13,15 +13,15 @@ from uuid import UUID
 from litestar import Request, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter, SkipValidation
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import BrowserContext, Caller, current_browser_context, prevent_credential_storage
 from squid.api.v1.schemas.cli_auth import (
-    CliDeviceListResponse,
     CliDeviceResponse,
     CliEnrollmentApprovalRequest,
     CliEnrollmentApprovalResponse,
@@ -38,6 +38,7 @@ from squid.core.actors import ActingContext
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
+from squid.core.pagination import ChronologicalSort
 
 
 class CliAuthorizationHttpService(Protocol):
@@ -324,10 +325,25 @@ async def exchange_session_challenge(
         "identity": Provide(current_cli_identity),
     },
 )
-async def list_devices(cli: CliAuthorization, context: BrowserContext) -> CliDeviceListResponse:
+async def list_devices(
+    cli: CliAuthorization,
+    context: BrowserContext,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 50,
+) -> Page[CliDeviceResponse]:
     """List browser-account-owned devices without exposing public keys."""
     devices = await cli.list_devices(context=context)
-    return CliDeviceListResponse(devices=[CliDeviceResponse.from_domain(device) for device in devices])
+    page = sort.page(
+        devices,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        created_at=lambda row: row.created_at,
+        id_type=UUID,
+    )
+    return Page.from_domain(page, CliDeviceResponse.from_domain)
 
 
 @delete(

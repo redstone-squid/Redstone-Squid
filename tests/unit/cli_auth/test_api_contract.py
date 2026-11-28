@@ -332,7 +332,7 @@ async def test_account_and_current_session_revocation_are_separately_scoped() ->
         revoked_device = await client.delete(f"/cli/auth/devices/{DEVICE_ID}")
         revoked_session = await client.delete("/cli/auth/sessions/current")
 
-    assert listed.json()["devices"][0]["id"] == str(DEVICE_ID)
+    assert listed.json()["items"][0]["id"] == str(DEVICE_ID)
     assert revoked_device.status_code == 204
     assert revoked_session.status_code == 204
     for response in (listed, revoked_device, revoked_session):

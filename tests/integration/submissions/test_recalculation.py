@@ -223,10 +223,10 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
     with record_queries(migrated_session_factory) as statements:
         history = await service.list_for_source(456, context=ActingContext.for_actor(actor))
 
-    assert [row.id for row in history] == [proposal.id for proposal in reversed(proposals)]
+    assert [row.id for row in history.items] == [proposal.id for proposal in reversed(proposals)]
     assert sum("FROM submission_revision_proposals" in statement for statement in statements) == 1
     assert sum("FROM permission_epoch" in statement for statement in statements) == (1 if role == "staff" else 0)
-    assert await service.get(history[0].id, context=ActingContext.for_actor(actor)) == history[0]
+    assert await service.get(history.items[0].id, context=ActingContext.for_actor(actor)) == history.items[0]
 
 
 async def test_history_refuses_a_list_containing_another_accounts_proposal(
@@ -251,7 +251,7 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
         await service.get(foreign.id, context=ActingContext.for_actor(owner))
     with pytest.raises(AuthorizationError):
         await service.list_for_source(proposal.source_message_id, context=ActingContext.for_actor(owner))
-    assert await service.list_for_source(999, context=ActingContext.for_actor(owner)) == ()
+    assert (await service.list_for_source(999, context=ActingContext.for_actor(owner))).total == 0
 
 
 def revision_service(

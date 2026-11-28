@@ -24,7 +24,7 @@ from squid.core.notifications.domain import (
     SubscriptionTarget,
 )
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, ChronologicalSort, Page, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
@@ -58,9 +58,32 @@ class FollowedSubject:
 
 
 @dataclass(frozen=True, slots=True)
+class SubscriptionListFilters:
+    kind: SubscriptionKind | None
+    subject_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
 class NotificationEditorSnapshot:
     preferences: NotificationPreferences
     follows: tuple[FollowedSubject, ...]
+
+    def subscriptions(
+        self, filters: SubscriptionListFilters, *, selector: PageSelector, page_size: int, sort: ChronologicalSort
+    ) -> Page[FollowedSubject]:
+        follows = [
+            follow
+            for follow in self.follows
+            if (filters.kind is None or follow.subscription.kind is filters.kind)
+            and (filters.subject_id is None or follow.subscription.subject_id == filters.subject_id)
+        ]
+        return sort.page(
+            follows,
+            selector=selector,
+            page_size=page_size,
+            identifier=lambda follow: follow.subscription.id,
+            created_at=lambda follow: follow.subscription.created_at,
+        )
 
 
 @dataclass(frozen=True, slots=True)

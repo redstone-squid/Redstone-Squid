@@ -47,3 +47,11 @@ class CreditedBuild:
     build_id: int
     title: str | None
     roles: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionListFilters:
+    status: SubmissionStatus | None = None
+
+
+ALL_SUBMISSIONS = SubmissionListFilters()

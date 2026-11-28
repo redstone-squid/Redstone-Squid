@@ -24,6 +24,7 @@ from squid.api.pagination import (
 )
 from squid.api.private_responses import private_response
 from squid.core.errors import JSONValue
+from squid.core.pagination import ChronologicalSort
 from squid.core.submissions.application.recalculation import RecalculationProposalService
 from squid.core.submissions.application.recalculation_values import (
     RecalculationFacts,
@@ -122,19 +123,28 @@ async def list_proposals(
         "proposals": Provide(recalculation_proposals, sync_to_thread=False),
     },
 )
+@private_response
 async def history(
     message_id: FromPath[int],
     caller: CurrentCaller,
     proposals: Proposals,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
+    cursor: CursorParam = None,
+    offset: OffsetParam = None,
+    page_size: PageSizeParam = 20,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> list[RecalculationProposalResponse]:
+) -> Page[RecalculationProposalResponse]:
     """List recalculation proposals for a source message after checking the caller's access."""
     caller.require_account_id()
-    return [
-        RecalculationProposalResponse.from_domain(item)
-        for item in await proposals.list_for_source(message_id, context=caller.context())
-    ]
+    page = await proposals.list_for_source(
+        message_id,
+        context=caller.context(),
+        sort=sort,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+    )
+    return Page.from_domain(page, RecalculationProposalResponse.from_domain)
 
 
 @get(

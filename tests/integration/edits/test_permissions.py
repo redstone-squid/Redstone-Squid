@@ -43,7 +43,7 @@ from squid.core.permissions.application.edits import (
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain import Effect
 from squid.core.permissions.domain.catalogue import PERM_NODE_VIEW, ROLE_DEFINITION_MANAGE
-from squid.core.permissions.domain.models import AccountGrantSubject
+from squid.core.permissions.domain.models import AccountGrantSubject, PermissionSubjectFilters
 from squid.core.permissions.models import PermissionAuditEntry
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -187,7 +187,8 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
     }
     assert (
         await admin.assignments_for(
-            context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)), account_id=subject
+            context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
+            filters=PermissionSubjectFilters(account_id=subject),
         )
         == ()
     )
@@ -251,12 +252,15 @@ async def test_multi_recipient_assignment_undo_preserves_existing_membership(
     )
     assert result.receipt is not None
     assert await admin.assignments_for(
-        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)), discord_role_id=99, guild_id=42
+        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
+        filters=PermissionSubjectFilters(discord_role_id=99, guild_id=42),
     )
     await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(owner))
     assert await admin.assignments_for(
-        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)), account_id=subject, guild_id=42
+        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
+        filters=PermissionSubjectFilters(account_id=subject, guild_id=42),
     )
     assert not await admin.assignments_for(
-        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)), discord_role_id=99, guild_id=42
+        context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
+        filters=PermissionSubjectFilters(discord_role_id=99, guild_id=42),
     )

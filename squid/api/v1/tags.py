@@ -13,7 +13,6 @@ from squid.api.errors import responses
 from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.browser_views import BrowserViews, TagDetail
 from squid.core.actors import ActingContext
-from squid.core.pagination import collection_page
 from squid.core.tags.errors import TagNotFoundError
 from squid.core.tags.models import TagDefinition, TagListSort
 
@@ -65,15 +64,7 @@ async def list_tags(
 ) -> Page[TagDefinition]:
     """List published tag definitions."""
     definitions = await tags.public_definitions(context=ActingContext.current())
-    page = collection_page(
-        definitions,
-        selector=resolve_selector(offset=offset, cursor=cursor),
-        sort=sort,
-        page_size=page_size,
-        identifier=lambda row: row.id,
-        display_key=lambda row: (row.default_display_order, row.display_name),
-        key_types=(int, str),
-    )
+    page = sort.page(definitions, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     return Page[TagDefinition].from_domain(page)
 
 

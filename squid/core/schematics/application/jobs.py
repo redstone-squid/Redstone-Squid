@@ -61,6 +61,14 @@ class SchematicJobSnapshot:
     expires_at: Instant | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class VideoListFilters:
+    schematic_id: int | None = None
+
+
+ALL_VIDEOS = VideoListFilters()
+
+
 class SchematicJobRepository(Protocol):
     """Persistence operations for durable schematic work."""
 
@@ -74,7 +82,7 @@ class SchematicJobRepository(Protocol):
     async def get(self, job_id: int) -> SchematicJobSnapshot | None: ...
 
     async def list_videos(
-        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, page_size: int
+        self, account_id: int, *, filters: VideoListFilters, selector: PageSelector, page_size: int
     ) -> Page[SchematicJobSnapshot]:
         """Page an account's video jobs newest first, omitting those whose attachment changed file."""
         ...
@@ -160,7 +168,7 @@ class SchematicJobService:
         self,
         account_id: int,
         *,
-        schematic_id: int | None,
+        filters: VideoListFilters,
         selector: PageSelector,
         page_size: int,
         context: ActingContext,
@@ -168,7 +176,7 @@ class SchematicJobService:
         with context.scope():
             async with self._uow_factory() as uow:
                 return await uow.schematic_jobs.list_videos(
-                    account_id, schematic_id=schematic_id, selector=selector, page_size=page_size
+                    account_id, filters=filters, selector=selector, page_size=page_size
                 )
 
     async def claim(self, *, context: ActingContext, limit: int = 8) -> Sequence[ClaimedSchematicJob]:

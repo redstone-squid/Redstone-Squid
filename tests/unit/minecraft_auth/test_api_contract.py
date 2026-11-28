@@ -412,7 +412,7 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
     assert created.status_code == 201
     assert created.json()["secret"] == INSTALLATION_SECRET
     assert "secret_hash" not in created.text
-    assert listed.json()["installations"][0].keys().isdisjoint({"secret", "secret_hash", "owner_account_id"})
+    assert listed.json()["items"][0].keys().isdisjoint({"secret", "secret_hash", "owner_account_id"})
     assert profiled.json()["profile"]["display_name"] == "Updated"
     assert rotated.json()["secret"] == ROTATED_SECRET
     assert paper_started.status_code == 201

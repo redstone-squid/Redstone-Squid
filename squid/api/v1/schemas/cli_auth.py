@@ -160,12 +160,6 @@ class CliDeviceResponse(StrictSchema):
         )
 
 
-class CliDeviceListResponse(StrictSchema):
-    """All CLI devices owned by the signed-in browser account."""
-
-    devices: list[CliDeviceResponse]
-
-
 class IssuedCliSessionResponse(StrictSchema):
     """One-time CLI bearer token response from a verified device proof."""
 

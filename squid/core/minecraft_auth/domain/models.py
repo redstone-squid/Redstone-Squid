@@ -1,5 +1,6 @@
 """Domain values for server credentials and Minecraft player grants."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -9,6 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.core.pagination import Page, PageSelector, collection_page
 from squid_i18n import md_tr
 
 
@@ -126,3 +128,17 @@ if TYPE_CHECKING:
 class ServerListSort(StrEnum):
     ID = "id"
     OLDEST = "oldest"
+
+    def page(
+        self, rows: Sequence[PublishedPaperServer], *, selector: PageSelector, page_size: int
+    ) -> Page[PublishedPaperServer]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.installation_id,
+            id_type=UUID,
+            display_key=lambda row: (row.created_at.format_iso(unit="nanosecond"),),
+            key_types=(str,),
+        )

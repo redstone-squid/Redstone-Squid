@@ -14,7 +14,11 @@ from squid.core.errors import AuthorizationError, NotFoundError
 from squid.core.pagination import Page
 from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application.attachments import StoredSchematic
-from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
+from squid.core.schematics.application.jobs import (
+    SchematicJobService,
+    SchematicJobSnapshot,
+    VideoListFilters,
+)
 from squid.core.schematics.application.ports import SchematicResourcePackProvider
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.application.video_service import SchematicVideoService
@@ -137,8 +141,10 @@ async def test_listing_pages_the_callers_videos_with_their_status(components: Co
         items=(replace(finished, id=42, completed_at=None), finished), total=2, next=None, prev=None
     )
 
-    page = await service.list_videos(schematic_id=1, context=ActingContext.direct(UserActor(account_id=10)))
+    page = await service.list_videos(
+        filters=VideoListFilters(1), context=ActingContext.direct(UserActor(account_id=10))
+    )
 
     assert [(item.id, item.status) for item in page.items] == [(42, "queued"), (41, "succeeded")]
     assert jobs.list_videos.call_args.args == (10,)
-    assert jobs.list_videos.call_args.kwargs["schematic_id"] == 1
+    assert jobs.list_videos.call_args.kwargs["filters"].schematic_id == 1

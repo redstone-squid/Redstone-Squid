@@ -1,10 +1,12 @@
 """Minecraft version domain values."""
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Literal, override
 
+from squid.core.pagination import Page, PageSelector, collection_page
 from squid.core.sentinel import UNSET
 from squid.core.versions.errors import InvalidVersionError
 
@@ -89,3 +91,19 @@ def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
 class VersionListSort(StrEnum):
     ID = "id"
     RELEASE = "release"
+
+    def page(self, rows: Sequence[VersionEntry], *, selector: PageSelector, page_size: int) -> Page[VersionEntry]:
+        return collection_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            sort=self,
+            identifier=lambda row: row.id,
+            display_key=lambda row: (
+                int(row.version.edition == "Bedrock"),
+                row.version.major,
+                row.version.minor,
+                row.version.patch,
+            ),
+            key_types=(int, int, int, int),
+        )

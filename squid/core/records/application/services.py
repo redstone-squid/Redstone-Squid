@@ -661,11 +661,13 @@ class RecordService:
         return await self._computation.inspect(stored, context=context)
 
     @application_operation
-    async def recompute_queue(self, *, context: ActingContext) -> Sequence[RecomputeItem]:
+    async def recompute_queue(
+        self, *, selector: PageSelector, page_size: int, context: ActingContext
+    ) -> Page[RecomputeItem]:
         """Return pending and failed recompute requests, oldest first."""
         await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
-            return await uow.records.list_recompute_queue()
+            return await uow.records.list_recompute_queue(selector=selector, page_size=page_size)
 
     @application_operation
     async def drift(

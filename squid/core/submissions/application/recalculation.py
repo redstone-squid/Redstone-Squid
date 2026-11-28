@@ -21,7 +21,7 @@ from squid.core.errors import (
     OwnershipRequiredError,
     ValidationError,
 )
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, ChronologicalSort, Page, PageSelector
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.submissions.application.recalculation_values import (
@@ -39,7 +39,7 @@ class RecalculationProposalRepository(Protocol):
 
     async def create(self, proposal: RecalculationProposal) -> RecalculationProposal: ...
     async def get(self, proposal_id: UUID) -> RecalculationProposal | None: ...
-    async def list_for_source(self, source_message_id: int, *, limit: int) -> tuple[RecalculationProposal, ...]: ...
+    async def list_for_source(self, source_message_id: int) -> tuple[RecalculationProposal, ...]: ...
     async def list_page(
         self,
         filters: RecalculationProposalFilters,
@@ -124,15 +124,28 @@ class RecalculationProposalService:
                 return proposal
 
     async def list_for_source(
-        self, source_message_id: int, *, context: ActingContext
-    ) -> tuple[RecalculationProposal, ...]:
-        """Return a bounded history with the same visibility policy as individual reads."""
+        self,
+        source_message_id: int,
+        *,
+        context: ActingContext,
+        sort: ChronologicalSort = ChronologicalSort.NEWEST,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+    ) -> Page[RecalculationProposal]:
+        """Return a page of history with the same visibility policy as individual reads."""
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
-                rows = await uow.recalculation_proposals.list_for_source(source_message_id, limit=20)
+                rows = await uow.recalculation_proposals.list_for_source(source_message_id)
                 await self._require_read_access(uow, rows, actor)
-                return rows
+                return sort.page(
+                    rows,
+                    selector=selector,
+                    page_size=page_size,
+                    identifier=lambda row: row.id,
+                    created_at=lambda row: row.created_at,
+                    id_type=UUID,
+                )
 
     async def list_page(
         self,

@@ -15,6 +15,7 @@ from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
     CursorParam,
     OffsetParam,
+    Page,
     PageSizeParam,
     resolve_selector,
 )
@@ -30,6 +31,7 @@ from squid.api.v1.schemas.notifications import (
 from squid.core.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.notifications import SubscriptionKind
+from squid.core.notifications.application import SubscriptionListFilters
 from squid.core.notifications.domain import InboxListFilters
 from squid.core.notifications.edits import (
     INBOX_EDIT,
@@ -120,7 +122,11 @@ async def list_subscriptions(
     subject_id: Annotated[
         UUID | None, QueryParameter(description="Only list follows of this creator or record.")
     ] = None,
-) -> Response[list[NotificationSubscriptionDetail]]:
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 50,
+) -> Response[Page[NotificationSubscriptionDetail]]:
     """List enabled subscriptions owned by the caller.
 
     Filter by kind and subject to learn whether the caller follows one creator or record.
@@ -128,12 +134,15 @@ async def list_subscriptions(
     _account_id(caller)
     snapshot = await notifications.editor_snapshot(context=caller.context())
     return Response(
-        content=[
-            NotificationSubscriptionDetail.from_domain(follow)
-            for follow in snapshot.follows
-            if (kind is None or follow.subscription.kind is kind)
-            and (subject_id is None or follow.subscription.subject_id == subject_id)
-        ],
+        content=Page.from_domain(
+            snapshot.subscriptions(
+                SubscriptionListFilters(kind, subject_id),
+                sort=sort,
+                selector=resolve_selector(offset=offset, cursor=cursor),
+                page_size=page_size,
+            ),
+            NotificationSubscriptionDetail.from_domain,
+        ),
         headers={
             "ETag": revision_etag(
                 Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)

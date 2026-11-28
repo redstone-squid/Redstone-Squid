@@ -58,7 +58,7 @@ class PostgresRecalculationProposals:
         model = await session.get(SubmissionRecalculationProposal, proposal_id)
         return _snapshot(model) if model is not None else None
 
-    async def list_for_source(self, source_message_id: int, *, limit: int) -> tuple[RecalculationProposal, ...]:
+    async def list_for_source(self, source_message_id: int) -> tuple[RecalculationProposal, ...]:
         session = self._session()
         rows = await session.scalars(
             select(SubmissionRecalculationProposal)
@@ -66,7 +66,6 @@ class PostgresRecalculationProposals:
                 SubmissionRecalculationProposal.source_message_id == source_message_id,
             )
             .order_by(SubmissionRecalculationProposal.created_at.desc(), SubmissionRecalculationProposal.id)
-            .limit(limit)
         )
         return tuple(_snapshot(row) for row in rows)
 

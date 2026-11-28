@@ -20,8 +20,10 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.permissions.domain.models import NodeScope
 from squid.core.submissions.application.reviews import (
+    ALL_SUBMISSIONS,
     CreditedBuild,
     SubmissionDetail,
+    SubmissionListFilters,
     SubmissionStatus,
     SubmissionSummary,
 )
@@ -54,7 +56,12 @@ class ViewerBallot:
 class ViewerRepository(Protocol):
     async def portfolio(self, account_id: int, selector: PageSelector, page_size: int) -> Page[CreditedBuild]: ...
     async def submissions(
-        self, account_id: int | None, selector: PageSelector, page_size: int, *, status: str | None = None
+        self,
+        account_id: int | None,
+        selector: PageSelector,
+        page_size: int,
+        *,
+        filters: SubmissionListFilters = ALL_SUBMISSIONS,
     ) -> Page[SubmissionSummary]: ...
     async def submission(
         self, identifier: UUID, owner: int | None, review_session_id: int | None = None
@@ -89,10 +96,15 @@ class ViewerQueries:
 
     @application_operation
     async def submissions(
-        self, selector: PageSelector, page_size: int, *, status: SubmissionStatus | None = None, context: ActingContext
+        self,
+        selector: PageSelector,
+        page_size: int,
+        *,
+        filters: SubmissionListFilters = ALL_SUBMISSIONS,
+        context: ActingContext,
     ) -> Page[SubmissionSummary]:
         async with self._uow_factory() as uow:
-            return await uow.viewer.submissions(await self._reader(context, uow), selector, page_size, status=status)
+            return await uow.viewer.submissions(await self._reader(context, uow), selector, page_size, filters=filters)
 
     @application_operation
     async def review_queue(
@@ -101,7 +113,9 @@ class ViewerQueries:
         async with self._uow_factory() as uow:
             await self._reader(context, uow)
             await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)
-            return await uow.viewer.submissions(None, selector, page_size, status="pending")
+            return await uow.viewer.submissions(
+                None, selector, page_size, filters=SubmissionListFilters(SubmissionStatus.PENDING)
+            )
 
     @application_operation
     async def submission(

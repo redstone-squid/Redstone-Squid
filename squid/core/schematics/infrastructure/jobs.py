@@ -21,6 +21,7 @@ from squid.core.schematics.application.jobs import (
     SchematicJobErrorKind,
     SchematicJobOperation,
     SchematicJobSnapshot,
+    VideoListFilters,
 )
 from squid.core.schematics.models import BuildSchematic, SchematicJob
 
@@ -88,14 +89,16 @@ class PostgresSchematicJobRepository:
         return None if row is None else _snapshot(row)
 
     async def list_videos(
-        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, page_size: int
+        self, account_id: int, *, filters: VideoListFilters, selector: PageSelector, page_size: int
     ) -> Page[SchematicJobSnapshot]:
         session = self._session()
         order = KeysetOrder("newest", SchematicJob.id, SchematicJob.id, descending=True)
-        total = await session.scalar(_videos(select(func.count()).select_from(SchematicJob), account_id, schematic_id))
+        total = await session.scalar(
+            _videos(select(func.count()).select_from(SchematicJob), account_id, filters.schematic_id)
+        )
         page = await order.page(
             session,
-            _videos(select(SchematicJob), account_id, schematic_id),
+            _videos(select(SchematicJob), account_id, filters.schematic_id),
             selector,
             page_size=page_size,
             total=total or 0,

@@ -259,7 +259,14 @@ async def update_profile(
     status_code=200,
     guards=[requires(ACCOUNT_SELF_READ)],
 )
-async def list_identities(accounts: Accounts, caller: UserCaller) -> list[AccountIdentity]:
+async def list_identities(
+    accounts: Accounts,
+    caller: UserCaller,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 50,
+) -> Page[AccountIdentity]:
     """List every identity linked to the caller's account, hidden ones included.
 
     Unfiltered by visibility on purpose: you can only unhide what you can see listed.
@@ -267,7 +274,14 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Accoun
     if caller.account_id is None:
         raise AuthenticationError
     identities = await accounts.list_identities(context=caller.context())
-    return list(identities)
+    page = sort.page(
+        identities,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        created_at=lambda row: row.created_at,
+    )
+    return Page.from_domain(page)
 
 
 @put(

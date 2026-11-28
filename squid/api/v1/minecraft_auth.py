@@ -15,7 +15,7 @@ from uuid import UUID
 from litestar import Request, Router, delete, get, post, put
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, SkipValidation
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
@@ -27,6 +27,7 @@ from squid.api.dependencies import (
 )
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import BrowserContext, Caller, current_browser_context, prevent_credential_storage
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
@@ -35,7 +36,6 @@ from squid.api.v1.schemas.minecraft_auth import (
     FabricChallengeCreateRequest,
     FabricChallengeExchangeRequest,
     InstallationCreateRequest,
-    InstallationListResponse,
     InstallationResponse,
     IssuedInstallationResponse,
     IssuedPlayerGrantResponse,
@@ -54,6 +54,7 @@ from squid.core.minecraft_auth.application.crypto import (
 from squid.core.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
 )
+from squid.core.pagination import ChronologicalSort
 
 
 async def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
@@ -170,13 +171,24 @@ async def create_installation(
     },
 )
 async def list_installations(
-    installations: MinecraftInstallations, context: BrowserContext
-) -> InstallationListResponse:
+    installations: MinecraftInstallations,
+    context: BrowserContext,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 50,
+) -> Page[InstallationResponse]:
     """List only the signed-in account's Paper installations, without secrets or digests."""
     owned = await installations.list_owned(context=context)
-    return InstallationListResponse(
-        installations=[InstallationResponse.from_domain(installation) for installation in owned]
+    page = sort.page(
+        owned,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        created_at=lambda row: row.created_at,
+        id_type=UUID,
     )
+    return Page.from_domain(page, InstallationResponse.from_domain)
 
 
 @post(

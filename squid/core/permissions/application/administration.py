@@ -57,6 +57,7 @@ from squid.core.permissions.domain.models import (
     GrantSubject,
     GuildListFilters,
     PatternMode,
+    PermissionSubjectFilters,
     RolePermissionSubject,
 )
 from squid.core.permissions.models import (
@@ -501,16 +502,14 @@ class PermissionAdministrationService:
         self,
         *,
         context: ActingContext,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters,
     ) -> tuple[PermissionGrant, ...]:
         """List stored direct grants matching the supplied subject and guild filters."""
         async with self._read() as uow:
             return await uow.permission_admin.list_rules(
-                subject_account_id=account_id,
-                subject_role_id=discord_role_id,
-                guild_id=guild_id,
+                subject_account_id=filters.account_id,
+                subject_role_id=filters.discord_role_id,
+                guild_id=filters.guild_id,
             )
 
     @application_operation
@@ -518,16 +517,14 @@ class PermissionAdministrationService:
         self,
         *,
         context: ActingContext,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters,
     ) -> tuple[PermissionRoleAssignment, ...]:
         """List permission-role assignments matching the supplied subject and guild filters."""
         async with self._read() as uow:
             return await uow.permission_admin.list_assignments(
-                subject_account_id=account_id,
-                subject_role_id=discord_role_id,
-                guild_id=guild_id,
+                subject_account_id=filters.account_id,
+                subject_role_id=filters.discord_role_id,
+                guild_id=filters.guild_id,
             )
 
     @application_operation
@@ -637,10 +634,12 @@ class PermissionAdministrationService:
     # ---- Permission roles ----------------------------------------------
 
     @application_operation
-    async def roles(self, *, context: ActingContext, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
+    async def roles(
+        self, *, context: ActingContext, filters: GuildListFilters = ALL_GUILDS
+    ) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
         async with self._read() as uow:
-            roles = await uow.permission_admin.list_roles(guild_id=guild_id)
+            roles = await uow.permission_admin.list_roles(guild_id=filters.guild_id)
             return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
     @application_operation

@@ -20,6 +20,7 @@ from squid.api.pagination import (
     PageSizeParam,
     resolve_selector,
 )
+from squid.api.private_responses import private_response
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportStats, ErrorReportSummary
 from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportFilters
@@ -73,6 +74,7 @@ ReferenceParam = Annotated[
     status_code=200,
     guards=[requires(DIAGNOSTICS_ERROR_READ)],
 )
+@private_response
 async def list_error_reports(
     caller: CurrentCaller,
     error_reports: ErrorReports,

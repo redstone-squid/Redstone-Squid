@@ -25,8 +25,10 @@ from squid.core.notifications.models import InboxNotification, NotificationSubsc
 from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.submissions.application.reviews import (
+    ALL_SUBMISSIONS,
     CreditedBuild,
     SubmissionDetail,
+    SubmissionListFilters,
     SubmissionStatus,
     SubmissionSummary,
 )
@@ -76,12 +78,17 @@ class PostgresViewerRepository:
         )
 
     async def submissions(
-        self, account_id: int | None, selector: PageSelector, page_size: int, *, status: str | None = None
+        self,
+        account_id: int | None,
+        selector: PageSelector,
+        page_size: int,
+        *,
+        filters: SubmissionListFilters = ALL_SUBMISSIONS,
     ) -> Page[SubmissionSummary]:
         session = self._session()
         where = BuildSubmission.submitter_account_id == account_id if account_id is not None else true()
-        if status is not None:
-            where = where & (BuildSubmission.decision == status)
+        if filters.status is not None:
+            where = where & (BuildSubmission.decision == filters.status)
         total = await session.scalar(select(func.count()).select_from(BuildSubmission).where(where))
         query = (
             select(BuildSubmission, Build.display_name, Build.submission_status)

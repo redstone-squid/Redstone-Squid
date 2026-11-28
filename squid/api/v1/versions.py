@@ -12,7 +12,6 @@ from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, P
 from squid.api.security import requires
 from squid.api.v1.schemas.versions import VersionCorrectionRequest, VersionCreateRequest, VersionDetail
 from squid.core.actors import ActingContext
-from squid.core.pagination import collection_page
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE, VERSION_ENTRY_DELETE, VERSION_ENTRY_EDIT
 from squid.core.versions.domain.models import VersionListSort
 
@@ -34,20 +33,7 @@ async def list_versions(
 ) -> Page[VersionDetail]:
     """List recognized Java and Bedrock releases."""
     versions = await versions_service.list_all(context=ActingContext.current())
-    page = collection_page(
-        versions,
-        selector=resolve_selector(offset=offset, cursor=cursor),
-        sort=sort,
-        page_size=page_size,
-        identifier=lambda row: row.id,
-        display_key=lambda row: (
-            int(row.version.edition == "Bedrock"),
-            row.version.major,
-            row.version.minor,
-            row.version.patch,
-        ),
-        key_types=(int, int, int, int),
-    )
+    page = sort.page(versions, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     return Page[VersionDetail].from_domain(page, VersionDetail.from_domain)
 
 

@@ -12,7 +12,12 @@ from squid.core.errors import ConflictError, InfrastructureError, NotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.core.schematics.application.attachments import StoredSchematic
-from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
+from squid.core.schematics.application.jobs import (
+    ALL_VIDEOS,
+    SchematicJobService,
+    SchematicJobSnapshot,
+    VideoListFilters,
+)
 from squid.core.schematics.application.ports import SchematicRepository, SchematicResourcePackProvider
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.errors import SchematicSupportUnavailableError, SchematicTooLargeError
@@ -118,7 +123,7 @@ class SchematicVideoService:
     async def list_videos(
         self,
         *,
-        schematic_id: int | None = None,
+        filters: VideoListFilters = ALL_VIDEOS,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         context: ActingContext,
@@ -131,7 +136,7 @@ class SchematicVideoService:
         with context.scope():
             page = await self._jobs.list_videos(
                 context.effective.require_account_id(),
-                schematic_id=schematic_id,
+                filters=filters,
                 selector=selector,
                 page_size=page_size,
                 context=context,

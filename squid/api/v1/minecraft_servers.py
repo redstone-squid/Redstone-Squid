@@ -13,7 +13,6 @@ from squid.api.dependencies import CurrentCaller, MinecraftInstallations, get_mi
 from squid.api.errors import responses
 from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.core.minecraft_auth.domain.models import PublishedPaperServer, ServerListSort
-from squid.core.pagination import collection_page
 
 
 class PublicServerSummary(BaseModel):
@@ -62,16 +61,7 @@ async def list_servers(
 ) -> Page[PublicServerSummary]:
     """List active Paper servers whose owners turned on their public profile, oldest first."""
     servers = await installations.public_servers(context=caller.context())
-    page = collection_page(
-        servers,
-        selector=resolve_selector(offset=offset, cursor=cursor),
-        sort=sort,
-        page_size=page_size,
-        identifier=lambda row: row.installation_id,
-        id_type=UUID,
-        display_key=lambda row: (row.created_at.format_iso(unit="nanosecond"),),
-        key_types=(str,),
-    )
+    page = sort.page(servers, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     return Page[PublicServerSummary].from_domain(page, PublicServerSummary.from_domain)
 
 
