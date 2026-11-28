@@ -22,7 +22,7 @@ class RecordDefinitionReader(Protocol):
 class CreatorReader(Protocol):
     """Read credited creator names."""
 
-    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
+    async def creators(self, query: str, *, limit: int) -> Sequence[str]: ...
 
 
 class RecordDefinitionProvider:
@@ -129,11 +129,7 @@ class CreatorProvider:
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         creators = await self._reader.creators(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
-        return tuple(
-            # Show existing ownership before the user submits a claim request.
-            Candidate.create(name, description="claimed" if claimed else None, kind="creator")
-            for name, claimed in creators
-        )
+        return tuple(Candidate.create(name, kind="creator") for name in creators)
 
 
 def record_sources(

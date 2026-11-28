@@ -314,14 +314,10 @@ class FakeAccountRepository:
         return None if alias is None else await self.get_alias_by_name(alias.name)
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
-        alias = next(
+        return next(
             (alias for alias in self.aliases.values() if fold_creator_name(alias.name) == fold_creator_name(name)),
             None,
         )
-        if alias is None:
-            return None
-        holder = None if alias.account_id is None else self.accounts.get(alias.account_id)
-        return replace(alias, public_account_id=None if holder is None else holder.public_account_id)
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
         account = next((account for account in self.accounts.values() if account.public_account_id == public_id), None)

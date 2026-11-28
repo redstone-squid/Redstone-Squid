@@ -566,9 +566,6 @@ class AccountRepository:
             select(attributed.c.position, Account.public_account_id)
             .join(Account, Account.id == attributed.c.account_id)
             .where(attributed.c.build_id == build_id)
-            # A credit claimed through an alias by one account and matching another's identity
-            # belongs to both; show the older account so the choice is stable.
-            .order_by(attributed.c.position, Account.id.desc())
         )
         return {position: public_id for position, public_id in rows}
 

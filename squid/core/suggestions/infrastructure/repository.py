@@ -242,8 +242,8 @@ class PostgresSuggestionRepository:
         rows = (await session.execute(statement)).all()
         return [(str(row.public_id), row.title, row.subtitle) for row in rows]
 
-    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
-        """Return credited creator names and whether each has been claimed by an account."""
+    async def creators(self, query: str, *, limit: int) -> Sequence[str]:
+        """Return names used on approved builds."""
         statement = select(CreatorAlias.name).where(
             select(BuildCredit.id)
             .join(Build, Build.id == BuildCredit.build_id)
@@ -258,4 +258,4 @@ class PostgresSuggestionRepository:
             statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
         statement = statement.order_by(CreatorAlias.normalized_name).limit(limit)
         session = self._session()
-        return [(name, False) for name in await session.scalars(statement)]
+        return (await session.scalars(statement)).all()

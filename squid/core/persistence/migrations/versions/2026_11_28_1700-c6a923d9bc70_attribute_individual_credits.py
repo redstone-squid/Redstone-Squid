@@ -48,6 +48,9 @@ _ENQUEUE_NEW = "-- Queue the work that follows a change to a build or to one of 
 
 
 def upgrade() -> None:
+    op.execute(
+        "COMMENT ON TABLE creator_aliases IS 'A searchable spelling shared by build credits. Ownership is recorded on each credit.'"
+    )
     op.execute("""
         ALTER TABLE build_credits
         ADD COLUMN account_id integer REFERENCES accounts(id) ON DELETE SET NULL,
@@ -111,6 +114,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        "COMMENT ON TABLE creator_aliases IS 'A creator name credited on a build, optionally claimed by an account.'"
+    )
     op.execute(
         "CREATE UNIQUE INDEX creator_alias_claims_one_pending_per_account ON creator_alias_claims(alias_id, account_id) WHERE status = 'pending'"
     )

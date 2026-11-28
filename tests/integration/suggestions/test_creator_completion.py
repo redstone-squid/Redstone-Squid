@@ -43,7 +43,7 @@ async def test_prefix_matches_regardless_of_typed_case(
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     for typed in ("Notch", "notch", "NOTCH", "  notc"):
-        names = [name for name, _claimed in await repository.creators(typed, limit=10)]
+        names = await repository.creators(typed, limit=10)
         assert "Notch" in names, f"{typed!r} did not suggest Notch"
 
 
@@ -54,9 +54,9 @@ async def test_prefix_matches_across_compatibility_and_case_folding(
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
-    assert [name for name, _ in await repository.creators("Σς", limit=10)] == ["ΣΣ"]
-    assert [name for name, _ in await repository.creators("strasse", limit=10)] == ["Straße"]
-    assert [name for name, _ in await repository.creators("alice", limit=10)] == ["Ａlice"]
+    assert await repository.creators("Σς", limit=10) == ["ΣΣ"]
+    assert await repository.creators("strasse", limit=10) == ["Straße"]
+    assert await repository.creators("alice", limit=10) == ["Ａlice"]
 
 
 @pytest.mark.parametrize("typed", ["alice", "ＡL"])
@@ -93,8 +93,8 @@ async def test_name_choices_do_not_imply_account_ownership(
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
-    assert await repository.creators("Ａlice", limit=10) == [("Ａlice", False)]
-    assert await repository.creators("Notch", limit=10) == [("Notch", False)]
+    assert await repository.creators("Ａlice", limit=10) == ["Ａlice"]
+    assert await repository.creators("Notch", limit=10) == ["Notch"]
 
 
 async def test_results_are_bounded(

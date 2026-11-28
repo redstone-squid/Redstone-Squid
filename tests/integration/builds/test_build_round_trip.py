@@ -20,12 +20,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import ClaimStatus
+from squid.core.accounts.domain import ClaimStatus, ProfileUpdate
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.application.tags import apply_build_tags, replace_showcase_tags
-from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag
+from squid.core.builds.domain import BuildCategory, BuildListFilters, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.infrastructure.repository import BuildRepository
 from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
@@ -477,6 +477,24 @@ async def test_approval_and_claims_attribute_only_selected_credits(
     assert claimed.credits[0].account_id != public_id
     assert other is not None
     assert other.credits[0].account_id is None
+
+    name_filter = BuildListFilters(creator_name_id=claimed.credits[0].name_id)
+    account_filter = BuildListFilters(public_account_id=claimed.credits[0].account_id)
+    async with factory() as uow:
+        stats = await uow.builds.creator_stats(name_filter)
+        assert stats.build_count == 2
+        assert sum(year.count for year in stats.builds_by_year) == 2
+        assert (await uow.builds.creator_stats(account_filter)).build_count == 1
+        await uow.accounts.upsert_profile(account_id, ProfileUpdate(hidden=True).validated())
+        await uow.commit()
+    async with factory() as uow:
+        assert (await uow.builds.creator_stats(account_filter)).build_count == 0
+        assert (await uow.builds.creator_stats(name_filter)).build_count == 2
+        assert list(await uow.suggestions.creators("Shared", limit=5)) == ["Shared"]
+        assert not await uow.suggestions.creator_profiles("Shared", limit=5)
+        hidden = await uow.builds.get_by_id(first.id)
+        assert hidden is not None
+        assert hidden.credits[0].account_id is None
 
 
 async def test_alias_resolves_to_canonical_display_name(

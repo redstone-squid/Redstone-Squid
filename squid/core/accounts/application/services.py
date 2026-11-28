@@ -608,11 +608,7 @@ class AccountService:
         reassign: bool = False,
         credit_ids: Collection[UUID] | None = None,
     ) -> AliasClaim:
-        """Credit the claimant with the alias and close the request.
-
-        *reassign* is required to take a name that is currently credited to someone else, which
-        is what a rename into a contested name produces.
-        """
+        """Assign the selected build credits. Replacing an existing owner requires confirmation."""
         with context.scope():
             return await self._resolve_claim(
                 claim_id, ClaimStatus.APPROVED, context.effective, reassign=reassign, credit_ids=credit_ids

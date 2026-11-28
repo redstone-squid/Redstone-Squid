@@ -51,7 +51,7 @@ class SuggestionRepository(Protocol):
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
     async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
-    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
+    async def creators(self, query: str, *, limit: int) -> Sequence[str]: ...
 
 
 class SuggestionQueryService:
@@ -96,7 +96,7 @@ class SuggestionQueryService:
         async with self._uow_factory() as uow:
             return await uow.suggestions.record_titles(query, limit=limit)
 
-    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
+    async def creators(self, query: str, *, limit: int) -> Sequence[str]:
         async with self._uow_factory() as uow:
             return await uow.suggestions.creators(query, limit=limit)
 

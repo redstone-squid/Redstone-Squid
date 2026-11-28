@@ -135,7 +135,7 @@ class BuildListFilters:
     tag_slugs: tuple[str, ...] = ()
     """Current or former slugs."""
     public_account_id: uuid.UUID | None = None
-    """An account credited as creator or designer."""
+    """A publicly attributed account in any credit role."""
     creator_name_id: int | None = None
 
 

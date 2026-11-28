@@ -386,6 +386,7 @@ class CreatorAlias(CreatedAtMixin, Base, kw_only=True):
         insert_default=_fold_from_name,
         init=False,
     )
+    # Historical name claims are retained as migration evidence. New decisions live on BuildCredit.
     account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="creator_aliases_account_id_fkey", ondelete="SET NULL"),
@@ -393,14 +394,6 @@ class CreatorAlias(CreatedAtMixin, Base, kw_only=True):
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(StrEnumText(ClaimMethod), default=None)
-
-    public_account_id: uuid.UUID | None = None
-    """Public identifier of the account claiming this alias."""
-
-    @property
-    def is_claimed(self) -> bool:
-        """Whether an account has been credited with this name."""
-        return self.account_id is not None
 
 
 @event.listens_for(CreatorAlias, "before_update")
