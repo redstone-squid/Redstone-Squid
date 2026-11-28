@@ -1738,7 +1738,7 @@ bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 # squid/bot/voting/poll_wizard.py:467
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/cog.py:214, squid/bot/voting/poll_wizard.py:462
+# squid/bot/voting/cog.py:215, squid/bot/voting/poll_wizard.py:462
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:322
@@ -1768,19 +1768,19 @@ bot-voting-poll-wizard-visibility = Visibility
 # squid/bot/voting/poll_wizard.py:335
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/cog.py:338
+# squid/bot/voting/cog.py:339
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/cog.py:372
+# squid/bot/voting/cog.py:373
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/cog.py:351
+# squid/bot/voting/cog.py:352
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/cog.py:350
+# squid/bot/voting/cog.py:351
 bot-voting-vote-working = Working
 
-# squid/bot/voting/cog.py:176
+# squid/bot/voting/cog.py:177
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/catalogue/browse.py:1138
@@ -2092,7 +2092,7 @@ builds-attribute-immutable = Attribute `{ $name }` is immutable!
 # squid/core/builds/errors.py:12
 builds-build-data-invalid = The build data is invalid.
 
-# squid/core/builds/models.py:233
+# squid/core/builds/models.py:235
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildInput.
 
 # squid/core/builds/errors.py:35
@@ -2542,16 +2542,16 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin_cog.py:108
 command-paste-name = paste
 
-# squid/bot/voting/cog.py:110
+# squid/bot/voting/cog.py:111
 command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/cog.py:109
+# squid/bot/voting/cog.py:110
 command-poll-name = poll
 
-# squid/bot/voting/cog.py:223
+# squid/bot/voting/cog.py:224
 command-poll-review-help = Inspect a paused poll or confirm a review decision.
 
-# squid/bot/voting/cog.py:222
+# squid/bot/voting/cog.py:223
 command-poll-review-name = poll-review
 
 # squid/bot/submission/cog.py:77
@@ -2695,7 +2695,7 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking_cog.py:127
 command-versions-name = versions
 
-# squid/bot/voting/cog.py:331
+# squid/bot/voting/cog.py:332
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/diagnostics/cog.py:48
@@ -2812,7 +2812,7 @@ core-errors-invalid-value = Invalid value
 # squid/core/errors.py:245
 core-errors-operation-conflict = Operation conflict
 
-# squid/core/pagination.py:33
+# squid/core/pagination.py:30
 core-errors-page-cursor-invalid = Page link out of date
 
 # squid/core/errors.py:181
@@ -2851,10 +2851,10 @@ core-operation-failed = The requested operation could not be completed.
 # squid/core/errors.py:302
 core-owner-required-action = Only the owner can perform this action.
 
-# squid/core/pagination.py:32
+# squid/core/pagination.py:29
 core-page-cursor-invalid = This page link is out of date.
 
-# squid/core/pagination.py:35
+# squid/core/pagination.py:32
 core-page-cursor-invalid-action = Go back to the first page.
 
 # squid/core/errors.py:364
@@ -4487,16 +4487,16 @@ notifications-denied-summary = { $build } was rejected.
 # squid/bot/notifications_view.py:192
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
-# squid/core/notifications/domain.py:342
+# squid/core/notifications/domain.py:348
 notifications-domain-invalid-tag-predicate = invalid tag predicate
 
-# squid/core/notifications/domain.py:473
+# squid/core/notifications/domain.py:479
 notifications-domain-unsupported = unsupported { $name }: { $value }
 
-# squid/core/notifications/domain.py:241
+# squid/core/notifications/domain.py:247
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/core/notifications/domain.py:425
+# squid/core/notifications/domain.py:431
 notifications-filter-build-kind =
     { $kind ->
         [door] Doors
@@ -4505,7 +4505,7 @@ notifications-filter-build-kind =
        *[utility] Utilities
     }
 
-# squid/core/notifications/domain.py:436
+# squid/core/notifications/domain.py:442
 notifications-filter-criterion =
     { $criterion ->
         [first] First
@@ -4515,16 +4515,16 @@ notifications-filter-criterion =
        *[smallest_fastest] Smallest fastest
     }
 
-# squid/core/notifications/domain.py:263
+# squid/core/notifications/domain.py:269
 notifications-filter-tag-value = { $name }: { $value }
 
-# squid/core/notifications/domain.py:262
+# squid/core/notifications/domain.py:268
 notifications-filter-tagged = Tagged { $name }
 
-# squid/core/notifications/domain.py:260
+# squid/core/notifications/domain.py:266
 notifications-filter-unknown-tag = Tag #{ $tag_id }
 
-# squid/core/notifications/domain.py:448
+# squid/core/notifications/domain.py:454
 notifications-filter-version-scope =
     { $scope ->
         [all_time] All time
@@ -4555,10 +4555,10 @@ notifications-inbox-heading = Recent notifications
 # squid/bot/notifications_view.py:517
 notifications-inbox-help = Select a notification to see details and open its build, or select several to change their read state.
 
-# squid/core/notifications/domain.py:344
+# squid/core/notifications/domain.py:350
 notifications-invalid-exact-tag-value = invalid exact tag value
 
-# squid/core/notifications/domain.py:459, squid/core/notifications/domain.py:464
+# squid/core/notifications/domain.py:465, squid/core/notifications/domain.py:470
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
 # squid/bot/notifications_cog.py:147
@@ -4576,25 +4576,25 @@ notifications-open-in-discord = Open it in Discord with `/build browse id:{ $bui
 # squid/core/notifications/application.py:247
 notifications-page-size = page_size must be between 1 and 100
 
-# squid/core/notifications/domain.py:363
+# squid/core/notifications/domain.py:369
 notifications-persisted-record-filter = persisted record filter violates the notification contract
 
-# squid/core/notifications/domain.py:349
+# squid/core/notifications/domain.py:355
 notifications-persisted-tag-predicate = persisted tag predicate violates the notification contract
 
-# squid/core/notifications/domain.py:236
+# squid/core/notifications/domain.py:242
 notifications-presence-predicates-include = presence predicates cannot include a value
 
 # squid/bot/notification_text.py:46
 notifications-record-detail = • { $title }
 
-# squid/core/notifications/domain.py:289
+# squid/core/notifications/domain.py:295
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
 # squid/bot/notifications_view.py:385
 notifications-record-filter-required = Choose at least one record filter.
 
-# squid/core/notifications/domain.py:296
+# squid/core/notifications/domain.py:302
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
 # squid/bot/notification_text.py:25
@@ -4626,16 +4626,16 @@ notifications-tab-delivery = Delivery
 # squid/bot/notifications_view.py:77
 notifications-tab-inbox = Inbox
 
-# squid/core/notifications/domain.py:226
+# squid/core/notifications/domain.py:232
 notifications-tag-id-positive = tag_id must be positive
 
-# squid/core/notifications/domain.py:231
+# squid/core/notifications/domain.py:237
 notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'
 
-# squid/core/notifications/domain.py:336
+# squid/core/notifications/domain.py:342
 notifications-tag-predicates-objects = tag predicates must be objects
 
-# squid/core/notifications/domain.py:331
+# squid/core/notifications/domain.py:337
 notifications-tags-list = tags must be a list
 
 # squid/bot/diagnostics/permissions.py:88
@@ -4944,7 +4944,7 @@ permissions-vote-polls = Vote in polls.
 # squid/core/permissions/domain/catalogue.py:520
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
-# squid/bot/voting/cog.py:171
+# squid/bot/voting/cog.py:172
 poll-account-changed = Your account changed. Open the poll again.
 
 # squid/bot/voting/poll_wizard.py:400
@@ -4977,43 +4977,43 @@ poll-choices-format = Separate choices with commas or line breaks; quote choices
 # squid/bot/voting/poll_wizard.py:225
 poll-choices-length = Keep the choices within 1000 characters.
 
-# squid/bot/voting/cog.py:119
+# squid/bot/voting/cog.py:120
 poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
 
-# squid/bot/voting/cog.py:118
+# squid/bot/voting/cog.py:119
 poll-command-choices-name = choices
 
-# squid/bot/voting/cog.py:123
+# squid/bot/voting/cog.py:124
 poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
 
-# squid/bot/voting/cog.py:122
+# squid/bot/voting/cog.py:123
 poll-command-duration-name = duration
 
-# squid/bot/voting/cog.py:204
+# squid/bot/voting/cog.py:205
 poll-command-network-denied = You do not have permission to publish to every server.
 
-# squid/bot/voting/cog.py:137
+# squid/bot/voting/cog.py:138
 poll-command-preview = Review and edit before publishing. Default: publish immediately.
 
-# squid/bot/voting/cog.py:136
+# squid/bot/voting/cog.py:137
 poll-command-preview-name = preview
 
-# squid/bot/voting/cog.py:115
+# squid/bot/voting/cog.py:116
 poll-command-question = Poll question; omit to open the editor.
 
-# squid/bot/voting/cog.py:114
+# squid/bot/voting/cog.py:115
 poll-command-question-name = question
 
-# squid/bot/voting/cog.py:132
+# squid/bot/voting/cog.py:133
 poll-command-scope = This server, or every server if you have permission.
 
-# squid/bot/voting/cog.py:131
+# squid/bot/voting/cog.py:132
 poll-command-scope-name = scope
 
-# squid/bot/voting/cog.py:127
+# squid/bot/voting/cog.py:128
 poll-command-visibility = Who can see votes and when results are shown.
 
-# squid/bot/voting/cog.py:126
+# squid/bot/voting/cog.py:127
 poll-command-visibility-name = visibility
 
 # squid/bot/voting/controls.py:65
@@ -5028,49 +5028,49 @@ poll-publish-final = One vote per person; voting again changes your choice. Publ
 # squid/bot/voting/poll_wizard.py:222
 poll-question-length = Enter a question between 1 and 300 characters.
 
-# squid/bot/voting/cog.py:236
+# squid/bot/voting/cog.py:237
 poll-review-action-finalize = Finalize
 
-# squid/bot/voting/cog.py:232
+# squid/bot/voting/cog.py:233
 poll-review-action-help = Review decision to inspect or confirm.
 
-# squid/bot/voting/cog.py:234
+# squid/bot/voting/cog.py:235
 poll-review-action-inspect = Inspect
 
-# squid/bot/voting/cog.py:231
+# squid/bot/voting/cog.py:232
 poll-review-action-name = action
 
-# squid/bot/voting/cog.py:237
+# squid/bot/voting/cog.py:238
 poll-review-action-reopen = Reopen
 
-# squid/bot/voting/cog.py:235
+# squid/bot/voting/cog.py:236
 poll-review-action-retry = Retry
 
-# squid/bot/voting/cog.py:238
+# squid/bot/voting/cog.py:239
 poll-review-action-void = Void
 
-# squid/bot/voting/cog.py:251
+# squid/bot/voting/cog.py:252
 poll-review-duration-help = Voting time to add when reopening the poll.
 
-# squid/bot/voting/cog.py:250
+# squid/bot/voting/cog.py:251
 poll-review-duration-name = duration
 
-# squid/bot/voting/cog.py:228
+# squid/bot/voting/cog.py:229
 poll-review-poll-id-help = Poll to review. Omit to list paused polls.
 
-# squid/bot/voting/cog.py:227
+# squid/bot/voting/cog.py:228
 poll-review-poll-id-name = poll_id
 
-# squid/bot/voting/cog.py:247
+# squid/bot/voting/cog.py:248
 poll-review-reason-help = Reason for finalizing, reopening, or voiding the poll.
 
-# squid/bot/voting/cog.py:246
+# squid/bot/voting/cog.py:247
 poll-review-reason-name = reason
 
-# squid/bot/voting/cog.py:243
+# squid/bot/voting/cog.py:244
 poll-review-revision-help = Count revision shown by the inspection.
 
-# squid/bot/voting/cog.py:242
+# squid/bot/voting/cog.py:243
 poll-review-revision-name = revision
 
 # squid/bot/voting/poll_wizard.py:52
@@ -6070,7 +6070,7 @@ submissions-application-forms-vertical-upward = Vertical upward
 # squid/core/submissions/application/attachments.py:84
 submissions-attachment-upload-authority = The draft attachment upload authority is no longer available.
 
-# squid/core/submissions/application/finalization.py:241
+# squid/core/submissions/application/finalization.py:242
 submissions-attention-retention-positive = finalization attention retention must be positive
 
 # squid/core/submissions/domain/drafts.py:130
@@ -6112,7 +6112,7 @@ submissions-choice-value-type = choice value types must be text, numeric, boolea
 # squid/core/submissions/application/forms.py:405
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
 
-# squid/core/submissions/application/finalization.py:474
+# squid/core/submissions/application/finalization.py:475
 submissions-claim-limit = finalization claim limit must be between 1 and { $maximum }
 
 # squid/core/submissions/application/finalization.py:77
@@ -6154,7 +6154,7 @@ submissions-draft-answers-exceed = The draft answers exceed the retained data li
 # squid/core/submissions/application/attachments.py:78
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/core/submissions/application/drafts.py:267
+# squid/core/submissions/application/drafts.py:277
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/core/submissions/domain/drafts.py:156
@@ -6166,10 +6166,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/core/submissions/domain/drafts.py:145
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/core/submissions/application/drafts.py:401
+# squid/core/submissions/application/drafts.py:411
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/core/submissions/application/drafts.py:473
+# squid/core/submissions/application/drafts.py:483
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/core/submissions/domain/drafts.py:306, squid/core/submissions/domain/drafts.py:314
@@ -6199,7 +6199,7 @@ submissions-draft-operation-required = draft changes require at least one operat
 # squid/core/submissions/errors.py:40
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/core/submissions/application/drafts.py:307
+# squid/core/submissions/application/drafts.py:317
 submissions-draft-retention-positive = draft retention must be positive
 
 # squid/core/submissions/errors.py:36
@@ -6241,10 +6241,10 @@ submissions-field-not-string = validated field { $field_id } is not a string
 # squid/core/submissions/domain/forms.py:306
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
-# squid/core/submissions/application/finalization.py:288
+# squid/core/submissions/application/finalization.py:289
 submissions-finalization-job-missing = processing draft has no active finalization job
 
-# squid/core/submissions/application/finalization.py:294
+# squid/core/submissions/application/finalization.py:295
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
 # squid/core/submissions/domain/finalization.py:404
@@ -6319,10 +6319,10 @@ submissions-owner-account-id = owner_account_id must be positive
 # squid/core/submissions/domain/finalization.py:374
 submissions-paper-installation-only = Only Paper submissions may retain an installation ID.
 
-# squid/core/submissions/application/drafts.py:344
+# squid/core/submissions/application/drafts.py:354
 submissions-paper-installation-origin-required = Paper drafts require server-derived installation identity.
 
-# squid/core/submissions/application/drafts.py:108
+# squid/core/submissions/application/drafts.py:114
 submissions-paper-may-retain = Only Paper drafts may retain an installation ID.
 
 # squid/core/submissions/application/forms.py:371
@@ -6361,7 +6361,7 @@ submissions-repeatable-field-use = repeatable field { $field_id } must use strin
 # squid/core/submissions/application/forms.py:324
 submissions-restrictions-tags = Restrictions and tags
 
-# squid/core/submissions/application/finalization.py:455
+# squid/core/submissions/application/finalization.py:456
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
 # squid/core/submissions/domain/finalization.py:186
@@ -6397,7 +6397,7 @@ submissions-state-edited = drafts in { $current_status } state cannot be edited
 # squid/core/submissions/domain/finalization.py:148
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/core/submissions/application/drafts.py:228
+# squid/core/submissions/application/drafts.py:238
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
 # squid/core/submissions/domain/finalization.py:368
@@ -7111,7 +7111,7 @@ vocabulary-version-scope-all-time = All time
 # squid/core/vocabulary.py:32
 vocabulary-version-scope-up-to-date = Current version
 
-# squid/bot/voting/cog.py:339
+# squid/bot/voting/cog.py:340
 vote-message-guild-mismatch = The message is not from this guild.
 
 # squid/bot/voting/actors.py:25
