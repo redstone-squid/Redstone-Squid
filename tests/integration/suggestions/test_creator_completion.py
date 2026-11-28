@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, CreatorAlias
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.suggestions.application.queries import SuggestionQueryService
 from tests.support.creator_credits import publish_credits
@@ -85,6 +85,30 @@ async def test_public_profile_search_matches_every_alias_and_escapes_wildcards(
     assert await repository.creator_profiles("zul", limit=10) == [(public_id, "Zulu")]
     assert await repository.creator_profiles("%", limit=10) == []
     assert len(await repository.creator_profiles("", limit=10)) == 1
+
+
+async def test_an_account_without_builds_can_be_nominated_by_visible_identity_or_public_id(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        public_id = str(account.public_account_id)
+        identity = AccountIdentity.discord(123)
+        identity.display_name = "RedFox"
+        identity.account_id = account.id
+        session.add(identity)
+    queries = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    assert await queries.creator_profiles("RedF", limit=5) == [(public_id, "RedFox")]
+    assert await queries.creator_profiles(public_id, limit=5) == [(public_id, public_id)]
+    async with async_session_factory.begin() as session:
+        linked = await session.get_one(AccountIdentity, identity.id)
+        linked.is_public = False
+    assert not await queries.creator_profiles("RedF", limit=5)
+    async with async_session_factory.begin() as session:
+        session.add(AccountProfile(account_id=account.id, hidden=True))
+    assert not await queries.creator_profiles(public_id, limit=5)
 
 
 async def test_name_choices_do_not_imply_account_ownership(

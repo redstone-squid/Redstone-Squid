@@ -6,6 +6,7 @@ services return.
 """
 
 from collections.abc import Callable, Collection, Sequence
+from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.infrastructure.attribution import attributed_credits
-from squid.core.accounts.models import Account, AccountProfile, CreatorAlias
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, CreatorAlias
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, BuildCredit
 from squid.core.records.domain import VersionScope
@@ -172,8 +173,19 @@ class PostgresSuggestionRepository:
         ]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
-        """Suggest visible profiles by their display name or published credit."""
+        """Suggest public accounts by ID, published credit, profile name or visible identity."""
         terms = fold_creator_name(query)
+        try:
+            public_id = UUID(terms)
+        except ValueError:
+            pass
+        else:
+            account = await self._session().scalar(
+                select(Account.public_account_id)
+                .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                .where(Account.public_account_id == public_id, AccountProfile.hidden.is_not(True))
+            )
+            return [(str(account), str(account))] if account else []
         owners = attributed_credits()
         credits = (
             select(owners.c.account_id, owners.c.name)
@@ -192,7 +204,17 @@ class PostgresSuggestionRepository:
             AccountProfile.display_name.is_not(None),
             func.lower(AccountProfile.display_name).startswith(query.strip().lower(), autoescape=True),
         )
-        matches = credits.union_all(profiles).subquery()
+        identities = (
+            select(AccountIdentity.account_id, AccountIdentity.display_name.label("name"))
+            .outerjoin(AccountProfile, AccountProfile.account_id == AccountIdentity.account_id)
+            .where(
+                AccountIdentity.is_public.is_(True),
+                AccountProfile.hidden.is_not(True),
+                AccountIdentity.display_name.is_not(None),
+                func.lower(AccountIdentity.display_name).startswith(query.strip().lower(), autoescape=True),
+            )
+        )
+        matches = credits.union_all(profiles, identities).subquery()
         statement = (
             select(Account.public_account_id, func.min(matches.c.name).label("name"))
             .join(matches, matches.c.account_id == Account.id)
