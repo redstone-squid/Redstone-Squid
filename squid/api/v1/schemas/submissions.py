@@ -28,6 +28,7 @@ from squid.core.submissions.application import (
     FormOptionSet,
     StoredDraft,
 )
+from squid.core.submissions.application.drafts import DraftViewer
 from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
     DRAFT_CHANGE_KEY_MIN_LENGTH,
@@ -361,6 +362,7 @@ class DraftProgressResponse(StrictSchema):
 class StoredDraftResponse(StrictSchema):
     """The compacted current state of one caller-owned draft."""
 
+    viewer: DraftViewer
     id: UUID
     source_build_id: int | None = None
     source_revision: int | None = None
@@ -381,8 +383,9 @@ class StoredDraftResponse(StrictSchema):
     """Null when this server no longer serves the draft's form revision."""
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None) -> StoredDraftResponse:
+    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None, account_id: int) -> StoredDraftResponse:
         return cls(
+            viewer=draft.viewer(account_id),
             id=draft.snapshot.id,
             source_build_id=draft.edit_source.build_id if draft.edit_source else None,
             source_revision=draft.edit_source.revision if draft.edit_source else None,
@@ -486,6 +489,7 @@ class SubmissionAttemptResponse(StrictSchema):
     """Owner-visible state of durable draft finalization."""
 
     draft_id: UUID
+    submission_id: UUID | None = None
     attempt_id: UUID
     attempt_number: int
     input_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
@@ -499,6 +503,7 @@ class SubmissionAttemptResponse(StrictSchema):
         return cls(
             draft_id=snapshot.draft_id,
             attempt_id=snapshot.job_id,
+            submission_id=snapshot.submission_id,
             attempt_number=snapshot.attempt_number,
             input_sha256=snapshot.input_sha256,
             draft_revision=snapshot.draft_revision,

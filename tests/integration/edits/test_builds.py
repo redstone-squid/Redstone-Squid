@@ -14,6 +14,7 @@ from whenever import Instant
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
+from squid.core.auth.infrastructure.viewer import PostgresViewerRepository
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.category_edits import BUILD_CATEGORY_EDIT, BuildCategoryEdit
 from squid.core.builds.application.edits import (
@@ -37,6 +38,7 @@ from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
 from squid.core.events import DomainEvent
+from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
@@ -240,6 +242,16 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     assert updated.description == "reviewed"
     assert updated.submission_status is BuildStatus.APPROVED
     async with migrated_session_factory() as session:
+        views = PostgresViewerRepository(lambda: session)
+        detail = await views.submission(submission.id, creator.id)
+        assert detail is not None
+        assert detail.submission.status == "approved"
+        assert detail.submission.decided_revision == updated.revision
+        assert detail.base_revision == current.revision
+        assert detail.reviewed_facts["description"] == "original"
+        assert await views.submission(submission.id, owner.account_id) is None
+        assert [row.id for row in (await views.submissions(creator.id, FIRST_PAGE, 10)).items] == [submission.id]
+        assert [row.build_id for row in (await views.portfolio(creator.id, FIRST_PAGE, 10)).items] == [build.id]
         applications = await session.scalars(
             select(BuildHistoryEntry).where(
                 BuildHistoryEntry.correlation_kind == "vote_session",
@@ -614,7 +626,11 @@ async def test_build_events_and_vector_share_the_content_transaction(
     async with factory() as uow:
         assert not await uow.build_vectors.fill_missing(build.id, build.revision, vector)
         deliveries = await uow.domain_events.claim(consumer="build_embeddings", limit=10)
-        assert sorted(item.event.event_type for item in deliveries) == ["build.edited", "build.submitted"]
+        assert sorted(item.event.event_type for item in deliveries) == [
+            "build.edited",
+            "build.review_requested",
+            "build.submitted",
+        ]
         edited = next(item.event for item in deliveries if item.event.event_type == "build.edited")
         assert edited.payload == {"revision": current.revision}
         saved = await uow.builds.get_by_id(build.id)

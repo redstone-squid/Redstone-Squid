@@ -50,7 +50,7 @@ class FakeBuildRepository(FakeBuildEditing):
         self.events.append("save")
         self.saved.append(build)
 
-    async def set_status(self, build: Build, status: BuildStatus) -> None:
+    async def set_status(self, build: Build, status: BuildStatus, *, feedback: str | None = None) -> None:
         build.submission_status = status
 
     async def approve(self, build: Build) -> None:

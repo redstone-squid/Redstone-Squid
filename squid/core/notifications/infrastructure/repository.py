@@ -43,6 +43,7 @@ from squid.core.records.models import (
     Record,
     RecordDefinition,
 )
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.tags.models import TagAssignment, TagDefinition
 
 
@@ -530,6 +531,15 @@ class PostgresNotificationRepository:
 
     # Recipient selection for each supported event, followed by shared preference checks.
 
+    @staticmethod
+    async def _submission_link(session: AsyncSession, build_id: int) -> dict[str, str]:
+        identifier = await session.scalar(
+            select(BuildSubmission.id).where(
+                BuildSubmission.build_id == build_id, BuildSubmission.edit_vote_id.is_(None)
+            )
+        )
+        return {"submission_id": str(identifier)} if identifier is not None else {}
+
     async def _materialize_staff_submission(self, session: AsyncSession, event: DomainEvent) -> None:
         build = await session.get(Build, event.aggregate_id)
         if build is None or build.submission_status != BuildStatus.PENDING:
@@ -541,6 +551,7 @@ class PostgresNotificationRepository:
         ).scalars()
         # Transient models can omit category.
         payload = {
+            **await self._submission_link(session, build.id),
             "build_id": build.id,
             "category": (
                 None
@@ -580,7 +591,7 @@ class PostgresNotificationRepository:
                 account_id=build.submitter_account_id,
                 kind=kind,
                 source_key=NotificationSource(event.id, kind).key_for(build.submitter_account_id),
-                payload={"build_id": build.id},
+                payload={"build_id": build.id, **await self._submission_link(session, build.id)},
             )
         ]
         if event.event_type != "build.confirmed" or not await self._is_first_confirmation(session, event):

@@ -27,3 +27,24 @@ def decide_build_edit(
     if status is BuildStatus.PENDING or fields <= _CREATOR_DIRECT:
         return BuildEditDecision.DIRECT
     return BuildEditDecision.REVIEW
+
+
+class BuildEditMode(StrEnum):
+    """Actions offered before the editor knows which fields will change."""
+
+    DIRECT = "direct"
+    FIELD_DEPENDENT = "field_dependent"
+    PROPOSE = "propose"
+    UNAVAILABLE = "unavailable"
+
+    @classmethod
+    def for_build(
+        cls, *, may_submit: bool, is_creator: bool, is_moderator: bool, status: BuildStatus | None
+    ) -> BuildEditMode:
+        if not may_submit:
+            return cls.UNAVAILABLE
+        if is_moderator:
+            return cls.DIRECT
+        if is_creator:
+            return cls.FIELD_DEPENDENT
+        return cls.PROPOSE if status is BuildStatus.APPROVED else cls.UNAVAILABLE

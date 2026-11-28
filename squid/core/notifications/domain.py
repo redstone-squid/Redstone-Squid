@@ -127,6 +127,7 @@ class _StoredRecord(BaseModel):
 
 
 class _StoredPayload(BaseModel):
+    submission_id: UUID | None = None
     model_config = ConfigDict(extra="ignore", strict=False)
     build_id: PositiveInt | None = Field(default=None, strict=True)
     records: list[_StoredRecord] = Field(default_factory=list)
@@ -145,6 +146,8 @@ class NotificationMessage:
     build: NotifiedBuild | None = None
     records: tuple[NotifiedRecord, ...] = ()
     account_ids: tuple[UUID, ...] = ()
+
+    submission_id: UUID | None = None
 
     @classmethod
     def from_payload(
@@ -168,11 +171,14 @@ class NotificationMessage:
             else NotifiedBuild(stored.build_id, (build_titles or {}).get(stored.build_id)),
             records=tuple(NotifiedRecord(record.title_id, record.title) for record in stored.records),
             account_ids=tuple(stored.account_ids),
+            submission_id=stored.submission_id,
         )
 
     @property
     def href(self) -> str | None:
         """The site path this message leads to: its build, or its only record."""
+        if self.submission_id is not None:
+            return f"/submissions/{self.submission_id}"
         if self.build is not None:
             return f"/builds/{self.build.id}"
         if len(self.records) == 1:

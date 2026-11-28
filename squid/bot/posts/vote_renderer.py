@@ -118,6 +118,8 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
                     key="proposed-changes",
                 ),
             )
+        elif target.reviewed_revision is not None and target.reviewed_revision != build.revision:
+            card = sd.v2.panel(sl.heading(sl.md(t"Build #{target.build_id} · revision {target.reviewed_revision}")))
         else:
             card = await render_build_card(
                 build,
@@ -133,7 +135,14 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
                     channel_id=channel_id,
                     guild_id=guild_id,
                     surface="build_review",
-                    payload=render_build_review(card, snapshot, guild_id),
+                    payload=render_build_review(
+                        card,
+                        snapshot,
+                        guild_id,
+                        f"{self.bot.notification_site_url}/submissions/{target.submission_id}?review_session_id={snapshot.id}"
+                        if target.submission_id and self.bot.notification_site_url
+                        else None,
+                    ),
                 )
             )
         return posts

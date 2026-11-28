@@ -13,6 +13,7 @@ from whenever import Instant
 from squid.core.accounts.domain import avatar_url_for
 from squid.core.accounts.domain.profiles import CreatorViewer
 from squid.core.accounts.errors import AccountNotFoundError
+from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.auth.application.viewer import SessionCounts, SessionUser, ViewerBallot
 from squid.core.builds.domain import BuildStatus
@@ -23,7 +24,12 @@ from squid.core.notifications.infrastructure.repository import inbox_predicates
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
-from squid.core.submissions.application.reviews import SubmissionDetail, SubmissionSummary
+from squid.core.submissions.application.reviews import (
+    CreditedBuild,
+    SubmissionDetail,
+    SubmissionStatus,
+    SubmissionSummary,
+)
 from squid.core.submissions.domain.drafts import DraftStatus
 from squid.core.submissions.models.entities import SubmissionDraft
 from squid.core.submissions.models.reviews import BuildSubmission
@@ -35,6 +41,26 @@ class PostgresViewerRepository:
     def __init__(self, session: Callable[[], AsyncSession]):
         self._session = session
 
+    async def portfolio(self, account_id: int, selector: PageSelector, page_size: int) -> Page[CreditedBuild]:
+        credits = attributed_credits(viewer_account_id=account_id)
+        rows = (
+            select(Build.id, Build.display_name, func.array_agg(credits.c.role))
+            .join(credits, credits.c.build_id == Build.id)
+            .where(credits.c.account_id == account_id, Build.submission_status == BuildStatus.APPROVED)
+            .group_by(Build.id)
+        )
+        session = self._session()
+        total = await session.scalar(select(func.count()).select_from(rows.subquery()))
+        page = await KeysetOrder("credited_builds", Build.id, Build.id, descending=True).page(
+            session, rows, selector, page_size=page_size, total=total or 0
+        )
+        return replace(
+            page,
+            items=tuple(
+                CreditedBuild(build_id, title, tuple(sorted(set(roles)))) for build_id, title, roles in page.items
+            ),
+        )
+
     @staticmethod
     def _submission_summary(row: BuildSubmission, title: str | None, status: BuildStatus | None) -> SubmissionSummary:
         submitted_title = row.content.get("display_name")
@@ -43,15 +69,19 @@ class PostgresViewerRepository:
             row.build_id,
             submitted_title if isinstance(submitted_title, str) else title,
             "new_build" if row.edit_vote_id is None else "edit",
-            row.decision,
+            SubmissionStatus(row.decision),
             row.submitted_at.to_stdlib(),
             status == BuildStatus.APPROVED,
             row.decided_revision,
         )
 
-    async def submissions(self, account_id: int, selector: PageSelector, page_size: int) -> Page[SubmissionSummary]:
+    async def submissions(
+        self, account_id: int | None, selector: PageSelector, page_size: int, *, status: str | None = None
+    ) -> Page[SubmissionSummary]:
         session = self._session()
-        where = BuildSubmission.submitter_account_id == account_id
+        where = BuildSubmission.submitter_account_id == account_id if account_id is not None else true()
+        if status is not None:
+            where = where & (BuildSubmission.decision == status)
         total = await session.scalar(select(func.count()).select_from(BuildSubmission).where(where))
         query = (
             select(BuildSubmission, Build.display_name, Build.submission_status)
@@ -59,11 +89,16 @@ class PostgresViewerRepository:
             .where(where)
         )
         page = await KeysetOrder(
-            "my_submissions", BuildSubmission.submitted_at, BuildSubmission.id, descending=True
+            "my_submissions" if account_id is not None else "submission_queue",
+            BuildSubmission.submitted_at,
+            BuildSubmission.id,
+            descending=account_id is not None,
         ).page(session, query, selector, page_size=page_size, total=total or 0)
         return replace(page, items=tuple(self._submission_summary(*row) for row in page.items))
 
-    async def submission(self, identifier: UUID, owner: int | None) -> SubmissionDetail | None:
+    async def submission(
+        self, identifier: UUID, owner: int | None, review_session_id: int | None = None
+    ) -> SubmissionDetail | None:
         session = self._session()
         query = (
             select(BuildSubmission, Build.display_name, Build.submission_status, Build.revision)
@@ -76,14 +111,17 @@ class PostgresViewerRepository:
         if found is None:
             return None
         row, title, status, revision = found
-        vote_id = row.edit_vote_id
-        if vote_id is None:
-            vote_id = await session.scalar(
-                select(BuildVoteSession.vote_session_id)
-                .where(BuildVoteSession.build_id == row.build_id, BuildVoteSession.proposal_revision.is_(None))
-                .order_by(BuildVoteSession.vote_session_id.desc())
-                .limit(1)
-            )
+        votes = select(BuildVoteSession).where(BuildVoteSession.build_id == row.build_id)
+        if row.edit_vote_id is not None:
+            votes = votes.where(BuildVoteSession.vote_session_id == row.edit_vote_id)
+        else:
+            votes = votes.where(BuildVoteSession.proposal_revision.is_(None))
+        if review_session_id is not None:
+            votes = votes.where(BuildVoteSession.vote_session_id == review_session_id)
+        vote = await session.scalar(votes.order_by(BuildVoteSession.vote_session_id.desc()).limit(1))
+        if review_session_id is not None and vote is None:
+            return None
+        vote_id = vote.vote_session_id if vote is not None else None
         # Retained execution inputs also carry private identity and installation data.
         fields = (
             "category",
@@ -104,8 +142,10 @@ class PostgresViewerRepository:
                 else {}
             )
         review_revision = row.base_revision or revision
-        if row.decided_revision is not None:
-            review_revision = row.base_revision or row.decided_revision - 1
+        if row.base_revision is None and row.decision != "pending":
+            review_revision = row.decided_revision - 1 if row.decided_revision else None
+        if review_session_id is not None and vote is not None:
+            review_revision = vote.proposal_revision or vote.reviewed_revision
         reviewed = (
             await session.scalar(
                 select(BuildHistorySnapshot.snapshot)
@@ -138,6 +178,7 @@ class PostgresViewerRepository:
             cast(dict[str, JsonValue], facts),
             review_revision,
             reviewed_facts,
+            feedback=row.feedback if row.decision == "rejected" else None,
         )
 
     async def session(self, account_id: int, *, staff: bool) -> tuple[SessionUser, SessionCounts]:
@@ -148,7 +189,7 @@ class PostgresViewerRepository:
                 *inbox_predicates(account_id, InboxVisibility(include_staff=staff)), InboxNotification.read_at.is_(None)
             )
         )
-        queue = select(func.count()).select_from(Build).where(Build.submission_status == BuildStatus.PENDING)
+        queue = select(func.count()).select_from(BuildSubmission).where(BuildSubmission.decision == "pending")
         drafts = select(
             func.count(SubmissionDraft.id).label("active"),
             func.count(SubmissionDraft.id)

@@ -19,7 +19,12 @@ from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.permissions.domain.models import NodeScope
-from squid.core.submissions.application.reviews import SubmissionDetail, SubmissionSummary
+from squid.core.submissions.application.reviews import (
+    CreditedBuild,
+    SubmissionDetail,
+    SubmissionStatus,
+    SubmissionSummary,
+)
 from squid.core.unit_of_work import UnitOfWorkFactory
 
 
@@ -47,8 +52,13 @@ class ViewerBallot:
 
 
 class ViewerRepository(Protocol):
-    async def submissions(self, account_id: int, selector: PageSelector, page_size: int) -> Page[SubmissionSummary]: ...
-    async def submission(self, identifier: UUID, owner: int | None) -> SubmissionDetail | None: ...
+    async def portfolio(self, account_id: int, selector: PageSelector, page_size: int) -> Page[CreditedBuild]: ...
+    async def submissions(
+        self, account_id: int | None, selector: PageSelector, page_size: int, *, status: str | None = None
+    ) -> Page[SubmissionSummary]: ...
+    async def submission(
+        self, identifier: UUID, owner: int | None, review_session_id: int | None = None
+    ) -> SubmissionDetail | None: ...
     async def session(self, account_id: int, *, staff: bool) -> tuple[SessionUser, SessionCounts]: ...
     async def build_state(self, account_id: int, build: Build) -> tuple[dict[UUID, int], ViewerBallot | None]: ...
     async def subscription(
@@ -73,14 +83,30 @@ class ViewerQueries:
         return account_id
 
     @application_operation
+    async def portfolio(self, selector: PageSelector, page_size: int, *, context: ActingContext) -> Page[CreditedBuild]:
+        async with self._uow_factory() as uow:
+            return await uow.viewer.portfolio(await self._reader(context, uow), selector, page_size)
+
+    @application_operation
     async def submissions(
+        self, selector: PageSelector, page_size: int, *, status: SubmissionStatus | None = None, context: ActingContext
+    ) -> Page[SubmissionSummary]:
+        async with self._uow_factory() as uow:
+            return await uow.viewer.submissions(await self._reader(context, uow), selector, page_size, status=status)
+
+    @application_operation
+    async def review_queue(
         self, selector: PageSelector, page_size: int, *, context: ActingContext
     ) -> Page[SubmissionSummary]:
         async with self._uow_factory() as uow:
-            return await uow.viewer.submissions(await self._reader(context, uow), selector, page_size)
+            await self._reader(context, uow)
+            await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)
+            return await uow.viewer.submissions(None, selector, page_size, status="pending")
 
     @application_operation
-    async def submission(self, identifier: UUID, *, context: ActingContext) -> SubmissionDetail:
+    async def submission(
+        self, identifier: UUID, *, context: ActingContext, review_session_id: int | None = None
+    ) -> SubmissionDetail:
         async with self._uow_factory() as uow:
             owner = await self._reader(context, uow)
             allowed = await self._permissions.check(
@@ -91,13 +117,16 @@ class ViewerQueries:
                 uow=uow,
             )
             detail = await uow.viewer.submission(
-                identifier, None if BUILD_SUBMISSION_VIEW_PENDING.name in allowed.allowed_nodes else owner
+                identifier,
+                None if BUILD_SUBMISSION_VIEW_PENDING.name in allowed.allowed_nodes else owner,
+                review_session_id,
             )
             if detail is None:
                 raise NotFoundError
             can_decide = (
                 detail.submission.kind == "new_build"
                 and detail.submission.status == "pending"
+                and review_session_id is None
                 and bool(detail.reviewed_facts)
             )
             return replace(

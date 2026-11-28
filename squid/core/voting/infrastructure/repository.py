@@ -96,7 +96,13 @@ class VoteRepository:
         self._session = session
 
     async def create_build_edit_session(
-        self, *, author_account_id: int, pass_threshold: int, fail_threshold: int, target: BuildEditVoteTarget
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        target: BuildEditVoteTarget,
+        submitter_account_id: int,
     ) -> int:
         session = self._session()
         guild_ids = (
@@ -111,9 +117,11 @@ class VoteRepository:
         session_id = await self._create_session(
             session, author_account_id, VoteKind.BUILD_EDIT, pass_threshold, fail_threshold, menu
         )
+        assert target.submission_id is not None
         submission = BuildSubmission(
+            id=target.submission_id,
             build_id=target.build_id,
-            submitter_account_id=author_account_id,
+            submitter_account_id=submitter_account_id,
             edit_vote_id=session_id,
             base_revision=target.revision,
             content={"patch": dict(target.patch), "changes": list(target.changes)},
@@ -700,7 +708,7 @@ class VoteRepository:
         return None if row is None else GuildMember(row.discord_user_id, frozenset(row.role_ids), row.manage_server)
 
     async def record_members(self, guild_id: int, members: Sequence[GuildMember], *, complete: bool) -> None:
-        """Upsert the members that belong to consented accounts; others are not stored."""
+        """Store guild roles for members with a linked Discord account."""
         session = self._session()
         synced_at = Instant.now().round("microsecond", mode="floor")
         by_discord_id = {member.discord_user_id: member for member in members}

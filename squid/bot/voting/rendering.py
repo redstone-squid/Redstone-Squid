@@ -12,7 +12,7 @@ from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.bot.voting.poll_display import poll_choices, poll_question
 from squid.core.voting.domain import VoteChoice, VoteOption, Voter, VoteSessionResult, VoteSessionSnapshot, VoteStatus
-from squid_i18n import discord_markup
+from squid_i18n import Text, discord_markup
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -45,6 +45,7 @@ def render_build_review(
     card: sl.LayoutNode[ComponentsV2Target, sd.Request],
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
+    submission_url: str | None = None,
 ) -> sd.messages.payload.MessagePayload:
     """Compose a build card with the review vote state beneath it.
 
@@ -76,6 +77,8 @@ def render_build_review(
         )
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
+    if submission_url:
+        vote_text = Text.join("\n", [vote_text, sl.md(t"[View submission]({submission_url})")])
     state = (sd.v2.separator(), sd.v2.text(vote_text, overflow=primitives.Never()))
     # Add vote state to the card's children to keep one container and one shared
     # display budget for build fields and voting instructions.

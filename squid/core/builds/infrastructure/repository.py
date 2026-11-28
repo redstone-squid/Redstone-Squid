@@ -73,6 +73,7 @@ from squid.core.persistence.paging import KeysetOrder
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
 from squid.core.search.models import SearchDocument
 from squid.core.settings.infrastructure.repository import ensure_server_settings
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.infrastructure.loading import assignment_units, definition_units
 from squid.core.tags.models import (
@@ -963,9 +964,14 @@ class BuildRepository:
 
         await self._set_status(build, BuildStatus.REJECTED, operation="reject")
 
-    async def set_status(self, build: Build, status: BuildStatus) -> None:
+    async def set_status(self, build: Build, status: BuildStatus, *, feedback: str | None = None) -> None:
         """Write a review status, including PENDING when undoing a decision."""
         await self._set_status(build, status, operation="review")
+        await self._session().execute(
+            update(BuildSubmission)
+            .where(BuildSubmission.build_id == build.id, BuildSubmission.edit_vote_id.is_(None))
+            .values(feedback=feedback)
+        )
 
     async def _set_status(self, build: Build, status: BuildStatus, *, operation: str) -> None:
         assert build.id is not None

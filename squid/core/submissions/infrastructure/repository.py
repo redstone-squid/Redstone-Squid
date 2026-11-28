@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, replace
+from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID
 
@@ -192,7 +192,10 @@ class PostgresDraftRepository(DraftRepository):
     async def finish_edit(self, draft_id: UUID, result: DraftEditResult, now: Instant) -> None:
         model = await self._locked(self._session(), draft_id)
         assert model.edit_source is not None
-        model.edit_source = {**model.edit_source, "result": asdict(result)}
+        model.edit_source = {
+            **model.edit_source,
+            "result": TypeAdapter(DraftEditResult).dump_python(result, mode="json"),
+        }
         model.status = DraftStatus.SUBMITTED
         model.revision += 1
         model.updated_at = now

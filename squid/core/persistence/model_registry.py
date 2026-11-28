@@ -26,6 +26,7 @@ from squid.core.submissions.models import entities as submission_models
 from squid.core.submissions.models import finalization as submission_finalization_models
 from squid.core.submissions.models import intake as submission_intake_models
 from squid.core.submissions.models import recalculation as submission_recalculation_models
+from squid.core.submissions.models import reviews as submission_review_models
 from squid.core.submissions.models import schematics as submission_schematic_models
 from squid.core.sync import models as sync_models
 from squid.core.tags import models as tag_models
@@ -60,6 +61,7 @@ __all__ = [
     "submission_intake_models",
     "submission_models",
     "submission_recalculation_models",
+    "submission_review_models",
     "submission_schematic_models",
     "sync_models",
     "tag_models",

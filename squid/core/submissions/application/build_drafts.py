@@ -142,12 +142,15 @@ class BuildDraftEditor:
                     raise ValidationError(message)
             patch = patch_from_answers(saved, answers, saved.unresolved, options)
             command = EditCommand(BUILD_EDIT, (expected,), patch_values(patch), draft_id)
-            prepared = await self.handler.prepare(uow, actor, command)
+            prepared = await self.handler.prepare(uow, actor, command, draft_owner_id=current.snapshot.owner_account_id)
             revisions = (
                 await self.handler.apply(uow, actor, command, prepared) if prepared.changed else prepared.revisions
             )
             result = DraftEditResult(
-                build_id=build.id, revision=revisions[0].value, review_vote_id=prepared.review_vote_id
+                build_id=build.id,
+                revision=revisions[0].value,
+                review_vote_id=prepared.review_vote_id,
+                submission_id=prepared.submission_id,
             )
             await uow.submission_drafts.finish_edit(draft_id, result, Instant.now())
             await uow.commit()

@@ -20,6 +20,7 @@ BUILD_CREDITS = table(
     column("kind"),
     column("subject"),
     column("name"),
+    column("role"),
 )
 """A lightweight handle on build credits.
 
@@ -28,20 +29,20 @@ whole `Build` relationship graph into the accounts context.
 """
 
 
-def attributed_credits() -> Subquery:
+def attributed_credits(*, viewer_account_id: int | None = None) -> Subquery:
     """Build credits with the account each one publicly belongs to.
 
     An explicit build-credit owner takes precedence. A provider match is public
     only while its identity is public. Hidden profiles never identify a credit.
 
-    Columns: `build_id`, `position`, `name`, `account_id`.
+    A signed-in viewer also sees their own private attributions.
     """
     provider = case(
         (BUILD_CREDITS.c.kind == "discord", "discord"),
         (BUILD_CREDITS.c.kind == "minecraft_java", "java"),
         (BUILD_CREDITS.c.kind == "minecraft_bedrock", "bedrock"),
     )
-    credit = (BUILD_CREDITS.c.build_id, BUILD_CREDITS.c.position, BUILD_CREDITS.c.name)
+    credit = (BUILD_CREDITS.c.build_id, BUILD_CREDITS.c.position, BUILD_CREDITS.c.name, BUILD_CREDITS.c.role)
     owners = union(
         select(*credit, AccountIdentity.account_id)
         .join(
@@ -49,7 +50,9 @@ def attributed_credits() -> Subquery:
             (AccountIdentity.subject == BUILD_CREDITS.c.subject) & (AccountIdentity.provider == provider),
         )
         .where(
-            AccountIdentity.is_public.is_(True),
+            AccountIdentity.is_public.is_(True) | (AccountIdentity.account_id == viewer_account_id)
+            if viewer_account_id is not None
+            else AccountIdentity.is_public.is_(True),
             BUILD_CREDITS.c.account_id.is_(None),
             BUILD_CREDITS.c.account_source == "automatic",
         ),
@@ -58,7 +61,11 @@ def attributed_credits() -> Subquery:
     return (
         select(owners)
         .outerjoin(AccountProfile, AccountProfile.account_id == owners.c.account_id)
-        .where(AccountProfile.hidden.is_not(True))
+        .where(
+            AccountProfile.hidden.is_not(True) | (owners.c.account_id == viewer_account_id)
+            if viewer_account_id is not None
+            else AccountProfile.hidden.is_not(True)
+        )
         .subquery("attributed_credits")
     )
 

@@ -38,3 +38,4 @@ class BuildSubmission(Base, kw_only=True):
     content: Mapped[dict[str, object]] = mapped_column(JSONB)
     decision: Mapped[str] = mapped_column(Text, default="pending", server_default=text("'pending'"))
     decided_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    feedback: Mapped[str | None] = mapped_column(Text, default=None)

@@ -61,6 +61,7 @@ from squid.core.permissions.domain.catalogue import (
     ACCOUNT_SELF_MANAGE,
     ACCOUNT_SELF_READ,
 )
+from squid.core.submissions.application.reviews import CreditedBuild
 
 
 class LinkedIdentityDTO(SQLAlchemyDTO[AccountIdentity]):
@@ -589,6 +590,31 @@ async def own_credit_claims(
     return Page.from_domain(page, CreditClaimDetail.from_claim)
 
 
+@get(
+    "/me/builds",
+    operation_id="account_credited_builds",
+    security=[WEB],
+    opt=contract(cli=browser_only()),
+    responses=responses(401, 403, 422, 503),
+    response_headers={"Cache-Control": "private, no-store"},
+)
+async def credited_builds(
+    services: Services,
+    caller: CurrentCaller,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[CreditedBuild]:
+    """List published builds credited to this account, including its private attributions."""
+    if caller.kind != "account":
+        raise AuthenticationError
+    return Page.from_domain(
+        await services.viewer_queries.portfolio(
+            resolve_selector(offset=offset, cursor=cursor), page_size, context=caller.context()
+        )
+    )
+
+
 router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
@@ -598,6 +624,7 @@ router = Router(
     path="/accounts",
     tags=["accounts"],
     route_handlers=[
+        credited_builds,
         get_me,
         own_credit_claims,
         account_creator_stats,

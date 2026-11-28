@@ -1,6 +1,7 @@
 """Ballot-safe vote-session representations."""
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -115,6 +116,7 @@ class VoteSessionDetail(BaseModel):
     result: VoteSessionResult
     pass_threshold: int | None
     fail_threshold: int | None
+    submission_id: UUID | None = None
     build_id: int | None
     options: list[VoteOptionSummary]
     tallies: VoteTallies | None
@@ -146,6 +148,9 @@ class VoteSessionDetail(BaseModel):
             result=session.result,
             pass_threshold=session.pass_threshold,
             fail_threshold=session.fail_threshold,
+            submission_id=session.target.submission_id
+            if isinstance(session.target, BuildVoteTarget | BuildEditVoteTarget)
+            else None,
             build_id=session.target.build_id
             if isinstance(session.target, BuildVoteTarget | BuildEditVoteTarget)
             else None,

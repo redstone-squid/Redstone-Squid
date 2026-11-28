@@ -13,7 +13,7 @@ from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.auth.application.viewer import SessionCounts, SessionUser
 from squid.core.builds.application.queries import PublicBuildPreview
-from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
+from squid.core.builds.domain.edit_policy import BuildEditMode
 from squid.core.builds.models import Build
 from squid.core.notifications.domain import RecordSubscriptionFilter, SubscriptionKind, TagPredicate
 from squid.core.permissions.domain.catalogue import (
@@ -100,21 +100,18 @@ class BrowserViews:
                 self.caller.to_actor(), BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_EDIT, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE
             )
             allowed = permissions.allowed_nodes
-            can_edit = (
-                BUILD_SUBMISSION_CREATE.name in allowed
-                and decide_build_edit(
-                    set(),
-                    status=build.submission_status,
-                    is_creator=build.is_creator(self.account_id),
-                    is_moderator=BUILD_SUBMISSION_EDIT.name in allowed,
-                )
-                is not BuildEditDecision.DENY
+            edit_mode = BuildEditMode.for_build(
+                may_submit=BUILD_SUBMISSION_CREATE.name in allowed,
+                is_creator=build.is_creator(self.account_id),
+                is_moderator=BUILD_SUBMISSION_EDIT.name in allowed,
+                status=build.submission_status,
             )
             # This route currently serves only approved builds.
             detail = replace(
                 detail,
                 viewer=BuildViewer(
-                    can_edit=can_edit,
+                    can_edit=edit_mode in {BuildEditMode.DIRECT, BuildEditMode.FIELD_DEPENDENT},
+                    edit_mode=edit_mode,
                     can_review=False,
                     can_download_private_schematics=BUILD_SCHEMATIC_DOWNLOAD_PRIVATE.name in allowed,
                     followed_account_subscription_ids=follows,

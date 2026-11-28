@@ -9,6 +9,7 @@ writer, including callers which also use the longer application lease.
 
 from dataclasses import dataclass
 from typing import Protocol, cast
+from uuid import UUID, uuid4
 
 from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.edit_schema import BuildPatch
@@ -63,7 +64,13 @@ class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, PermissionUnitOfWork,
 
 class BuildEditVoteWriter(Protocol):
     async def create_build_edit_session(
-        self, *, author_account_id: int, pass_threshold: int, fail_threshold: int, target: BuildEditVoteTarget
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        target: BuildEditVoteTarget,
+        submitter_account_id: int,
     ) -> int: ...
 
 
@@ -75,6 +82,7 @@ class BuildFieldsUnitOfWork(BuildEditUnitOfWork, SettingsUnitOfWork, Protocol):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PreparedBuildEdit(PreparedEdit):
     build: Build
+    submission_id: UUID | None = None
 
 
 class BuildFieldsEdit:
@@ -82,7 +90,9 @@ class BuildFieldsEdit:
         self._builds = builds
         self._suggestions = suggestions
 
-    async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
+    async def prepare(
+        self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand, *, draft_owner_id: int | None = None
+    ) -> PreparedBuildEdit:
         if actor.linked_account_id is None:
             raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
@@ -142,16 +152,29 @@ class BuildFieldsEdit:
             raise AuthorizationError(public_context={"fields": sorted(changed)})
         if decision is BuildEditDecision.REVIEW:
             settings = await uow.settings.runtime(RuntimeSettings())
+            submission_id = uuid4()
             vote_id = await uow.votes.create_build_edit_session(
                 author_account_id=actor.linked_account_id,
+                submitter_account_id=draft_owner_id or actor.linked_account_id,
                 pass_threshold=settings.build_vote_pass_threshold,
                 fail_threshold=settings.build_vote_fail_threshold,
                 target=BuildEditVoteTarget(
-                    build_id, expected.value, patch_values(candidate).unpack(), changes, public_suggestion=suggestion
+                    build_id,
+                    expected.value,
+                    patch_values(candidate).unpack(),
+                    changes,
+                    public_suggestion=suggestion,
+                    submission_id=submission_id,
                 ),
             )
             return PreparedBuildEdit(
-                before, before, final=True, review_vote_id=vote_id, build=build, revisions=(expected,)
+                before,
+                before,
+                final=True,
+                review_vote_id=vote_id,
+                submission_id=submission_id,
+                build=build,
+                revisions=(expected,),
             )
         return PreparedBuildEdit(before, after, build=build, revisions=(expected,))
 
@@ -182,6 +205,13 @@ class BuildStatusEdit:
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
             raise ValidationError
         values = command.values.unpack()
+        feedback = values.pop("feedback", None)
+        if feedback is not None and (
+            not isinstance(feedback, str)
+            or len(feedback) > 2000
+            or values.get("submission_status") != BuildStatus.REJECTED
+        ):
+            raise ValidationError
         if values.keys() != {"submission_status"}:
             raise ValidationError
         try:
@@ -224,5 +254,10 @@ class BuildStatusEdit:
             correlation_kind="edit_operation",
             correlation_id=str(command.operation_id),
         ):
-            await uow.builds.set_status(prepared.build, BuildStatus(prepared.after.unpack()["submission_status"]))
+            feedback = command.values.unpack().get("feedback")
+            await uow.builds.set_status(
+                prepared.build,
+                BuildStatus(prepared.after.unpack()["submission_status"]),
+                feedback=feedback if isinstance(feedback, str) else None,
+            )
         return (Revision(command.expected[0].target, prepared.build.revision),)

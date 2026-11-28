@@ -1,6 +1,7 @@
 """The source revision retained by a draft editing a published build."""
 
 from dataclasses import dataclass
+from uuid import UUID
 
 from squid.core.errors import JSONValue
 
@@ -10,6 +11,7 @@ class DraftEditResult:
     build_id: int
     revision: int
     review_vote_id: int | None
+    submission_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

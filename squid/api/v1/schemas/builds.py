@@ -15,6 +15,7 @@ from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain.edit_policy import BuildEditMode
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.history import BuildLastEdit, HistoryActor
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
@@ -139,6 +140,7 @@ def _details(build: Build) -> BuildDetails:
 
 @dataclass(frozen=True, slots=True)
 class BuildViewer:
+    edit_mode: BuildEditMode
     can_edit: bool
     can_review: bool
     can_download_private_schematics: bool

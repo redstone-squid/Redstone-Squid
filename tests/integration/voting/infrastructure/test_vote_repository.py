@@ -893,7 +893,7 @@ async def test_every_ballot_change_is_kept_as_an_event(
     ]
 
 
-async def test_only_consented_accounts_have_their_guild_roles_stored(
+async def test_linked_accounts_have_their_guild_roles_stored_regardless_of_notice_receipt(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -914,7 +914,7 @@ async def test_only_consented_accounts_have_their_guild_roles_stored(
     await transact(repository, lambda uow: uow.votes.record_members(GUILD_ID, members, complete=False), commit=True)
 
     assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, consented)) == members[0]
-    assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, pending)) is None
+    assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, pending)) == members[1]
 
     # A complete sync without the member forgets them.
     await transact(repository, lambda uow: uow.votes.record_members(GUILD_ID, (), complete=True), commit=True)

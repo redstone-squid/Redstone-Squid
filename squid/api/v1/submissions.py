@@ -7,7 +7,8 @@ reports required corrections or processing waits, or starts a durable
 finalization attempt that produces a build.
 """
 
-from typing import Annotated, Protocol, cast
+from dataclasses import dataclass
+from typing import Annotated, Literal, Protocol, cast
 from uuid import UUID
 
 from litestar import Request, Response, Router, delete, get, post
@@ -15,6 +16,7 @@ from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
 from litestar.params import (
     FromPath,
+    FromQuery,
     HeaderParameter,
     JSONBody,
     PathParameter,
@@ -23,9 +25,15 @@ from litestar.params import (
 )
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
+from squid.api.dependencies import Services
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
-from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
+from squid.api.idempotency import (
+    edit_operation_id,
+    reserve_edit_before_request,
+    reserve_edit_request,
+    reserve_idempotent_request,
+)
 from squid.api.pagination import (
     CursorParam,
     OffsetParam,
@@ -51,8 +59,10 @@ from squid.api.v1.schemas.submissions import (
     SubmissionAttemptResponse,
 )
 from squid.core.actors import ActingContext
+from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
+from squid.core.builds.domain import BuildStatus
 from squid.core.edits.application import EditRunner
-from squid.core.edits.domain import Revision
+from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.pagination import Page as ResultPage
@@ -66,6 +76,7 @@ from squid.core.submissions.application import (
 )
 from squid.core.submissions.application.edits import change_command, draft_target
 from squid.core.submissions.application.finalization import DraftEditor
+from squid.core.submissions.application.reviews import SubmissionDetail, SubmissionStatus, SubmissionSummary
 from squid.core.submissions.domain import FormManifest, FormProgress, SubmissionOrigin
 from squid.core.submissions.domain.build_edit import DraftEditResult
 
@@ -460,7 +471,7 @@ async def create_draft(
             locale_for_request(request),
             context=caller.context(),
         )
-        return StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
+        return StoredDraftResponse.from_domain(draft, await drafts.progress(draft), caller.require_account_id())
     draft = await drafts.create(
         owner_account_id=caller.require_account_id(),
         context=caller.context(),
@@ -470,7 +481,7 @@ async def create_draft(
         locale=locale_for_request(request),
         source_installation_id=caller.installation_id,
     )
-    return StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
+    return StoredDraftResponse.from_domain(draft, await drafts.progress(draft), caller.require_account_id())
 
 
 @get(
@@ -491,11 +502,13 @@ async def create_draft(
 async def get_draft(
     draft_id: FromPath[UUID], drafts: Drafts, context: SubmissionContext
 ) -> Response[StoredDraftResponse]:
-    """Return one draft after enforcing caller ownership."""
+    """Return a draft to its owner or an authorized correction editor."""
     response_headers: dict[str, str] = {}
     draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
-    content = StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
+    content = StoredDraftResponse.from_domain(
+        draft, await drafts.progress(draft), context.effective.require_account_id()
+    )
     return Response(content=content, headers=response_headers, status_code=200)
 
 
@@ -537,7 +550,10 @@ async def change_draft(
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(
         content=DraftChangeResponse(
-            draft=StoredDraftResponse.from_domain(draft, await drafts.progress(draft)), replayed=result.replayed
+            draft=StoredDraftResponse.from_domain(
+                draft, await drafts.progress(draft), context.effective.require_account_id()
+            ),
+            replayed=result.replayed,
         ),
         headers=response_headers,
         status_code=200,
@@ -577,7 +593,9 @@ async def upgrade_draft_manifest(
         target_revision=data.target_revision,
         locale=locale_for_request(request),
     )
-    draft = StoredDraftResponse.from_domain(result.draft, await drafts.progress(result.draft))
+    draft = StoredDraftResponse.from_domain(
+        result.draft, await drafts.progress(result.draft), context.effective.require_account_id()
+    )
     return DraftManifestUpgradeResponse(draft=draft, replayed=result.replayed)
 
 
@@ -731,10 +749,133 @@ async def delete_draft(
     return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 
+async def submission_reader(caller: NamedDependency[SkipValidation[Caller]]) -> ActingContext:
+    """Use browser session authority for account portfolio and reviewer reads."""
+    if caller.kind != "account":
+        raise AuthenticationError
+    return caller.context()
+
+
+@get(
+    "/",
+    dependencies={"context": Provide(submission_reader)},
+    operation_id="submissions_list",
+    security=[WEB],
+    opt=contract(cli=transport_only()),
+    responses=responses(401, 403, 422, 503),
+)
+@private_response
+async def list_submissions(
+    services: Services,
+    context: SubmissionContext,
+    status: FromQuery[SubmissionStatus | None] = None,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[SubmissionSummary]:
+    """List the signed-in account's submissions, newest first."""
+    page = await services.viewer_queries.submissions(
+        resolve_selector(offset=offset, cursor=cursor), page_size, status=status, context=context
+    )
+    return Page.from_domain(page)
+
+
+@get(
+    "/{submission_id:uuid}",
+    dependencies={"context": Provide(submission_reader)},
+    operation_id="submissions_get",
+    security=[WEB],
+    opt=contract(cli=transport_only()),
+    responses=responses(401, 403, 404, 422, 503),
+)
+@private_response
+async def get_submission(
+    submission_id: FromPath[UUID],
+    services: Services,
+    context: SubmissionContext,
+    review_session_id: FromQuery[int | None] = None,
+) -> SubmissionDetail:
+    """Open one submission as its submitter or an authorized reviewer."""
+    return await services.viewer_queries.submission(submission_id, context=context, review_session_id=review_session_id)
+
+
+@get(
+    "/review-queue",
+    operation_id="submissions_review_queue",
+    security=[WEB],
+    opt=contract(cli=transport_only()),
+    responses=responses(401, 403, 422, 503),
+    dependencies={"context": Provide(submission_reader)},
+)
+@private_response
+async def submission_review_queue(
+    services: Services,
+    context: SubmissionContext,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[SubmissionSummary]:
+    """List pending new builds and edits for authorized reviewers, oldest first."""
+    return Page.from_domain(
+        await services.viewer_queries.review_queue(
+            resolve_selector(offset=offset, cursor=cursor), page_size, context=context
+        )
+    )
+
+
+@dataclass
+class SubmissionDecision:
+    revision: int
+    decision: Literal["approve", "reject"]
+    feedback: str | None = None
+
+
+@post(
+    "/{submission_id:uuid}/decision",
+    operation_id="submissions_decide",
+    security=[WEB_WRITE],
+    opt=contract(cli=transport_only()),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    status_code=200,
+    before_request=reserve_edit_before_request,
+    dependencies={
+        "context": Provide(submission_reader),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
+)
+@private_response
+async def decide_submission(
+    submission_id: FromPath[UUID],
+    data: JSONBody[SubmissionDecision],
+    services: Services,
+    context: SubmissionContext,
+    operation_id: NamedDependency[UUID],
+) -> SubmissionDetail:
+    """Apply a review decision to the displayed candidate revision."""
+    detail = await services.viewer_queries.submission(submission_id, context=context)
+    if detail.submission.kind != "new_build":
+        raise AuthorizationError
+    status = BuildStatus.APPROVED if data.decision == "approve" else BuildStatus.REJECTED
+    await services.edits.execute(
+        EditCommand(
+            BUILD_STATUS_EDIT,
+            (Revision(build_target(detail.submission.build_id), data.revision),),
+            EditValues.of({"submission_status": status.value, "feedback": data.feedback}),
+            operation_id,
+        ),
+        context=context,
+    )
+    return await services.viewer_queries.submission(submission_id, context=context)
+
+
 router = Router(
     path="/submissions",
     tags=["submissions"],
     route_handlers=[
+        decide_submission,
+        submission_review_queue,
+        list_submissions,
+        get_submission,
         list_correction_inbox,
         list_drafts,
         current_form,
