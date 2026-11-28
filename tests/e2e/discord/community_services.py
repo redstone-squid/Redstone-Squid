@@ -194,7 +194,14 @@ class PublishedTags(TagService):
         pass
 
     @override
-    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
+    async def public_definitions(
+        self,
+        *,
+        kind: TagSemanticKind | None = None,
+        authority: TagAuthority | None = None,
+        q: str = "",
+        context: ActingContext,
+    ) -> Sequence[TagDefinition]:
         return (
             TagDefinition(
                 id=4,

@@ -12671,6 +12671,12 @@ export type TagsListData = {
     };
     path?: never;
     query?: {
+        kind?: TagSemanticKind | null;
+        authority?: TagAuthority | null;
+        /**
+         * Case-insensitive display name or alias prefix.
+         */
+        q?: string;
         /**
          * Maximum number of items to return.
          */

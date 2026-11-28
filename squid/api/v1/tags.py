@@ -13,6 +13,7 @@ from squid.api.errors import responses
 from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.browser_views import BrowserViews, TagDetail
 from squid.core.actors import ActingContext
+from squid.core.tags.domain import TagAuthority, TagSemanticKind
 from squid.core.tags.errors import TagNotFoundError
 from squid.core.tags.models import TagDefinition, TagListSort
 
@@ -57,13 +58,16 @@ class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
 )
 async def list_tags(
     tags: Tags,
+    kind: FromQuery[TagSemanticKind | None] = None,
+    authority: FromQuery[TagAuthority | None] = None,
+    q: Annotated[str, QueryParameter(description="Case-insensitive display name or alias prefix.")] = "",
     page_size: PageSizeParam = 50,
     sort: FromQuery[TagListSort] = TagListSort.DISPLAY,
     cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[TagDefinition]:
     """List published tag definitions."""
-    definitions = await tags.public_definitions(context=ActingContext.current())
+    definitions = await tags.public_definitions(kind=kind, authority=authority, q=q, context=ActingContext.current())
     page = sort.page(definitions, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
     return Page[TagDefinition].from_domain(page)
 

@@ -27494,6 +27494,56 @@
         "operationId": "tags_list",
         "parameters": [
           {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/TagSemanticKind"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "authority",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/TagAuthority"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "Case-insensitive display name or alias prefix.",
+              "default": ""
+            },
+            "description": "Case-insensitive display name or alias prefix.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "page_size",
             "in": "query",
             "schema": {

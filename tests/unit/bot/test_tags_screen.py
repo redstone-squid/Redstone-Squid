@@ -62,7 +62,14 @@ class FakeTagService(TagService):
         self.approvals: list[int] = []
 
     @override
-    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
+    async def public_definitions(
+        self,
+        *,
+        kind: TagSemanticKind | None = None,
+        authority: TagAuthority | None = None,
+        q: str = "",
+        context: ActingContext,
+    ) -> Sequence[TagDefinition]:
         self.public_reads += 1
         return (self.published,)
 

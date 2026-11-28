@@ -70,6 +70,17 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     redone = await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
     await restrictions.add_alias("Restriction", "Other alias", context=ActingContext.direct(AnonymousActor()))
+    tags = TagService(uow_factory=factory)
+    context = ActingContext.direct(AnonymousActor())
+    for prefix in ("ReSt", "aLt", " other  A "):
+        matches = await tags.public_definitions(
+            kind=TagSemanticKind.RESTRICTION, authority=TagAuthority.OFFICIAL, q=prefix, context=context
+        )
+        assert [tag.id for tag in matches] == [definition.id]
+    for prefix in ("ternate", "%", "_"):
+        assert not await tags.public_definitions(q=prefix, context=context)
+    assert not await tags.public_definitions(kind=TagSemanticKind.PATTERN, q="alternate", context=context)
+    assert not await tags.public_definitions(authority=TagAuthority.USER, q="alternate", context=context)
     with pytest.raises(RevisionConflictError):
         await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
 

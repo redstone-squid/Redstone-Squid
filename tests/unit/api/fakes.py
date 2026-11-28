@@ -113,6 +113,7 @@ from squid.core.submissions.domain.schematics import DraftSchematic
 from squid.core.submissions.errors import DraftNotFoundError
 from squid.core.suggestions.application import SuggestionRegistry, SuggestionService
 from squid.core.tags.application import TagService
+from squid.core.tags.domain import TagAuthority, TagSemanticKind
 from squid.core.tags.models import TagDefinition
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
@@ -332,7 +333,14 @@ class MockTags(TagService):
         """Publish no tags."""
 
     @override
-    async def public_definitions(self, *, context: ActingContext) -> tuple[TagDefinition, ...]:
+    async def public_definitions(
+        self,
+        *,
+        kind: TagSemanticKind | None = None,
+        authority: TagAuthority | None = None,
+        q: str = "",
+        context: ActingContext,
+    ) -> tuple[TagDefinition, ...]:
         return ()
 
     @override

@@ -8,7 +8,7 @@ from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.core.tags.domain import TagModerationStatus, TagValueType
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
 from squid.core.unit_of_work import UnitOfWorkFactory
 
@@ -35,7 +35,9 @@ class TagDefinitionRepository(Protocol):
 
     async def get(self, tag_id: int | str) -> TagDefinition | None: ...
 
-    async def approved(self) -> Sequence[TagDefinition]: ...
+    async def approved(
+        self, *, kind: TagSemanticKind | None = None, authority: TagAuthority | None = None, q: str = ""
+    ) -> Sequence[TagDefinition]: ...
 
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
 
@@ -63,10 +65,17 @@ class TagService:
             return await uow.tags.pending()
 
     @application_operation
-    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
+    async def public_definitions(
+        self,
+        *,
+        kind: TagSemanticKind | None = None,
+        authority: TagAuthority | None = None,
+        q: str = "",
+        context: ActingContext,
+    ) -> Sequence[TagDefinition]:
         """List tag definitions available to public search and build clients."""
         async with self._uow_factory() as uow:
-            return await uow.tags.approved()
+            return await uow.tags.approved(kind=kind, authority=authority, q=q)
 
     @application_operation
     async def public_definition(self, tag_id: int | str, *, context: ActingContext) -> TagDefinition | None:

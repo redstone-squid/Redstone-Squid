@@ -122,18 +122,30 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         return await flush_revision(self._session(), definition, expected)
 
     @override
-    async def approved(self) -> Sequence[TagDefinition]:
+    async def approved(
+        self, *, kind: TagSemanticKind | None = None, authority: TagAuthority | None = None, q: str = ""
+    ) -> Sequence[TagDefinition]:
         session = self._session()
-        rows = (
-            await session.scalars(
-                select(TagDefinition)
-                .where(
-                    TagDefinition.moderation_status == TagModerationStatus.APPROVED, TagDefinition.withdrawn.is_(False)
+        statement = select(TagDefinition).where(
+            TagDefinition.moderation_status == TagModerationStatus.APPROVED, TagDefinition.withdrawn.is_(False)
+        )
+        if kind is not None:
+            statement = statement.where(TagDefinition.semantic_kind == kind)
+        if authority is not None:
+            statement = statement.where(TagDefinition.authority == authority)
+        prefix = " ".join(q.casefold().split())
+        if prefix:
+            statement = statement.where(
+                or_(
+                    TagDefinition.normalized_name.startswith(prefix, autoescape=True),
+                    TagDefinition.aliases.any(TagAlias.normalized_alias.startswith(prefix, autoescape=True)),
                 )
-                .order_by(TagDefinition.default_display_order, TagDefinition.display_name, TagDefinition.id)
+            )
+        return (
+            await session.scalars(
+                statement.order_by(TagDefinition.default_display_order, TagDefinition.display_name, TagDefinition.id)
             )
         ).all()
-        return tuple(row for row in rows)
 
     @override
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
