@@ -4379,10 +4379,10 @@ minecraft-auth-current-privacy-required = Current privacy consent is required.
 # squid/core/minecraft_auth/errors.py:143
 minecraft-auth-fabric-pkce-proof = The Fabric PKCE proof is invalid.
 
-# squid/core/minecraft_auth/application/services.py:554
+# squid/core/minecraft_auth/application/services.py:561
 minecraft-auth-installation-label-length = Installation label must contain 1 to 80 characters.
 
-# squid/core/minecraft_auth/application/services.py:257
+# squid/core/minecraft_auth/application/services.py:258
 minecraft-auth-minecraft-authorization-limits = Minecraft authorization limits must be positive.
 
 # squid/core/minecraft_auth/application/crypto.py:49

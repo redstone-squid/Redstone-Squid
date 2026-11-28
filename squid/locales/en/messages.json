@@ -14344,7 +14344,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/minecraft_auth/application/services.py:554"
+      "squid/core/minecraft_auth/application/services.py:561"
     ]
   },
   "minecraft-auth-minecraft-authorization-limits": {
@@ -14353,7 +14353,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/minecraft_auth/application/services.py:257"
+      "squid/core/minecraft_auth/application/services.py:258"
     ]
   },
   "minecraft-auth-minecraft-authorization-pepper": {
