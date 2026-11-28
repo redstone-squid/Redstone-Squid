@@ -636,14 +636,16 @@ class TestMergeCodes:
         accounts = InMemoryAccountService(repository)
 
         code, ticket = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
-        preview = await accounts.preview_merge(code, context=ActingContext.direct(UserActor(account_id=survivor.id)))
+        preview = await accounts.preview_merge(
+            f"{code[:4]} {code[4:]}".lower(), context=ActingContext.direct(UserActor(account_id=survivor.id))
+        )
 
         assert ticket.account_id == absorbed.id
         assert preview.absorbed_public_account_id == absorbed.public_account_id
         assert preview.identity_count == 1
 
         merge = await accounts.complete_merge(
-            code, now=NOW, context=ActingContext.direct(UserActor(account_id=survivor.id))
+            f"{code[:4]}-{code[4:]}", now=NOW, context=ActingContext.direct(UserActor(account_id=survivor.id))
         )
 
         assert merge.surviving_account_id == survivor.id

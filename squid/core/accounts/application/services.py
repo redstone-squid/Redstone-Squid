@@ -96,6 +96,10 @@ def generate_verification_code() -> int:
     return secrets.randbelow(9 * lower) + lower
 
 
+def _normalize_merge_code(code: str) -> str:
+    return "".join(code.split()).replace("-", "").upper()
+
+
 class AccountService:
     """Manage accounts, their sign-in identities, profiles, and creator credit.
 
@@ -236,7 +240,7 @@ class AccountService:
         with context.scope():
             async with self._uow_factory() as uow:
                 await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
-                ticket = await uow.accounts.peek_merge_ticket(code)
+                ticket = await uow.accounts.peek_merge_ticket(_normalize_merge_code(code))
                 if ticket is None or ticket.account_id == surviving_account_id:
                     # Self-merge is refused here as well as in `merge_accounts`, so the preview never
                     # renders a confirmation for something that cannot commit.
@@ -268,7 +272,7 @@ class AccountService:
                 uow.builds.editing(actor=surviving_account_id, operation="account_merge", source="account_merge"),
             ):
                 await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
-                ticket = await uow.accounts.consume_merge_ticket(code)
+                ticket = await uow.accounts.consume_merge_ticket(_normalize_merge_code(code))
                 checked_at = now or Instant.now()
                 if ticket is None:
                     raise InvalidMergeCodeError

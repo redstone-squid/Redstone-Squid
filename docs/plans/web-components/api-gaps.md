@@ -29,13 +29,10 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 27. **Staff account picker.** Add a staff-only `accounts` source to `GET /v1/suggest/accounts?q=&limit=` for X5 and X6. Use the standard suggestion fields: the account ID as `value`, the display name as `label`, and a short `description` to distinguish accounts with the same name.
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
-53. **Merge code normalization.** `POST /v1/accounts/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
 ### Submissions
 
-36. **Finalization push (phase 2).** S3 polls `/drafts/{id}/status` with `If-None-Match`. Add a long-poll or SSE stream only if polling proves costly.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
-60. **Record preview.** `GET /v1/submissions/drafts/{id}/record-preview` turns the draft into a record candidate and runs record publication against current approved builds without publishing. It returns each category the build would enter: the record (`record_id` null for a new one), an `outcome` of `holds`, `shares`, `ties_later`, `loses` or `undecided`, the missing facts and their fields when undecided, current holder summaries, and per-metric deltas. Other pending builds, approvals and rule changes can change the outcome, so the screen calls it a prediction. Phase 1 serves pending builds (`GET /v1/builds/{id}/record-preview`), which already load as candidates, for S3 and M2. Phase 2 needs a draft-to-candidate mapping. Needed by S2's submit panel, S3 and M2.
 
 ### Cross-cutting
 
@@ -102,6 +99,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 24. **Creator pages (P13).** `GET /v1/creator-aliases/lookup?name=` returns `{id, name}`. `GET /v1/creator-aliases/summary?name=` summarizes a credited name and `GET /v1/accounts/{account_id}/creator-stats` summarizes a public account across names. Both count distinct approved builds and distinct records held now or ever.
 25. **Creator builds (P13).** Filter `GET /v1/builds` by `account_id` or `creator_name_id`. Each build appears once. Each credit carries a stable `credit_id`, its printed name and a nullable public `account_id`.
 26. **Credit claims (P13, A3, X4).** Send `{credit_ids: [...]}` to `POST /v1/creator-aliases/{id}/claims`. Applicants read `GET /v1/accounts/me/claims`. Staff read pending claims oldest first at `GET /v1/claims` and post decisions to `/v1/claims/{id}/approve` or `/reject`. Approval takes the selected `credit_ids` and requires `reassign: true` to replace an existing owner. Later builds under the same name are unaffected. Historical links migrate as automatic attributions, with conflicting credits left unassigned.
+53. **Merge codes (A3).** Preview and completion accept lowercase, whitespace and hyphens in a merge code.
 
 ### Notifications
 
@@ -110,6 +108,9 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 31. **Readable subscriptions.** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. Creator follows link to `/accounts/{id}`, so a follow covers that account across credited names. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
 
 ### Submissions
+
+36. **Finalization status.** S3 polls active attempts with `If-None-Match`, backs off while unchanged and pauses in hidden tabs. Use the status read-duration histogram (count and latency by conditional response) and completion-observation latency to decide whether push is warranted.
+60. **Record prediction.** Saved drafts and reviewed submissions expose `/record-preview` under their own detail routes. A review-session link selects its archived revision. Both compare against current approved builds with publication rules and return missing facts and deltas against current holders.
 
 **Creator credit picker.** The `creators` suggestion source returns names printed on approved builds, including names credited to hidden accounts. The separate `creator_profiles` source returns visible accounts. A submitter can credit “RedFox” and explicitly nominate Alice via `proposed_account_id`. A name match alone assigns no account. Reviewers can change or clear the nomination before approving the build.
 
