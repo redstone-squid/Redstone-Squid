@@ -180,6 +180,11 @@ rejects `Astro.cookies` and `document.cookie` elsewhere. The API sets its own se
 Use a subtitle only when it helps visitors interpret the content or decide what to do.
 Delete redundant copy instead of moving it from the header into the page body.
 
+Write workbench descriptions for someone looking at the example. Say what they can see or
+try, such as “Explore a piston door in 3D.” Keep setup details in developer docs and put
+guidance specific to one variant beside that variant. Omit the description when the name
+and example already explain it.
+
 Every visible string lives in the Fluent catalogs `src/locales/<locale>/messages.ftl`, with the
 same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.gen.ts`,
 one typed function per message. Workbench stories import their own generated module
