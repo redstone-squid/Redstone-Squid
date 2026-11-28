@@ -1,5 +1,5 @@
 ---
-import faviconUrl from "@/ui/favicon.svg?url&no-inline";
+import Logo from "@/ui/favicon.svg";
 import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import type { ComponentProps } from "astro/types";
 import AccountMenu from "./AccountMenu.astro";
@@ -41,13 +41,14 @@ const nav = [
         <NavBar
           label={m.navPrimary()}
           menuLabel={m.navMenu()}
-          home={{ label: m.siteName(), href: localizePath("/"), logo: faviconUrl }}
+          home={{ label: m.siteName(), href: localizePath("/") }}
           links={nav.map(([label, href]) => ({
             label: label(),
             href: localizePath(href),
             current: activePath === href || activePath.startsWith(`${href}/`),
           }))}
         >
+          <Logo slot="logo" class="size-8" width="32" height="32" aria-hidden="true" />
           <Fragment slot="actions">
             <LanguageSelector />
             <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
@@ -68,8 +69,7 @@ const nav = [
             class="inline-flex items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
             href={localizePath("/")}
           >
-            {/* eslint-disable-next-line squid/no-raw-elements -- a bundled decorative logo needs no loading frame or fallback */}
-            <img class="size-8" src={faviconUrl} width="32" height="32" alt="" />
+            <Logo class="size-8" width="32" height="32" aria-hidden="true" />
             {m.siteName()}
           </a>
           <p class="mt-4 max-w-prose text-sm text-fg-muted">{m.footerNote()}</p>
