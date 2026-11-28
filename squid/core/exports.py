@@ -14,6 +14,8 @@ from whenever import Instant
 
 from squid.core.errors import ValidationError
 
+MAX_EXPORT_BYTES = 16 * 1024 * 1024
+
 
 class ExportFormat(StrEnum):
     JSON = "json"
@@ -22,6 +24,13 @@ class ExportFormat(StrEnum):
 
 @dataclass(frozen=True)
 class ExportTable:
+    """Declare the public column order and types independently of storage and encoding.
+
+    A trailing question mark marks nullable columns. JSON columns in CSV contain a JSON value.
+    Unquoted empty fields represent null. Remove one leading apostrophe from CSV text fields
+    that start with one to recover the original text.
+    """
+
     name: str
     columns: Mapping[str, str]
     rows: AsyncIterable[Mapping[str, object]]
@@ -46,10 +55,19 @@ async def _csv_table(table: ExportTable, write: Callable[[str], None]) -> None:
     async for row in table.rows:
         buffer.seek(0)
         buffer.truncate()
-        writer.writerow(
-            value if value is None or isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-            for value in (row[column] for column in table.columns)
-        )
+        cells = []
+        for name, kind in table.columns.items():
+            value = row[name]
+            if value is None:
+                cells.append(None)
+            elif isinstance(value, str) and kind.rstrip("?") != "json":
+                # Escape leading apostrophes too, so this spreadsheet protection is reversible.
+                if value.startswith(("'", "\t", "\r", "\n")) or value.lstrip().startswith(("=", "+", "-", "@")):
+                    value = "'" + value
+                cells.append(value)
+            else:
+                cells.append(json.dumps(value, ensure_ascii=False))
+        writer.writerow(cells)
         write(buffer.getvalue())
 
 
@@ -75,7 +93,7 @@ async def encode_export(tables: Sequence[ExportTable], file_format: ExportFormat
             "tables": {table.name: table.columns for table in tables},
         }
     )
-    remaining = 16 * 1024 * 1024
+    remaining = MAX_EXPORT_BYTES
 
     def limited_writer(target: _Sink) -> Callable[[str], None]:
         def write(data: str) -> None:
@@ -106,7 +124,7 @@ async def encode_export(tables: Sequence[ExportTable], file_format: ExportFormat
                     with bundle.open(table.name + ".csv", "w") as member:
                         await _csv_table(table, limited_writer(member))
             extension, media_type = "zip", "application/zip"
-        if output.tell() > 16 * 1024 * 1024:
+        if output.tell() > MAX_EXPORT_BYTES:
             msg = "Export exceeds the 16 MiB download limit."
             raise ValidationError(msg)
         output.seek(0)
