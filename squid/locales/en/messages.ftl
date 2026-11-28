@@ -5791,7 +5791,7 @@ search-reference-version-scope = `version_scope:` { $scopes }
 # squid/core/search/application/fields.py:474
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/core/search/application/services.py:96
+# squid/core/search/application/services.py:116
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
 # squid/core/search/application/fields.py:106
@@ -6547,7 +6547,7 @@ tags-history-proposal = Propose showcase tag
 # squid/bot/tags_view.py:237
 tags-link-account-instructions = Link and consent an account in `/account` before proposing tags.
 
-# squid/core/tags/application/services.py:92
+# squid/core/tags/application/services.py:101
 tags-names-start-letter = query names must start with a letter and contain only lowercase letters, digits, or underscores
 
 # squid/bot/tags_view.py:177
@@ -6559,7 +6559,7 @@ tags-public-catalogue-warning = This changes the public tag catalogue and cannot
 # squid/core/tags/domain/values.py:43
 tags-requires-value = { $display_name } requires a { $value_type } value.
 
-# squid/core/tags/application/services.py:88
+# squid/core/tags/application/services.py:97
 tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 
 # squid/core/tags/errors.py:11

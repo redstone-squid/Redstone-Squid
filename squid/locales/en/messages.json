@@ -19230,7 +19230,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/services.py:96"
+      "squid/core/search/application/services.py:116"
     ]
   },
   "search-sort-ascending": {
@@ -21786,7 +21786,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/tags/application/services.py:92"
+      "squid/core/tags/application/services.py:101"
     ]
   },
   "tags-no-proposals-awaiting-review": {
@@ -21833,7 +21833,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/tags/application/services.py:88"
+      "squid/core/tags/application/services.py:97"
     ]
   },
   "tags-tag-not-found-title": {
