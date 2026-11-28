@@ -650,11 +650,49 @@ export function storyCopperDoorNeedsEvidence(locale: Locale = getLocale()): stri
   }
 }
 
+/** Tiles */
+export function storyTiles(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Tiles";
+    case "zh-CN":
+      return "卡片";
+    case "en-XA":
+      return "[" + "Ţîļéš" + "··]";
+  }
+}
+
+/** Inline, first number leading */
+export function storyInlineLeading(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Inline, first number leading";
+    case "zh-CN":
+      return "行内，首个数字突出";
+    case "en-XA":
+      return "[" + "Îñļîñé, ƒîŕšţ ñûɱƀéŕ ļéåđîñĝ" + "············]";
+  }
+}
+
+/** Thumbnail fallback */
+export function storyIconFallback(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Thumbnail fallback";
+    case "zh-CN":
+      return "缩略图占位";
+    case "en-XA":
+      return "[" + "Ţĥûɱƀñåîļ ƒåļļƀåçķ" + "········]";
+  }
+}
+
 export {
+  buildBlocks,
   buildDimensions,
   buildImageUnavailable,
   buildNoPreview,
   buildOpening,
+  buildTicks,
   commonNext,
   commonPrevious,
   navBuilds,
@@ -681,6 +719,7 @@ export {
   storySeamless33FlushDoor,
   storyVersion,
   storyVideo,
+  storyVolume,
   storyVote,
   storyWidth,
 } from "./messages.gen";

@@ -138,7 +138,14 @@ const records = [
     category_key: "door:door|5x5|t[]|Door:r[]:p[]",
     status: "resolved",
     holder_build_ids: [1],
-    holders: [{ build_id: 1, title: "Fastest 5×5 seamless door", creators: [], preview: null }],
+    holders: [
+      {
+        build_id: 1,
+        title: builds[0].display_name,
+        creators: builds[0].creators,
+        preview: builds[0].preview,
+      },
+    ],
     metrics: { opening_time: { value: 12, unit: "game_ticks", display: "12 gt" } },
     computed_at: frozenDate,
   },
@@ -154,7 +161,7 @@ const records = [
     category_key: "extender:extender|Upward|3|t[]:r[]:p[]",
     status: "resolved",
     holder_build_ids: [3],
-    holders: [{ build_id: 3, title: "Smallest piston extender", creators: [], preview: null }],
+    holders: [{ build_id: 3, title: builds[2].title, creators: builds[2].creators, preview: null }],
     computed_at: frozenDate,
   },
 ] satisfies [PublicRecordSummary, PublicRecordSummary];

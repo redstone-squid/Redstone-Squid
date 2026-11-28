@@ -1,24 +1,30 @@
 <script lang="ts">
-  import type { PublicBuildSummary } from "@/generated/types.gen";
   import * as m from "@/locales/messages.gen";
   import Image from "@/ui/data/Image.svelte";
-  let { build, priority = false }: { build: PublicBuildSummary; priority?: boolean } = $props();
-  const title = $derived(build.display_name ?? build.title);
-  // Only HTTPS and same-origin previews are shown; the API should never send others, but this
-  // is untrusted input.
-  const preview = $derived.by(() => {
-    const url = build.preview?.url;
-    if (url === undefined) return null;
-    if (url.startsWith("/") && !url.startsWith("//")) return url;
-    return URL.canParse(url) && url.startsWith("https://") ? url : null;
-  });
+  import { buildName, previewUrl, type BuildIdentity } from "./presentation";
+
+  /**
+   * A build's preview image, or a placeholder when it has none or it fails to load. A
+   * `thumbnail` is a small `square` or `wide` frame whose placeholder shows only its icon.
+   */
+  type Props = {
+    build: Pick<BuildIdentity, "title" | "display_name" | "preview">;
+    priority?: boolean;
+    thumbnail?: "square" | "wide";
+    class?: string;
+  };
+  let { build, priority = false, thumbnail, class: className }: Props = $props();
+  const src = $derived(previewUrl(build.preview));
 </script>
 
 <Image
-  src={preview}
-  alt={m.buildPreviewAlt({ title })}
+  {src}
+  alt={m.buildPreviewAlt({ title: buildName(build) })}
   width={640}
   height={400}
+  aspect={thumbnail ?? "wide"}
+  fallback={thumbnail === undefined ? "label" : "icon"}
   {priority}
-  fallbackLabel={preview === null ? m.buildNoPreview() : m.buildImageUnavailable()}
+  fallbackLabel={src === null ? m.buildNoPreview() : m.buildImageUnavailable()}
+  class={className}
 />

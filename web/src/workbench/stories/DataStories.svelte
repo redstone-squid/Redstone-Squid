@@ -95,6 +95,18 @@
         fallbackLabel={m.buildImageUnavailable()}
       />
     </Variant>
+    <Variant label={m.storyIconFallback()}>
+      <Image
+        src={null}
+        alt=""
+        width={640}
+        height={400}
+        aspect="square"
+        fallback="icon"
+        fallbackLabel={m.buildNoPreview()}
+        class="size-12 rounded-xs"
+      />
+    </Variant>
   </Layout>
 </Story>
 
@@ -147,18 +159,31 @@
 </Story>
 
 <Story name="StatGroup" source="data/StatGroup">
-  <StatGroup
-    items={[
-      { label: m.navBuilds(), value: "1,284" },
-      { label: m.storyRecordsHeld(), value: "12", href: "#statgroup" },
-      {
-        label: m.buildOpening(),
-        value: "8",
-        unit: "gt",
-        hint: m.story3GtFasterThanTheLastHolder(),
-      },
-    ]}
-  />
+  <Variant label={m.storyTiles()}>
+    <StatGroup
+      items={[
+        { label: m.navBuilds(), value: "1,284" },
+        { label: m.storyRecordsHeld(), value: "12", href: "#statgroup" },
+        {
+          label: m.buildOpening(),
+          value: "8",
+          unit: "gt",
+          hint: m.story3GtFasterThanTheLastHolder(),
+        },
+      ]}
+    />
+  </Variant>
+  <Variant label={m.storyInlineLeading()}>
+    <StatGroup
+      layout="inline"
+      size="lg"
+      lead
+      items={[
+        { label: m.storyVolume(), value: m.buildBlocks({ count: 64 }) },
+        { label: m.buildOpening(), value: m.buildTicks({ ticks: 8 }) },
+      ]}
+    />
+  </Variant>
 </Story>
 
 <Story name="Disclosure" source="data/Disclosure" description={m.storyDisclosureDescription()}>

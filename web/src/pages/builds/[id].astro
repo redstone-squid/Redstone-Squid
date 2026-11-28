@@ -1,15 +1,10 @@
 ---
+import BuildDetail from "@/features/catalogue/BuildDetail.svelte";
+import { buildName } from "@/features/catalogue/presentation";
 import { buildsGet } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { load } from "@/server/api";
 import { apiSessionCookie } from "@/server/cookies";
-import { localizePath } from "@/locales/locale";
-import * as m from "@/locales/messages.gen";
-import PageHeader from "@/ui/patterns/PageHeader.svelte";
-import DescriptionList from "@/ui/data/DescriptionList.svelte";
-import Section from "@/ui/patterns/Section.svelte";
-import Button from "@/ui/actions/Button.svelte";
-import Link from "@/ui/content/Link.svelte";
 import { ApiError } from "@/api-client/api-error";
 
 const id = Number(Astro.params.id);
@@ -22,52 +17,8 @@ const build = await load(
     headers: cookie ? { Cookie: cookie } : {},
   }),
 );
-const title = build.display_name ?? build.title;
-const { width, height, depth } = build.dimensions;
-const unknown = m.buildDimensionUnknown();
 ---
 
-<CatalogueLayout {title} canonicalPath={`/builds/${id}`}>
-  <PageHeader {title} description={build.subtitle ?? build.category} />
-  {build.description && <p>{build.description}</p>}
-  <DescriptionList
-    items={[
-      {
-        term: m.buildDimensions(),
-        value: m.buildSize({
-          width: width ?? unknown,
-          height: height ?? unknown,
-          depth: depth ?? unknown,
-        }),
-      },
-      ...(build.versions.length
-        ? [{ term: m.recordVersionScope(), value: build.versions.join(", ") }]
-        : []),
-    ]}
-  />
-  {build.credits?.length ? (
-    <Section title={m.buildCreators()}>
-      <ul>
-        {build.credits.map((credit) => (
-          <li>
-            {credit.account_id ? (
-              <Link href={localizePath(`/accounts/${credit.account_id}`)}>{credit.name}</Link>
-            ) : (
-              credit.name
-            )}{" "}
-            · {credit.role}
-          </li>
-        ))}
-      </ul>
-    </Section>
-  ) : null}
-  {build.viewer && build.viewer.edit_mode !== "unavailable" && (
-    <form method="post" action={localizePath("/submit")}>
-      <input type="hidden" name="source_build_id" value={id} />
-      <input type="hidden" name="category" value={build.category.toLowerCase()} />
-      <Button type="submit">
-        {build.viewer.edit_mode === "propose" ? m.submissionEdit() : m.submissionEditBuild()}
-      </Button>
-    </form>
-  )}
+<CatalogueLayout title={buildName(build)} canonicalPath={`/builds/${id}`}>
+  <BuildDetail {build} />
 </CatalogueLayout>

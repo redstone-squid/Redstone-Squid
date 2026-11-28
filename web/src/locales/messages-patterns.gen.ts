@@ -2,30 +2,6 @@
 import { getLocale, type Locale } from "./locale";
 import { formatNumber, formatValue, select } from "./format";
 
-/** Clear search */
-export function navClearSearch(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Clear search";
-    case "zh-CN":
-      return "清除搜索";
-    case "en-XA":
-      return "[" + "Çļéåŕ šéåŕçĥ" + "·····]";
-  }
-}
-
-/** Record holder */
-export function recordHolders(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Record holder";
-    case "zh-CN":
-      return "纪录保持者";
-    case "en-XA":
-      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
-  }
-}
-
 /** Needs attention */
 export function storyNeedsAttention(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1823,10 +1799,12 @@ export function storyDefaultTone(locale: Locale = getLocale()): string {
 export {
   navAbout,
   navBuilds,
+  navClearSearch,
   navMenu,
   navRecords,
   navSearch,
   navSubmit,
+  recordHolders,
   siteName,
   story312Builds,
   storyAFastFlush55Door,

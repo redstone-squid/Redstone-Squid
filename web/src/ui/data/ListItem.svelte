@@ -4,8 +4,8 @@
 
   /**
    * One row of a `List`: an optional `leading` icon, avatar, or thumbnail; a title, linked to
-   * `href` across the whole row; `meta` such as badges and times; and `trailing` actions,
-   * which stay clickable above the row link. `unread` adds a marker and announces
+   * `href` across the whole row; `meta` such as badges and times; and `trailing` actions.
+   * Links and controls anywhere in the row stay clickable above the row link. `unread` adds a marker and announces
    * `unreadLabel` before the title.
    */
   type Props = {
@@ -48,7 +48,7 @@
       aria-hidden="true"
     ></span>{/if}
   {#if leading}<div class="shrink-0">{@render leading()}</div>{/if}
-  <div class="grid min-w-0 flex-1 gap-1">
+  <div data-row-body class="grid min-w-0 flex-1 gap-1">
     <p class={cn("min-w-0 wrap-break-word", unread ? "font-semibold" : "font-medium")}>
       {#if unread && unreadLabel !== undefined}<span class="sr-only">{unreadLabel}:</span>{/if}
       {#if href !== undefined}<a
@@ -68,3 +68,11 @@
       {@render trailing()}
     </div>{/if}
 </li>
+
+<style>
+  /* The title link stretches over the row; other controls in the body stay clickable on top. */
+  [data-row-body] :global(:is(a, button, input, select, textarea, summary):not([data-row-link])) {
+    position: relative;
+    z-index: var(--z-sticky);
+  }
+</style>

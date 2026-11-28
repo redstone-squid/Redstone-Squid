@@ -42,6 +42,14 @@ export function formatList(items: string[], locale: Locale = getLocale()): strin
   return cached(listFormats, locale, () => new Intl.ListFormat(locale)).format(items);
 }
 
+/** The pieces of `formatList`, so each item can render as its own element, such as a link. */
+export function formatListParts(
+  items: string[],
+  locale: Locale = getLocale(),
+): { type: "element" | "literal"; value: string }[] {
+  return cached(listFormats, locale, () => new Intl.ListFormat(locale)).formatToParts(items);
+}
+
 /** Format a variable used as plain text: numbers get locale grouping, strings pass through. */
 export function formatValue(locale: Locale, value: string | number): string {
   return typeof value === "number" ? formatNumber(locale, value) : value;

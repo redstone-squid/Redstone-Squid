@@ -1566,18 +1566,6 @@ export function storyShowOptions(locale: Locale = getLocale()): string {
   }
 }
 
-/** No matches */
-export function storyNoMatches(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No matches";
-    case "zh-CN":
-      return "无匹配项";
-    case "en-XA":
-      return "[" + "Ñö ɱåţçĥéš" + "····]";
-  }
-}
-
 /** Options are unavailable. */
 export function storyOptionsAreUnavailable(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -2421,6 +2409,7 @@ export {
   storyFlushLabel,
   storyLoading,
   storyNewest,
+  storyNoMatches,
   storyOpeningTime,
   storyPending,
   storyPublish,

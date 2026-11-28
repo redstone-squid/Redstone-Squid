@@ -6,7 +6,7 @@
   /**
    * A bordered surface for one item. With `title` and `href`, the title link covers the whole
    * card, so the card is clickable while screen readers hear only the title; links and buttons
-   * inside the card stay clickable on top of it. Without `href` it is a plain surface.
+   * in the body and footer stay clickable on top of it. Without `href` it is a plain surface.
    *
    * `headingLevel` follows the heading the card sits under: 2 directly under the page title.
    */
@@ -72,14 +72,15 @@
     {/if}
     {@render children?.()}
   </div>
-  {#if footer}<div class={cn("border-t border-line", paddings[padding])}>
+  {#if footer}<div data-card-footer class={cn("border-t border-line", paddings[padding])}>
       {@render footer()}
     </div>{/if}
 </svelte:element>
 
 <style>
-  /* The title link stretches over the card; other controls in the body stay clickable on top. */
-  [data-card-body] :global(:is(a, button, input, select, textarea, summary):not([data-card-link])) {
+  /* The title link stretches over the card; other controls stay clickable on top. */
+  :is([data-card-body], [data-card-footer])
+    :global(:is(a, button, input, select, textarea, summary):not([data-card-link])) {
     position: relative;
     z-index: var(--z-sticky);
   }

@@ -69,48 +69,32 @@ export function storyBuildcardDescription(locale: Locale = getLocale()): string 
   }
 }
 
-/** A compact build link, used for builds tied with a record. */
-export function storyBuildlistitemDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "A compact build link, used for builds tied with a record.";
-    case "zh-CN":
-      return "紧凑的作品链接，用于与纪录并列的作品。";
-    case "en-XA":
-      return (
-        "[" +
-        "Å çöɱþåçţ ƀûîļđ ļîñķ, ûšéđ ƒöŕ ƀûîļđš ţîéđ ŵîţĥ å ŕéçöŕđ." +
-        "·······················]"
-      );
-  }
-}
-
-/** A record's only holder, shown large above its facts. */
+/** One build shown large with the numbers it is featured for, such as a record’s only holder. */
 export function storyFeaturedbuildDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A record's only holder, shown large above its facts.";
+      return "One build shown large with the numbers it is featured for, such as a record’s only holder.";
     case "zh-CN":
-      return "纪录唯一的保持者，大图显示在信息上方。";
+      return "放大展示单个作品及其入选的成绩，例如纪录的唯一保持者。";
     case "en-XA":
       return (
-        "[" + "Å ŕéçöŕđ'š öñļý ĥöļđéŕ, šĥöŵñ ļåŕĝé åƀöṽé îţš ƒåçţš." + "·····················]"
+        "[" +
+        "Öñé ƀûîļđ šĥöŵñ ļåŕĝé ŵîţĥ ţĥé ñûɱƀéŕš îţ îš ƒéåţûŕéđ ƒöŕ, šûçĥ åš å ŕéçöŕđ’š öñļý ĥöļđéŕ." +
+        "····································]"
       );
   }
 }
 
-/** Shows the measurements that define a record, such as volume or opening time. */
+/** A record’s deciding numbers with its holder underneath. */
 export function storyRecordcardDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Shows the measurements that define a record, such as volume or opening time.";
+      return "A record’s deciding numbers with its holder underneath.";
     case "zh-CN":
-      return "显示判定纪录所用的数据，例如体积或开启时间。";
+      return "纪录的决定性成绩，下方显示保持者。";
     case "en-XA":
       return (
-        "[" +
-        "Šĥöŵš ţĥé ɱéåšûŕéɱéñţš ţĥåţ đéƒîñé å ŕéçöŕđ, šûçĥ åš ṽöļûɱé öŕ öþéñîñĝ ţîɱé." +
-        "·······························]"
+        "[" + "Å ŕéçöŕđ’š đéçîđîñĝ ñûɱƀéŕš ŵîţĥ îţš ĥöļđéŕ ûñđéŕñéåţĥ." + "······················]"
       );
   }
 }
@@ -324,18 +308,6 @@ export function storyWithAdjacentPages(locale: Locale = getLocale()): string {
       return "有相邻页";
     case "en-XA":
       return "[" + "Ŵîţĥ åđĵåçéñţ þåĝéš" + "········]";
-  }
-}
-
-/** Last page */
-export function storyLastPage(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Last page";
-    case "zh-CN":
-      return "最后一页";
-    case "en-XA":
-      return "[" + "Ļåšţ þåĝé" + "····]";
   }
 }
 
@@ -575,10 +547,343 @@ export function storyRejectedWithFeedback(locale: Locale = getLocale()): string 
   }
 }
 
+/** As a table */
+export function storyAsATable(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "As a table";
+    case "zh-CN":
+      return "表格视图";
+    case "en-XA":
+      return "[" + "Åš å ţåƀļé" + "····]";
+  }
+}
+
+/** Build numbers only */
+export function storyBuildNumbersOnly(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Build numbers only";
+    case "zh-CN":
+      return "仅有作品编号";
+    case "en-XA":
+      return "[" + "Ɓûîļđ ñûɱƀéŕš öñļý" + "········]";
+  }
+}
+
+/** Build only */
+export function storyBuildOnly(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Build only";
+    case "zh-CN":
+      return "仅作品";
+    case "en-XA":
+      return "[" + "Ɓûîļđ öñļý" + "····]";
+  }
+}
+
+/** A whole build page: media, timings, records, specifications, credits, and downloads. */
+export function storyBuilddetailDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A whole build page: media, timings, records, specifications, credits, and downloads.";
+    case "zh-CN":
+      return "完整的作品页面：媒体、时间、纪录、规格、署名和下载。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å ŵĥöļé ƀûîļđ þåĝé: ɱéđîå, ţîɱîñĝš, ŕéçöŕđš, šþéçîƒîçåţîöñš, çŕéđîţš, åñđ đöŵñļöåđš." +
+        "··································]"
+      );
+  }
+}
+
+/** A build named by its thumbnail and title, wherever another view refers to it. */
+export function storyBuildmentionDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A build named by its thumbnail and title, wherever another view refers to it.";
+    case "zh-CN":
+      return "以缩略图和标题指代作品，用于其他视图中提及作品的地方。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å ƀûîļđ ñåɱéđ ƀý îţš ţĥûɱƀñåîļ åñđ ţîţļé, ŵĥéŕéṽéŕ åñöţĥéŕ ṽîéŵ ŕéƒéŕš ţö îţ." +
+        "·······························]"
+      );
+  }
+}
+
+/** A build as one row: for search results, a creator’s builds, and builds beside a record. */
+export function storyBuildrowDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A build as one row: for search results, a creator’s builds, and builds beside a record.";
+    case "zh-CN":
+      return "单行作品：用于搜索结果、创作者的作品，以及纪录旁的作品。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å ƀûîļđ åš öñé ŕöŵ: ƒöŕ šéåŕçĥ ŕéšûļţš, å çŕéåţöŕ’š ƀûîļđš, åñđ ƀûîļđš ƀéšîđé å ŕéçöŕđ." +
+        "···································]"
+      );
+  }
+}
+
+/** Compare builds side by side. Sort a column or hide one from the column menu. */
+export function storyBuildtableDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Compare builds side by side. Sort a column or hide one from the column menu.";
+    case "zh-CN":
+      return "并排比较作品。可按列排序，或在列菜单中隐藏某列。";
+    case "en-XA":
+      return (
+        "[" +
+        "Çöɱþåŕé ƀûîļđš šîđé ƀý šîđé. Šöŕţ å çöļûɱñ öŕ ĥîđé öñé ƒŕöɱ ţĥé çöļûɱñ ɱéñû." +
+        "·······························]"
+      );
+  }
+}
+
+/** Comfortable */
+export function storyComfortable(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Comfortable";
+    case "zh-CN":
+      return "宽松";
+    case "en-XA":
+      return "[" + "Çöɱƒöŕţåƀļé" + "·····]";
+  }
+}
+
+/** Compact, in a gallery */
+export function storyCompactGallery(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Compact, in a gallery";
+    case "zh-CN":
+      return "紧凑，用于画廊";
+    case "en-XA":
+      return "[" + "Çöɱþåçţ, îñ å ĝåļļéŕý" + "·········]";
+  }
+}
+
+/** Door with everything */
+export function storyDoorWithEverything(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Door with everything";
+    case "zh-CN":
+      return "信息齐全的门";
+    case "en-XA":
+      return "[" + "Đööŕ ŵîţĥ éṽéŕýţĥîñĝ" + "········]";
+  }
+}
+
+/** Doors competing for the record */
+export function storyDoorsCompeting(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Doors competing for the record";
+    case "zh-CN":
+      return "争夺纪录的门";
+    case "en-XA":
+      return "[" + "Đööŕš çöɱþéţîñĝ ƒöŕ ţĥé ŕéçöŕđ" + "············]";
+  }
+}
+
+/** From a record summary */
+export function storyFromARecordSummary(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "From a record summary";
+    case "zh-CN":
+      return "来自纪录摘要";
+    case "en-XA":
+      return "[" + "Ƒŕöɱ å ŕéçöŕđ šûɱɱåŕý" + "·········]";
+  }
+}
+
+/** Holder */
+export function storyHolder(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Holder";
+    case "zh-CN":
+      return "保持者";
+    case "en-XA":
+      return "[" + "Ĥöļđéŕ" + "···]";
+  }
+}
+
+/** Who held a record and when, newest first, with the number each holder set. */
+export function storyHoldertimelineDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Who held a record and when, newest first, with the number each holder set.";
+    case "zh-CN":
+      return "纪录由谁、在何时保持，最新的在前，并附各保持者的成绩。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ŵĥö ĥéļđ å ŕéçöŕđ åñđ ŵĥéñ, ñéŵéšţ ƒîŕšţ, ŵîţĥ ţĥé ñûɱƀéŕ éåçĥ ĥöļđéŕ šéţ." +
+        "······························]"
+      );
+  }
+}
+
+/** Named holders */
+export function storyNamedHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Named holders";
+    case "zh-CN":
+      return "有名称的保持者";
+    case "en-XA":
+      return "[" + "Ñåɱéđ ĥöļđéŕš" + "······]";
+  }
+}
+
+/** On a build page */
+export function storyOnABuildPage(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "On a build page";
+    case "zh-CN":
+      return "在作品页面上";
+    case "en-XA":
+      return "[" + "Öñ å ƀûîļđ þåĝé" + "······]";
+  }
+}
+
+/** Extender awaiting review */
+export function storyPendingExtender(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Extender awaiting review";
+    case "zh-CN":
+      return "待审核的伸缩器";
+    case "en-XA":
+      return "[" + "Éẋţéñđéŕ åŵåîţîñĝ ŕéṽîéŵ" + "··········]";
+  }
+}
+
+/** A record as one row: for the records a build or creator holds. */
+export function storyRecordrowDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A record as one row: for the records a build or creator holds.";
+    case "zh-CN":
+      return "单行纪录：用于作品或创作者保持的纪录。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å ŕéçöŕđ åš öñé ŕöŵ: ƒöŕ ţĥé ŕéçöŕđš å ƀûîļđ öŕ çŕéåţöŕ ĥöļđš." +
+        "·························]"
+      );
+  }
+}
+
+/** Every record’s value and holder in one table, for scanning many at once. */
+export function storyRecordtableDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Every record’s value and holder in one table, for scanning many at once.";
+    case "zh-CN":
+      return "在一张表中列出每项纪录的成绩和保持者，便于快速浏览。";
+    case "en-XA":
+      return (
+        "[" +
+        "Éṽéŕý ŕéçöŕđ’š ṽåļûé åñđ ĥöļđéŕ îñ öñé ţåƀļé, ƒöŕ šçåññîñĝ ɱåñý åţ öñçé." +
+        "·····························]"
+      );
+  }
+}
+
+/** Sorted, holder marked */
+export function storySortedWithHolder(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Sorted, holder marked";
+    case "zh-CN":
+      return "已排序，标出保持者";
+    case "en-XA":
+      return "[" + "Šöŕţéđ, ĥöļđéŕ ɱåŕķéđ" + "·········]";
+  }
+}
+
+/** Thumbnails */
+export function storyThumbnails(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Thumbnails";
+    case "zh-CN":
+      return "缩略图";
+    case "en-XA":
+      return "[" + "Ţĥûɱƀñåîļš" + "····]";
+  }
+}
+
+/** Title only */
+export function storyTitleOnly(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Title only";
+    case "zh-CN":
+      return "仅标题";
+    case "en-XA":
+      return "[" + "Ţîţļé öñļý" + "····]";
+  }
+}
+
+/** With creators */
+export function storyWithCreators(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "With creators";
+    case "zh-CN":
+      return "附创作者";
+    case "en-XA":
+      return "[" + "Ŵîţĥ çŕéåţöŕš" + "······]";
+  }
+}
+
+/** Inline */
+export function storyInlineMention(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Inline";
+    case "zh-CN":
+      return "行内";
+    case "en-XA":
+      return "[" + "Îñļîñé" + "···]";
+  }
+}
+
+/** Compact */
+export function storyCompactRows(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Compact";
+    case "zh-CN":
+      return "紧凑";
+    case "en-XA":
+      return "[" + "Çöɱþåçţ" + "···]";
+  }
+}
+
 export {
+  recordHistory,
+  recordHolders,
+  recordsTitle,
   storyCopperBolt55,
   storyEmpty,
   storyFailedToLoad,
+  storyFirstIris,
   storyNoPreview,
+  storyRecordHolder,
   trialDoor,
 } from "./messages.gen";

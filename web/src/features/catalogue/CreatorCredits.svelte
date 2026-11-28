@@ -1,18 +1,25 @@
 <script lang="ts">
   import type { CreatorStats, PublicBuildSummary } from "@/generated/types.gen";
-  import { localizePath } from "@/locales/locale";
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/actions/Button.svelte";
-  import CheckField from "@/ui/forms/CheckField.svelte";
-  import Link from "@/ui/content/Link.svelte";
-  import DescriptionList from "@/ui/data/DescriptionList.svelte";
+  import SeriesChart from "@/ui/chart/SeriesChart.svelte";
   import List from "@/ui/data/List.svelte";
-  import ListItem from "@/ui/data/ListItem.svelte";
+  import StatGroup from "@/ui/data/StatGroup.svelte";
+  import EmptyState from "@/ui/feedback/EmptyState.svelte";
+  import CheckField from "@/ui/forms/CheckField.svelte";
   import FieldGroup from "@/ui/forms/FieldGroup.svelte";
-  import Section from "@/ui/patterns/Section.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Pagination from "@/ui/navigation/Pagination.svelte";
+  import Section from "@/ui/patterns/Section.svelte";
+  import BuildRow from "./BuildRow.svelte";
+  import RecordRow from "./RecordRow.svelte";
+  import { buildName, creditRoleLabel } from "./presentation";
 
+  /**
+   * A creator's page body: their counts, builds per year, one page of builds, and the
+   * records they hold. With `claimNameId`, a signed-in visitor can claim this name's credits
+   * on the listed builds; the form posts to the current page.
+   */
   type Props = {
     claimNameId?: number;
     stats: CreatorStats;
@@ -21,76 +28,95 @@
     nextHref: string | null;
   };
   let { stats, builds, prevHref, nextHref, claimNameId }: Props = $props();
+  const years = $derived(stats.builds_by_year.toSorted((a, b) => a.year - b.year));
+  const claimable = $derived(
+    claimNameId === undefined
+      ? []
+      : builds.flatMap((build) =>
+          (build.credits ?? [])
+            .filter((credit) => credit.credit_id != null && credit.name_id === claimNameId)
+            .map((credit) => ({ build, credit, id: credit.credit_id ?? "" })),
+        ),
+  );
 </script>
 
-<Layout pattern="stack">
-  <Section title={m.creatorBuildCount({ count: stats.build_count })}>
-    {#if stats.builds_by_year.length > 0}
-      <DescriptionList
-        items={stats.builds_by_year.map(({ year, count }) => ({
-          term: String(year),
-          value: String(count),
-          numeric: true,
-        }))}
-      />
+<Layout pattern="stack" gap="xl">
+  <StatGroup
+    items={[
+      { label: m.navBuilds(), value: String(stats.build_count) },
+      { label: m.creatorRecordsHeld(), value: String(stats.records_held.length) },
+      { label: m.creatorRecordsEver(), value: String(stats.records_ever) },
+    ]}
+  />
+  <Section title={m.navBuilds()}>
+    {#if builds.length === 0}
+      <EmptyState title={m.creatorBuildsEmpty()} />
+    {:else}
+      <Layout pattern="stack">
+        {#if years.length > 1}
+          <SeriesChart
+            title={m.creatorBuildsPerYear()}
+            description={m.creatorBuildsPerYearDescription()}
+            kind="bar"
+            height="sm"
+            x={{ type: "band", label: m.creatorYear() }}
+            y={{
+              label: m.navBuilds(),
+              // Counts are whole; hide the axis's in-between ticks.
+              format: (count) => (Number.isInteger(count) ? String(count) : ""),
+            }}
+            series={[
+              {
+                id: "builds",
+                label: m.navBuilds(),
+                tone: 1,
+                points: years.map(({ year, count }) => ({ x: String(year), y: count })),
+              },
+            ]}
+            labels={{ showData: m.catalogueShowData() }}
+          />
+        {/if}
+        <List>
+          {#each builds as build (build.id)}
+            <BuildRow {build} />
+          {/each}
+        </List>
+        <Pagination
+          {prevHref}
+          {nextHref}
+          labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
+        />
+      </Layout>
     {/if}
-    <ul>
-      {#each builds as build (build.id)}
-        <li>
-          <Link href={localizePath(`/builds/${build.id}`)}>{build.display_name ?? build.title}</Link
-          >
-          <ul aria-label={m.buildCreators()}>
-            {#each build.credits ?? [] as creator (creator.credit_id)}
-              <li>
-                <Link
-                  href={localizePath(
-                    creator.account_id !== null
-                      ? `/accounts/${creator.account_id}`
-                      : `/creators/${encodeURIComponent(creator.name)}`,
-                  )}>{creator.name}</Link
-                >
-              </li>
-            {/each}
-          </ul>
-        </li>
-      {/each}
-    </ul>
-    <Pagination
-      {prevHref}
-      {nextHref}
-      labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
-    />
   </Section>
-  <Section title={`${m.recordCurrent()} · ${m.navRecords()}`}>
-    <p>{m.creatorRecordCounts({ held: stats.records_held.length, ever: stats.records_ever })}</p>
-    {#if stats.records_held.length > 0}
+  <Section title={m.creatorRecordsHeld()}>
+    {#if stats.records_held.length === 0}
+      <EmptyState title={m.creatorRecordsEmpty({ ever: stats.records_ever })} />
+    {:else}
       <List>
         {#each stats.records_held as record (record.id)}
-          <ListItem
-            density="compact"
-            href={localizePath(`/records/${record.id}`)}
-            title={record.title}
-          />
+          <RecordRow record={{ record_id: record.id, title: record.title }} />
         {/each}
       </List>
     {/if}
   </Section>
-  {#if claimNameId !== undefined && builds.length > 0}
-    <form method="post">
-      <FieldGroup label={m.creatorClaimSelect()}>
-        {#each builds as build (build.id)}
-          {#each build.credits ?? [] as credit (credit.credit_id)}
-            {#if credit.credit_id != null && credit.name_id === claimNameId}
+  {#if claimable.length > 0}
+    <Section title={m.creatorClaimTitle()} description={m.creatorClaimDescription()} surface>
+      <form method="post">
+        <Layout pattern="stack" gap="md">
+          <FieldGroup label={m.creatorClaimSelect()} labelVisibility="hidden">
+            {#each claimable as { build, credit, id } (id)}
               <CheckField
                 name="credit"
-                value={credit.credit_id}
-                label={`${build.display_name ?? build.title} · ${credit.name} (${credit.role})`}
+                value={id}
+                label={buildName(build)}
+                hint={creditRoleLabel(credit.role)}
               />
-            {/if}
-          {/each}
-        {/each}
-      </FieldGroup>
-      <Button type="submit">{m.creatorClaimSubmit()}</Button>
-    </form>
+            {/each}
+          </FieldGroup>
+          <div><Button type="submit" variant="primary">{m.creatorClaimSubmit()}</Button></div>
+        </Layout>
+      </form>
+    </Section>
   {/if}
 </Layout>

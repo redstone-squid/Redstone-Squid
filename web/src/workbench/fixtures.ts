@@ -1,8 +1,8 @@
-import { storyBlocks } from "@/locales/messages-forms.gen";
 import { recordCriterionLabel } from "@/locales/vocabulary.gen";
 import { omit } from "es-toolkit";
 import * as m from "@/locales/messages.gen";
 import type {
+  BuildDetail,
   CandidateGap,
   CreatorStats,
   PublicBuildCredit,
@@ -11,6 +11,8 @@ import type {
   PublicRecordSummary,
   RecordCriterion,
   RecordHolderPeriod,
+  RecordHolderSummary,
+  RecordMetric,
 } from "@/generated/types.gen";
 
 const creators = (...names: string[]) => names.map((name) => ({ name, account_id: null }));
@@ -57,6 +59,7 @@ export function buildFixtures(): PublicBuildSummary[] {
       preview: image("/fixtures/iris-door.svg"),
     }),
     build(3, m.storySlimExtender(), {
+      category: "Extender",
       creators: creators("CircuitSage"),
       dimensions: { width: 3, height: 5, depth: 8 },
       opening_time: null,
@@ -80,10 +83,11 @@ export function buildScenarios() {
       preview: image("https://media.fixture.invalid/broken.png"),
     },
     unknownMeasurements: build(5, m.storySlimExtender(), {
+      category: "Extender",
       creators: creators("CircuitSage"),
       dimensions: { width: null, height: 5, depth: null },
       opening_time: null,
-      preview: image("/fixtures/copper-door.svg"),
+      preview: image("/fixtures/slim-extender.svg"),
     }),
     crowded: {
       ...long,
@@ -100,12 +104,31 @@ export function buildScenarios() {
   };
 }
 
+const holderOf = (build: PublicBuildSummary): RecordHolderSummary => ({
+  build_id: build.id,
+  title: build.display_name ?? build.title,
+  creators: build.creators,
+  preview: build.preview,
+});
+
+const ticksMetric = (ticks: number): RecordMetric => ({
+  value: ticks,
+  unit: "game_ticks",
+  display: m.buildTicks({ ticks }),
+});
+const blocksMetric = (count: number): RecordMetric => ({
+  value: count,
+  unit: "blocks",
+  display: m.buildBlocks({ count }),
+});
+
 function record(
   id: number,
   title: string,
   overrides: Partial<PublicRecordSummary> = {},
 ): PublicRecordSummary {
   const holderIds = overrides.holder_build_ids ?? [1];
+  const builds = buildFixtures();
   return {
     result_id: id,
     definition_id: id,
@@ -118,12 +141,12 @@ function record(
     category_key: `door:story-${id}`,
     status: "resolved",
     holder_build_ids: holderIds,
-    holders: holderIds.map((buildId) => ({
-      build_id: buildId,
-      title,
-      creators: [],
-      preview: null,
-    })),
+    holders: holderIds.flatMap((buildId) => {
+      const holder = builds.find((candidate) => candidate.id === buildId);
+      return holder ? [holderOf(holder)] : [];
+    }),
+    metrics: { opening_time: ticksMetric(8) },
+    holder_since: "2026-01-12T00:00:00Z",
     computed_at: "2026-01-12T00:00:00Z",
     ...overrides,
   };
@@ -143,6 +166,30 @@ export function recordFixtures(): PublicRecordSummary[] {
       holder_build_ids: [1, 2],
       tied_build_ids: [3],
       refresh_pending: true,
+      metrics: { volume: blocksMetric(180) },
+    }),
+  ];
+}
+
+/** A page of records for the table: different criteria, kinds, holders, and no holder. */
+export function recordTableFixtures(): PublicRecordSummary[] {
+  return [
+    ...recordFixtures(),
+    record(3, m.storySmallestExtender(), {
+      record_id: "smallest-extender",
+      criterion: "smallest",
+      build_kind: "extender",
+      holder_build_ids: [3],
+      metrics: { volume: blocksMetric(45) },
+      holder_since: "2025-06-10T00:00:00Z",
+    }),
+    record(4, m.storyFirstIris(), {
+      record_id: "first-iris",
+      criterion: "first",
+      build_kind: "entrance",
+      holder_build_ids: [],
+      metrics: {},
+      holder_since: null,
     }),
   ];
 }
@@ -153,6 +200,7 @@ export function recordScenarios() {
   return {
     single: record(10, title, { subtitle: m.storyFullFlushSeamless() }),
     noSubtitle: record(11, title),
+    noHolder: record(17, title, { holder_build_ids: [], metrics: {} }),
     shared: record(12, title, { holder_build_ids: [1, 2] }),
     tied: record(13, title, { tied_build_ids: [3] }),
     currentVersion: record(14, title, { version_scope: "up_to_date" }),
@@ -179,8 +227,8 @@ export const recordPerCriterion = () =>
     record(20 + index, `${recordCriterionLabel(criterion)} ${m.storyFlushPistonDoor()}`, {
       criterion,
       metrics: {
-        opening_time: { value: 8, unit: "game_ticks", display: m.buildTicks({ ticks: 8 }) },
-        volume: { value: 64, unit: "blocks", display: `64 ${storyBlocks()}` },
+        opening_time: ticksMetric(8),
+        volume: blocksMetric(64),
         completion_at: {
           value: "2026-01-12",
           unit: "date",
@@ -209,11 +257,40 @@ const gap = (build_id: number, field: CandidateGap["field"]): CandidateGap => ({
   field,
 });
 
-const history: RecordHolderPeriod[] = [
-  { build_ids: [3], held_from: "2025-03-01T00:00:00Z", held_until: "2025-09-14T00:00:00Z" },
-  { build_ids: [1, 2], held_from: "2025-09-14T00:00:00Z", held_until: "2026-01-12T00:00:00Z" },
-  { build_ids: [1], held_from: "2026-01-12T00:00:00Z", held_until: null },
-];
+function history(): RecordHolderPeriod[] {
+  const [copper, iris, slim] = buildFixtures() as [
+    PublicBuildSummary,
+    PublicBuildSummary,
+    PublicBuildSummary,
+  ];
+  return [
+    {
+      build_ids: [3],
+      held_from: "2025-03-01T00:00:00Z",
+      held_until: "2025-09-14T00:00:00Z",
+      holders: [holderOf(slim)],
+      metrics: { opening_time: ticksMetric(14) },
+    },
+    {
+      build_ids: [1, 2],
+      held_from: "2025-09-14T00:00:00Z",
+      held_until: "2026-01-12T00:00:00Z",
+      holders: [holderOf(copper), holderOf(iris)],
+      metrics: { opening_time: ticksMetric(12) },
+    },
+    {
+      build_ids: [1],
+      held_from: "2026-01-12T00:00:00Z",
+      held_until: null,
+      holders: [holderOf(copper)],
+      metrics: { opening_time: ticksMetric(8) },
+    },
+  ];
+}
+
+/** Holder history whose periods name only build numbers, as older records do. */
+export const unnamedHistory = (): RecordHolderPeriod[] =>
+  history().map((period) => omit(period, ["holders", "metrics"]));
 
 /** Whole record pages, one per layout the page can take. */
 export function recordDetailScenarios() {
@@ -222,7 +299,27 @@ export function recordDetailScenarios() {
   const base = (id: number, overrides: Partial<PublicRecordSummary> = {}) =>
     record(id, title, { subtitle: m.storyFullFlushSeamless(), ...overrides });
   return {
-    single: detail(base(30), [standard], { history }),
+    single: detail(base(30), [standard], {
+      history: history(),
+      siblings: [
+        {
+          record_id: "smallest-3x3-flush",
+          title: m.storySmallestFlushDoor(),
+          subtitle: null,
+          criterion: "smallest",
+          version_scope: "all_time",
+          retired: false,
+        },
+        {
+          record_id: "fastest-3x3-flush-current",
+          title,
+          subtitle: null,
+          criterion: "fastest",
+          version_scope: "up_to_date",
+          retired: false,
+        },
+      ],
+    }),
     shared: detail(base(31), [standard, crowded]),
     sharedUndated: detail(base(32), [standard, unknownMeasurements], {
       status: "unresolved",
@@ -233,7 +330,7 @@ export function recordDetailScenarios() {
       contender_builds: [unknownMeasurements],
       gaps: [gap(unknownMeasurements.id, "opening"), gap(unknownMeasurements.id, "closing")],
     }),
-    retired: detail(base(34), [], { retired_at: "2026-02-03T00:00:00Z", history }),
+    retired: detail(base(34), [], { retired_at: "2026-02-03T00:00:00Z", history: history() }),
     noHolders: detail(base(35), []),
   };
 }
@@ -280,4 +377,101 @@ export function creatorFixtures() {
     records_ever: 0,
   };
   return { builds, stats, newcomer, claimNameId: 7 };
+}
+
+/** Whole build pages: a door with everything filled in, and a bare extender awaiting review. */
+export function buildDetailScenarios(): Record<"door" | "extender", BuildDetail> {
+  const [copper, , slim] = buildFixtures() as [
+    PublicBuildSummary,
+    PublicBuildSummary,
+    PublicBuildSummary,
+  ];
+  const base = {
+    restrictions: {},
+    description: null,
+    links: { world_downloads: [], schematics: [] },
+    media: [],
+    submitted_at: "2026-01-12T00:00:00Z",
+  };
+  return {
+    door: {
+      ...copper,
+      ...base,
+      closing_time: 10,
+      version_spec: "Java 1.21+",
+      subtitle: m.storyFullFlushSeamless(),
+      credits: [credit("CircuitSage", "d1", 7), { ...credit("红石猫", "d2", 8), role: "layout" }],
+      tags: [
+        { key: "seamless", name: m.storySeamless(), value: null, unit: null },
+        { key: "closing_delay", name: m.storyClosingDelay(), value: "4", unit: "gt" },
+      ],
+      details: {
+        category: "Door",
+        door_dimensions: { width: 5, height: 5, depth: 1 },
+        orientation: m.storyOrientationFlush(),
+        patterns: [m.storyFullSeamless()],
+        visible_opening_time: 6,
+        visible_closing_time: 9,
+      },
+      restrictions: { wiring: [m.storyNoObservers()], component: [m.storyNoSlime()] },
+      description: m.storyBuildDescription(),
+      media: [
+        { kind: "render", url: "/fixtures/copper-door.svg", width: 640, height: 400 },
+        { kind: "image", url: "/fixtures/iris-door.svg", width: 640, height: 400 },
+      ],
+      links: {
+        world_downloads: ["https://downloads.fixture.invalid/copper-bolt.zip"],
+        schematics: ["https://downloads.fixture.invalid/copper-bolt.litematic"],
+      },
+      approved_at: "2026-01-14T00:00:00Z",
+      records_held: [
+        {
+          record_id: "fastest-3x3-flush",
+          title: m.storyFastestFlushDoor(),
+          criterion: "fastest",
+          version_scope: "all_time",
+          since: "2026-01-12T00:00:00Z",
+        },
+      ],
+      records_former: [
+        {
+          record_id: "smallest-iris",
+          title: m.storySmallestIris(),
+          criterion: "smallest",
+          version_scope: "up_to_date",
+          since: null,
+        },
+      ],
+      sponsor: {
+        installation_id: "story-sponsor",
+        display_name: m.storyCoppercraft(),
+        address: "play.coppercraft.example",
+        description: m.storySponsorDescription(),
+        website_url: "https://coppercraft.example/",
+      },
+      viewer: {
+        edit_mode: "propose",
+        can_edit: false,
+        can_review: false,
+        can_download_private_schematics: false,
+        followed_account_subscription_ids: {},
+        ballot: null,
+      },
+    },
+    extender: {
+      ...slim,
+      ...base,
+      status: "pending",
+      preview: image("/fixtures/slim-extender.svg"),
+      details: {
+        category: "Extender",
+        orientation: null,
+        patterns: [],
+        extension_length: 3,
+        extender_type: null,
+        extension_time: 4,
+        retraction_time: null,
+      },
+    },
+  };
 }

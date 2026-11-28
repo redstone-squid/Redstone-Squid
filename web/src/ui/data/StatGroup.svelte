@@ -3,19 +3,45 @@
 
   type Stat = { label: string; value: string; unit?: string; hint?: string; href?: string };
 
-  /** Headline numbers, such as a build's size and speed or a creator's record count. */
-  type Props = { items: Stat[]; size?: "md" | "lg"; class?: string };
-  let { items, size = "md", class: className }: Props = $props();
+  /**
+   * Headline numbers, such as a build's size and speed or a creator's record count. `tiles`
+   * draws each in a bordered tile; `inline` sets them in a wrapping row inside a card or
+   * header. `lead` keeps only the first at full size and mutes the rest, for numbers ranked
+   * by importance, such as the measurements that decide a record.
+   */
+  type Props = {
+    items: Stat[];
+    size?: "sm" | "md" | "lg";
+    layout?: "tiles" | "inline";
+    lead?: boolean;
+    class?: string;
+  };
+  let { items, size = "md", layout = "tiles", lead = false, class: className }: Props = $props();
+  const sizes = { sm: "text-lg", md: "text-2xl", lg: "text-3xl" };
+  const followers = { sm: "text-base", md: "text-lg", lg: "text-xl" };
 </script>
 
-<dl class={cn("grid min-w-0 grid-cols-fill-tile gap-4", className)}>
-  {#each items as stat (stat.label)}
-    <div class="grid min-w-0 content-start gap-1 rounded-sm border border-line bg-surface p-4">
-      <dt class="text-sm text-fg-muted">{stat.label}</dt>
+<dl
+  class={cn(
+    "min-w-0",
+    layout === "tiles"
+      ? "grid grid-cols-fill-tile gap-4"
+      : "flex flex-wrap items-end gap-x-6 gap-y-2",
+    className,
+  )}
+>
+  {#each items as stat, index (stat.label)}
+    <div
+      class={cn(
+        "grid min-w-0 content-start",
+        layout === "tiles" ? "gap-1 rounded-sm border border-line bg-surface p-4" : "gap-0.5",
+      )}
+    >
+      <dt class={cn("text-fg-muted", layout === "tiles" ? "text-sm" : "text-xs")}>{stat.label}</dt>
       <dd
         class={cn(
-          "font-bold tracking-tight wrap-break-word",
-          size === "lg" ? "text-3xl" : "text-2xl",
+          "font-bold tracking-tight wrap-break-word tabular-nums",
+          lead && index > 0 ? [followers[size], "text-fg-muted"] : sizes[size],
         )}
       >
         {#if stat.href !== undefined}<a class="no-underline hover:underline" href={stat.href}

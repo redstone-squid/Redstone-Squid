@@ -12,6 +12,9 @@
    * on the page's main image above the fold (at most one or two per page): it loads immediately
    * at high priority instead of lazily.
    *
+   * `fallback="icon"` keeps only the icon, for thumbnails too small for the label, which stays
+   * for screen readers.
+   *
    * `sources` offers the image at several widths. Lazy images let the browser pick from the
    * width the frame actually renders at (`sizes="auto"`), so `sources.sizes` only matters for a
    * `priority` image, which loads before layout, and for browsers without `sizes="auto"`.
@@ -27,6 +30,7 @@
     sources?: { srcset: string; sizes: string };
     fallbackLabel: string;
     fallbackIcon?: LucideIcon;
+    fallback?: "label" | "icon";
     class?: string;
   };
   let {
@@ -40,6 +44,7 @@
     sources,
     fallbackLabel,
     fallbackIcon: Glyph = ImageOff,
+    fallback = "label",
     class: className,
   }: Props = $props();
   const aspects = {
@@ -57,12 +62,13 @@
 >
   <div
     class={cn(
-      "absolute inset-0 grid content-center justify-items-center gap-2 p-4 text-center text-xs text-fg-muted",
+      "absolute inset-0 grid content-center justify-items-center text-center text-xs text-fg-muted",
+      fallback === "label" && "gap-2 p-4",
       src !== null && "invisible group-has-[>img[hidden]]:visible",
     )}
   >
-    <Glyph class="size-8" aria-hidden="true" />
-    {fallbackLabel}
+    <Glyph class={fallback === "label" ? "size-8" : "size-1/2 max-w-8"} aria-hidden="true" />
+    <span class={cn(fallback === "icon" && "sr-only")}>{fallbackLabel}</span>
   </div>
   <!-- eslint-enable svelte/no-inline-styles -->
   {#if src !== null}

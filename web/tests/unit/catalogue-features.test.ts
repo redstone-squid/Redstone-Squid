@@ -50,7 +50,10 @@ describe("catalogue", () => {
       within(contenders).getByText(m.buildMissingFacts({ facts: "Visible opening time" })),
     ).toBeVisible();
     const ties = screen.getByRole("region", { name: m.recordTied() });
-    expect(within(ties).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(ties).getByRole("link", { name: tied.title })).toBeVisible();
+    expect(
+      within(ties).queryByRole("link", { name: holder.display_name ?? holder.title }),
+    ).toBeNull();
     unmount();
 
     render(RecordDetail, { record: { ...smallest, holder_builds: [] } });

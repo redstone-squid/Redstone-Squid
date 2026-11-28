@@ -5,8 +5,8 @@
     variants: {
       pattern: {
         stack: "grid content-start",
-        cluster: "flex flex-wrap",
-        split: "flex flex-wrap",
+        cluster: "flex",
+        split: "flex",
         grid: "grid",
         center: "grid place-content-center",
       },
@@ -34,6 +34,7 @@
         stretch: "items-stretch",
       },
       justify: { none: "", start: "justify-start", end: "justify-end", between: "justify-between" },
+      wrap: { true: "flex-wrap", false: "flex-nowrap", none: "" },
       list: { true: "list-none", false: "" },
     },
   });
@@ -44,6 +45,8 @@
     min?: Exclude<NonNullable<Variants["min"]>, "none">;
     align?: Exclude<NonNullable<Variants["align"]>, "none">;
     justify?: Exclude<NonNullable<Variants["justify"]>, "none">;
+    /** Whether a `cluster` or `split` row wraps; off keeps a thumbnail beside its name. */
+    wrap?: boolean;
   };
   const PATTERN_DEFAULTS = {
     stack: { gap: "lg" },
@@ -78,6 +81,7 @@
     min,
     align,
     justify,
+    wrap = true,
     class: className,
     children,
     ...rest
@@ -94,6 +98,7 @@
       min: pattern === "grid" ? (min ?? defaults.min) : "none",
       align: align ?? defaults.align ?? "none",
       justify: justify ?? defaults.justify ?? "none",
+      wrap: pattern === "cluster" || pattern === "split" ? wrap : "none",
       list: as === "ul" || as === "ol",
     }),
     className,

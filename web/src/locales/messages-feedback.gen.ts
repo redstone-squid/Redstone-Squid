@@ -2,18 +2,6 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** Record holder */
-export function storyRecordHolder(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Record holder";
-    case "zh-CN":
-      return "纪录保持者";
-    case "en-XA":
-      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
-  }
-}
-
 /** Try a broader size or another version. */
 export function storyTryABroaderSizeOrAnotherVersion(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -527,6 +515,7 @@ export {
   storyLoadingBuilds,
   storyNoDraftsYet,
   storyPendingLabel,
+  storyRecordHolder,
   storyRemoveOption,
   storyRetry,
   storySaved,

@@ -690,18 +690,6 @@ export function storySubmitted(locale: Locale = getLocale()): string {
   }
 }
 
-/** Volume */
-export function storyVolume(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Volume";
-    case "zh-CN":
-      return "体积";
-    case "en-XA":
-      return "[" + "Ṽöļûɱé" + "···]";
-  }
-}
-
 /** Loading the chart */
 export function storyLoadingTheChart(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -789,5 +777,6 @@ export {
   storyIrisDoor,
   storyOpeningTime,
   storyTicks,
+  storyVolume,
   storyWidth,
 } from "./messages.gen";

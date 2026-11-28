@@ -23,20 +23,23 @@ it("labels every submission outcome", () => {
   ]);
 });
 
-it("retains nested labels and meaningful zero and false values", () => {
+it("labels submitted facts, keeping zero and false and reading sizes and credits", () => {
   expect(
     factRows({
-      capture_dimensions: { width: 0, seamless: false },
+      dimensions: { width: 9, height: null, depth: 4 },
+      opening_time: 0,
+      capture: { seamless: false, notes: null },
       tags: ["fast", "small"],
       missing: null,
       empty: [],
-      credits: [{ name: "Sam" }],
+      credits: [{ name: "Sam" }, { name: "Alex" }],
     }),
   ).toEqual([
-    { term: "capture dimensions · width", value: "0" },
-    { term: "capture dimensions · seamless", value: "false" },
-    { term: "tags", value: "fast, small" },
-    { term: "credits · 0 · name", value: "Sam" },
+    { key: "dimensions", term: "Dimensions", value: "9 × ? × 4" },
+    { key: "opening_time", term: "Opening", value: "0 gt" },
+    { key: "Capture.seamless", term: "Capture · Seamless", value: "No" },
+    { key: "tags", term: "Tags", value: "fast and small" },
+    { key: "credits", term: "Credits", value: "Sam and Alex" },
   ]);
 });
 

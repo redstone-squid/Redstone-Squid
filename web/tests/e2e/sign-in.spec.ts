@@ -84,7 +84,9 @@ test.describe("with JavaScript disabled", () => {
     ]);
     await expect(prediction.getByRole("heading", { name: "First 2×2 door" })).toBeVisible();
     await expect(prediction.getByText(/Undecided/)).toBeVisible();
-    await expect(prediction.getByText(/Missing facts: completion/)).toBeVisible();
+    await expect(
+      prediction.getByText(m.predictionMissingThis({ fact: "Completion date" }, "en")),
+    ).toBeVisible();
   });
 
   test("opens a rejected submission and a separate credited build", async ({ page, context }) => {
