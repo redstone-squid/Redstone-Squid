@@ -24,7 +24,12 @@ from squid.core.permissions.application.administration import (
 )
 from squid.core.permissions.application.ports import AuditEntry, PermissionSubject, SubjectRecords
 from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
-from squid.core.permissions.domain.models import AccountGrantSubject, PatternMode
+from squid.core.permissions.domain.models import (
+    ALL_GUILDS,
+    AccountGrantSubject,
+    GuildListFilters,
+    PatternMode,
+)
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
@@ -127,7 +132,7 @@ class FakeStore:
     async def list_assignments(self, **_kwargs: object) -> tuple[PermissionRoleAssignment, ...]:
         return tuple(self.assignments)
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
+    async def list_roles(self, *, filters: GuildListFilters = ALL_GUILDS) -> tuple[PermissionRole, ...]:
         return tuple(self.roles.values())
 
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
@@ -225,7 +230,7 @@ class FakeStore:
         return True
 
     async def list_audit(
-        self, *, guild_id: int | None = None, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+        self, *, filters: GuildListFilters = ALL_GUILDS, selector: PageSelector = FIRST_PAGE, page_size: int = 20
     ) -> Page[PermissionAuditEntry]:
         return offset_page((), offset=selector.offset, page_size=page_size)
 

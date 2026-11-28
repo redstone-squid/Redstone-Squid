@@ -29,7 +29,9 @@ if (Astro.request.method === "POST") {
   );
   return Astro.redirect(localizePath("/settings#claims"), 303);
 }
-const builds = await load(buildsList({ client, query: { ...page, creator_name_id: summary.id } }));
+const builds = await load(
+  buildsList({ client, query: { ...page, creator_name_id: [summary.id] } }),
+);
 ---
 
 <CatalogueLayout title={summary.name} noindex={Object.keys(page).length > 0}>

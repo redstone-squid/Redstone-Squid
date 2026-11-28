@@ -1019,8 +1019,8 @@ class VoteRepository:
 
 def _reviews[S: Select[Any]](statement: S, filters: ReviewFilters) -> S:
     statement = statement.where(VoteSession.kind.in_(filters.vote_kinds))
-    if filters.status is not None:
-        statement = statement.where(VoteSession.status == filters.status)
+    for status in filters.statuses:
+        statement = statement.where(VoteSession.status == status)
     return statement
 
 

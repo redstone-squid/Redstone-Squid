@@ -20,6 +20,7 @@ from squid.core.permissions.domain.models import (
     ExternalRoleGrantSubject,
     GrantSubject,
     PatternMode,
+    PermissionSubjectFilters,
 )
 from squid.core.permissions.models import PermissionRole
 
@@ -163,7 +164,7 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
     async def capture(self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand) -> GrantValues:
         values = GrantValues.model_validate_json(command.values.encoded)
         rules = await uow.permission_admin.list_rules(
-            subject_account_id=values.account_id, subject_role_id=values.discord_role_id, guild_id=values.guild_id
+            filters=PermissionSubjectFilters.for_subject(values.account_id, values.discord_role_id, values.guild_id)
         )
         for rule in rules:
             if rule.pattern == values.pattern and rule.scope_guild_id == values.scope_guild_id:
@@ -235,7 +236,7 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
     ) -> AssignmentValues:
         values = AssignmentValues.model_validate_json(command.values.encoded)
         assignments = await uow.permission_admin.list_assignments(
-            subject_account_id=values.account_id, subject_role_id=values.discord_role_id, guild_id=values.guild_id
+            filters=PermissionSubjectFilters.for_subject(values.account_id, values.discord_role_id, values.guild_id)
         )
         for assignment in assignments:
             if assignment.role_id == values.role_id and assignment.scope_guild_id == values.scope_guild_id:

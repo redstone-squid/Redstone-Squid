@@ -19,7 +19,7 @@ const listing = profile.hidden
   ? null
   : await Promise.all([
       load(accountCreatorStats({ client, path })),
-      load(buildsList({ client, query: { ...page, account_id: id } })),
+      load(buildsList({ client, query: { ...page, account_id: [id] } })),
     ]);
 const title = profile.hidden
   ? m.creatorHidden()

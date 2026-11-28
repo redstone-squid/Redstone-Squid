@@ -229,7 +229,11 @@ class AssignmentListSort(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class GuildListFilters:
-    guild_id: int | None = None
+    guild_ids: tuple[int, ...] = ()
+
+    @classmethod
+    def for_guild(cls, guild_id: int | None) -> Self:
+        return cls(() if guild_id is None else (guild_id,))
 
 
 ALL_GUILDS = GuildListFilters()
@@ -237,6 +241,19 @@ ALL_GUILDS = GuildListFilters()
 
 @dataclass(frozen=True, slots=True)
 class PermissionSubjectFilters:
-    account_id: int | None = None
-    discord_role_id: int | None = None
-    guild_id: int | None = None
+    account_ids: tuple[int, ...] = ()
+    discord_role_ids: tuple[int, ...] = ()
+    guild_ids: tuple[int, ...] = ()
+
+    @classmethod
+    def for_subject(
+        cls, account_id: int | None = None, discord_role_id: int | None = None, guild_id: int | None = None
+    ) -> Self:
+        return cls(
+            () if account_id is None else (account_id,),
+            () if discord_role_id is None else (discord_role_id,),
+            () if guild_id is None else (guild_id,),
+        )
+
+
+ALL_SUBJECTS = PermissionSubjectFilters()

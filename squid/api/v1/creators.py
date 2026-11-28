@@ -82,7 +82,7 @@ async def creator_name_summary(
     alias = await accounts.get_creator_alias(name, context=caller.context())
     if alias is None:
         raise CreatorAliasNotFoundError(name)
-    stats = await build_queries.creator_stats(BuildListFilters(creator_name_id=alias.id), context=caller.context())
+    stats = await build_queries.creator_stats(BuildListFilters(creator_name_ids=(alias.id,)), context=caller.context())
     return CreditedNameSummary(alias.id, alias.name, stats)
 
 

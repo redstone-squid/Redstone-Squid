@@ -126,5 +126,5 @@ class ListResponse[T](Response[T]):
         ):
             response.status_code = 304
             response.body = b""
-            del response.headers["content-length"]
+            response.headers.pop("content-length", None)
         return response

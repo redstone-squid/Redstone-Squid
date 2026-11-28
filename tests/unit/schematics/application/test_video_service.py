@@ -142,9 +142,9 @@ async def test_listing_pages_the_callers_videos_with_their_status(components: Co
     )
 
     page = await service.list_videos(
-        filters=VideoListFilters(1), context=ActingContext.direct(UserActor(account_id=10))
+        filters=VideoListFilters((1,)), context=ActingContext.direct(UserActor(account_id=10))
     )
 
     assert [(item.id, item.status) for item in page.items] == [(42, "queued"), (41, "succeeded")]
     assert jobs.list_videos.call_args.args == (10,)
-    assert jobs.list_videos.call_args.kwargs["filters"].schematic_id == 1
+    assert jobs.list_videos.call_args.kwargs["filters"].schematic_ids == (1,)

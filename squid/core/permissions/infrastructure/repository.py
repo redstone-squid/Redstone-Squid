@@ -13,7 +13,13 @@ from whenever import Instant
 from squid.core.actors import UserActor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.ports import AuditEntry, PermissionSubject, SubjectRecords
-from squid.core.permissions.domain.models import PatternMode
+from squid.core.permissions.domain.models import (
+    ALL_GUILDS,
+    ALL_SUBJECTS,
+    GuildListFilters,
+    PatternMode,
+    PermissionSubjectFilters,
+)
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionEpoch,
@@ -244,16 +250,14 @@ class PostgresPermissionAdminRepository:
     async def list_rules(
         self,
         *,
-        subject_account_id: int | None = None,
-        subject_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters = ALL_SUBJECTS,
     ) -> tuple[PermissionGrant, ...]:
         statement = select(PermissionGrant)
-        if subject_account_id is not None:
+        for subject_account_id in filters.account_ids:
             statement = statement.where(PermissionGrant.subject_account_id == subject_account_id)
-        if subject_role_id is not None:
+        for subject_role_id in filters.discord_role_ids:
             statement = statement.where(PermissionGrant.subject_role_id == subject_role_id)
-        if guild_id is not None:
+        for guild_id in filters.guild_ids:
             statement = statement.where(
                 or_(
                     PermissionGrant.subject_guild_id == guild_id,
@@ -267,9 +271,7 @@ class PostgresPermissionAdminRepository:
     async def list_assignments(
         self,
         *,
-        subject_account_id: int | None = None,
-        subject_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters = ALL_SUBJECTS,
     ) -> tuple[PermissionRoleAssignment, ...]:
         """List assignments, optionally filtering subjects and guild-related rows.
 
@@ -279,11 +281,11 @@ class PostgresPermissionAdminRepository:
         statement = select(PermissionRoleAssignment, PermissionRole.slug).join(
             PermissionRole, PermissionRole.id == PermissionRoleAssignment.role_id
         )
-        if subject_account_id is not None:
+        for subject_account_id in filters.account_ids:
             statement = statement.where(PermissionRoleAssignment.subject_account_id == subject_account_id)
-        if subject_role_id is not None:
+        for subject_role_id in filters.discord_role_ids:
             statement = statement.where(PermissionRoleAssignment.subject_role_id == subject_role_id)
-        if guild_id is not None:
+        for guild_id in filters.guild_ids:
             statement = statement.where(
                 or_(
                     PermissionRoleAssignment.subject_guild_id == guild_id,
@@ -297,9 +299,9 @@ class PostgresPermissionAdminRepository:
             assignment.role_slug = slug
         return tuple(assignment for assignment, _ in rows)
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
+    async def list_roles(self, *, filters: GuildListFilters = ALL_GUILDS) -> tuple[PermissionRole, ...]:
         statement = _ROLE_DEFINITIONS
-        if guild_id is not None:
+        for guild_id in filters.guild_ids:
             statement = statement.where(or_(PermissionRole.guild_id.is_(None), PermissionRole.guild_id == guild_id))
         session = self._session()
         return _role_records((await session.execute(statement)).all())
@@ -307,7 +309,9 @@ class PostgresPermissionAdminRepository:
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
         # A guild's own role shadows a global one of the same slug, which is what
         # makes `/role create moderator` usable in more than one server.
-        candidates = [role for role in await self.list_roles(guild_id=guild_id) if role.slug == slug]
+        candidates = [
+            role for role in await self.list_roles(filters=GuildListFilters.for_guild(guild_id)) if role.slug == slug
+        ]
         candidates.sort(key=lambda role: role.guild_id is None)
         return candidates[0] if candidates else None
 
@@ -531,23 +535,23 @@ class PostgresPermissionAdminRepository:
         return removed
 
     async def list_audit(
-        self, *, guild_id: int | None = None, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+        self, *, filters: GuildListFilters = ALL_GUILDS, selector: PageSelector = FIRST_PAGE, page_size: int = 20
     ) -> Page[PermissionAuditEntry]:
         session = self._session()
         order = KeysetOrder("newest", PermissionAuditEntry.at, PermissionAuditEntry.id, descending=True)
-        total = await session.scalar(_audit_in(select(func.count()).select_from(PermissionAuditEntry), guild_id))
+        total = await session.scalar(_audit_in(select(func.count()).select_from(PermissionAuditEntry), filters))
         return await order.page(
-            session, _audit_in(select(PermissionAuditEntry), guild_id), selector, page_size=page_size, total=total or 0
+            session, _audit_in(select(PermissionAuditEntry), filters), selector, page_size=page_size, total=total or 0
         )
 
 
-def _audit_in[S: Select[Any]](statement: S, guild_id: int | None) -> S:
+def _audit_in[S: Select[Any]](statement: S, filters: GuildListFilters) -> S:
     """Keep entries about `guild_id`, or every entry when it is None."""
-    if guild_id is None:
-        return statement
-    return statement.where(
-        or_(PermissionAuditEntry.subject_guild_id == guild_id, PermissionAuditEntry.scope_guild_id == guild_id)
-    )
+    for guild_id in filters.guild_ids:
+        statement = statement.where(
+            or_(PermissionAuditEntry.subject_guild_id == guild_id, PermissionAuditEntry.scope_guild_id == guild_id)
+        )
+    return statement
 
 
 def _role_records(

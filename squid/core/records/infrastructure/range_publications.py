@@ -343,12 +343,12 @@ class PostgresRangePublicationRepository:
 
 def _filtered[S: Select[*tuple[Any, ...]]](statement: S, filters: RangeListFilters) -> S:
     query = DoorRangeRegistration.query
-    if filters.orientation is not None:
-        statement = statement.where(query["orientation"].astext == filters.orientation)
-    if filters.height is not None:
-        statement = statement.where(query["height"].as_integer() == filters.height)
-    if filters.depth is not None:
-        statement = statement.where(query["depth"].as_integer() == filters.depth)
+    for orientation in filters.orientations:
+        statement = statement.where(query["orientation"].astext == orientation)
+    for height in filters.heights:
+        statement = statement.where(query["height"].as_integer() == height)
+    for depth in filters.depths:
+        statement = statement.where(query["depth"].as_integer() == depth)
     return statement
 
 

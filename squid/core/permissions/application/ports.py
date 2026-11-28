@@ -8,7 +8,15 @@ from whenever import Instant
 from squid.core.actors import Actor, UserActor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.domain import PermissionCheck
-from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind, RolePermissionSubject
+from squid.core.permissions.domain.models import (
+    ALL_GUILDS,
+    ALL_SUBJECTS,
+    AuditAction,
+    AuditSubjectKind,
+    GuildListFilters,
+    PermissionSubjectFilters,
+    RolePermissionSubject,
+)
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
@@ -108,20 +116,16 @@ class PermissionAdminRepository(Protocol):
     async def list_rules(
         self,
         *,
-        subject_account_id: int | None = None,
-        subject_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters = ALL_SUBJECTS,
     ) -> tuple[PermissionGrant, ...]: ...
 
     async def list_assignments(
         self,
         *,
-        subject_account_id: int | None = None,
-        subject_role_id: int | None = None,
-        guild_id: int | None = None,
+        filters: PermissionSubjectFilters = ALL_SUBJECTS,
     ) -> tuple[PermissionRoleAssignment, ...]: ...
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]: ...
+    async def list_roles(self, *, filters: GuildListFilters = ALL_GUILDS) -> tuple[PermissionRole, ...]: ...
 
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None: ...
 
@@ -191,7 +195,7 @@ class PermissionAdminRepository(Protocol):
     ) -> bool: ...
 
     async def list_audit(
-        self, *, guild_id: int | None = None, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+        self, *, filters: GuildListFilters = ALL_GUILDS, selector: PageSelector = FIRST_PAGE, page_size: int = 20
     ) -> Page[PermissionAuditEntry]:
         """Entries newest first, optionally only those about one guild."""
         ...

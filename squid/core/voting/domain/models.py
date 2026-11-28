@@ -82,11 +82,13 @@ class ReviewFilters:
     """Narrow a review listing; empty `kinds` means every review kind."""
 
     kinds: frozenset[ReviewKind] = frozenset()
-    status: VoteStatus | None = None
+    statuses: tuple[VoteStatus, ...] = ()
+
+    required_kinds: frozenset[ReviewKind] = frozenset()
 
     @property
     def vote_kinds(self) -> frozenset[VoteKind]:
-        return frozenset(kind.vote_kind for kind in (self.kinds or ReviewKind))
+        return frozenset(kind.vote_kind for kind in (self.kinds or ReviewKind) if self.required_kinds.issubset({kind}))
 
 
 class VoteSessionResult(StrEnum):

@@ -94,11 +94,11 @@ class PostgresSchematicJobRepository:
         session = self._session()
         order = KeysetOrder("newest", SchematicJob.id, SchematicJob.id, descending=True)
         total = await session.scalar(
-            _videos(select(func.count()).select_from(SchematicJob), account_id, filters.schematic_id)
+            _videos(select(func.count()).select_from(SchematicJob), account_id, filters.schematic_ids)
         )
         page = await order.page(
             session,
-            _videos(select(SchematicJob), account_id, filters.schematic_id),
+            _videos(select(SchematicJob), account_id, filters.schematic_ids),
             selector,
             page_size=page_size,
             total=total or 0,
@@ -268,7 +268,7 @@ def _snapshot(row: SchematicJob) -> SchematicJobSnapshot:
     )
 
 
-def _videos[S: Select[Any]](statement: S, account_id: int, schematic_id: int | None) -> S:
+def _videos[S: Select[Any]](statement: S, account_id: int, schematic_ids: tuple[int, ...]) -> S:
     """Keep the account's video jobs whose attachment still holds the file they rendered."""
     video = SchematicJob.params["video"]
     statement = statement.join(
@@ -276,6 +276,6 @@ def _videos[S: Select[Any]](statement: S, account_id: int, schematic_id: int | N
         (BuildSchematic.id == video["schematic_id"].as_integer())
         & (BuildSchematic.file_sha256 == video["source_sha256"].as_string()),
     ).where(SchematicJob.operation == "render_video", video["account_id"].as_integer() == account_id)
-    if schematic_id is not None:
+    for schematic_id in schematic_ids:
         statement = statement.where(BuildSchematic.id == schematic_id)
     return statement

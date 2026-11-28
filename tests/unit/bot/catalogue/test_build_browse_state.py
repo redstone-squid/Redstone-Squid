@@ -635,8 +635,7 @@ async def test_record_versions_filter_browse_and_search() -> None:
     records = AsyncMock(spec=PublicRecordQueryService)
 
     async def list_page(*, filters: RecordListFilters, **kwargs: object) -> Page[PublishedRecordResult]:
-        version_scope = filters.version_scope
-        assert version_scope is not None
+        (version_scope,) = filters.version_scopes
         current = version_scope is VersionScope.UP_TO_DATE
         record = PublishedRecordResult(
             result_id=2 if current else 1,

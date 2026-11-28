@@ -3405,7 +3405,7 @@ export const minecraftVersionsCorrect = <ThrowOnError extends boolean = false>(o
  *
  * Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.
  *
- * Repeat `kind_any` to choose several; without it every review kind is listed.
+ * Each `kind` must match. Repeat `kind_any` to include several kinds.
  */
 export const voteSessionList = <ThrowOnError extends boolean = false>(options?: Options<VoteSessionListData, ThrowOnError>): RequestResult<VoteSessionListResponses, VoteSessionListErrors, ThrowOnError> => (options?.client ?? client).get<VoteSessionListResponses, VoteSessionListErrors, ThrowOnError>({
     security: [{

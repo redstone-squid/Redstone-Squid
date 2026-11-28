@@ -752,15 +752,15 @@ class PostgresRecordRepository:
 
     async def _filtered[S: Select[*tuple[Any, ...]]](self, statement: S, filters: RecordListFilters) -> S:
         """Apply list filters to a statement that joins `RecordResult` and `Record`."""
-        if filters.build_kind is not None:
-            statement = statement.where(Record.build_kind == filters.build_kind)
-        if filters.criterion is not None:
-            statement = statement.where(Record.criterion == filters.criterion)
-        if filters.version_scope is not None:
-            statement = statement.where(Record.version_scope == filters.version_scope)
-        if filters.status is not None:
+        for build_kind in filters.build_kinds:
+            statement = statement.where(Record.build_kind == build_kind)
+        for criterion in filters.criteria:
+            statement = statement.where(Record.criterion == criterion)
+        for version_scope in filters.version_scopes:
+            statement = statement.where(Record.version_scope == version_scope)
+        for status in filters.statuses:
             has_gaps = func.coalesce(func.jsonb_array_length(RecordResult.gap_reasons["missing"]), 0) > 0
-            statement = statement.where(has_gaps if filters.status is RecordStatus.UNRESOLVED else not_(has_gaps))
+            statement = statement.where(has_gaps if status is RecordStatus.UNRESOLVED else not_(has_gaps))
         tag_ids = list(filters.tag_ids)
         if filters.tag_slugs:
             # A slug names at most one tag, so an unknown slug matches nothing.

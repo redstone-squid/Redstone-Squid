@@ -165,8 +165,8 @@ def test_list_filters_reach_the_service_and_offsetless_times_are_utc(client_for:
     assert response.status_code == 200
     assert reports.filters == [
         ErrorReportFilters(
-            surface="route",
-            error_code=ErrorCode.INTERNAL_ERROR,
+            surfaces=("route",),
+            error_codes=(ErrorCode.INTERNAL_ERROR,),
             occurred_after=Instant.from_utc(2026, 8, 17),
             occurred_before=Instant.from_utc(2026, 8, 17, 4),
         )

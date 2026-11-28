@@ -194,7 +194,9 @@ class FakeVoteRepository:
     ) -> Page[VoteSessionSnapshot]:
         session = self.session
         visible = (
-            session is not None and session.kind in filters.vote_kinds and filters.status in (None, session.status)
+            session is not None
+            and session.kind in filters.vote_kinds
+            and all(s is session.status for s in filters.statuses)
         )
         return offset_page([session] if visible and session else [], offset=selector.offset, page_size=page_size)
 
@@ -1182,7 +1184,7 @@ async def test_reviewers_who_can_see_pending_builds_page_review_votes() -> None:
     )
     reviewer = ActingContext.direct(UserActor(account_id=7))
 
-    page = await service.list_reviews(ReviewFilters(status=VoteStatus.OPEN), context=reviewer)
+    page = await service.list_reviews(ReviewFilters(statuses=(VoteStatus.OPEN,)), context=reviewer)
     edits = await service.list_reviews(ReviewFilters(frozenset({ReviewKind.BUILD_EDIT})), context=reviewer)
 
     assert ([item.id for item in page.items], page.total) == ([snapshot().id], 1)

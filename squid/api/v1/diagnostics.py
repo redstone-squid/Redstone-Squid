@@ -7,6 +7,7 @@ from litestar import Response, Router, delete, get
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
 from litestar.params import FromQuery, PathParameter, QueryParameter, SkipValidation
+from msgspec import Meta
 from whenever import Instant
 
 from squid.api.contract import ANONYMOUS, cli_command, contract, transport_only
@@ -31,27 +32,26 @@ from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIA
 # Reading and clearing reports require different permissions, declared per route.
 
 WorkLostParam = Annotated[
-    bool,
+    list[bool] | None,
     QueryParameter(description="Return only failures that permanently abandoned work, such as a dead-lettered job."),
 ]
 
 SurfaceParam = Annotated[
-    str | None,
+    list[Annotated[str, Meta(min_length=1)]] | None,
     QueryParameter(
-        min_length=1,
         description="Only failures from this surface, such as `application_command` or `route`.",
     ),
 ]
 ErrorCodeParam = Annotated[
-    ErrorCode | None,
+    list[ErrorCode] | None,
     QueryParameter(description="Only failures that carried this application error code."),
 ]
 OccurredAfterParam = Annotated[
-    datetime | None,
+    list[datetime] | None,
     QueryParameter(description="Only failures at or after this time. A time without an offset is UTC."),
 ]
 OccurredBeforeParam = Annotated[
-    datetime | None,
+    list[datetime] | None,
     QueryParameter(description="Only failures before this time. A time without an offset is UTC."),
 ]
 
@@ -82,7 +82,7 @@ async def list_error_reports(
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
-    work_lost: WorkLostParam = False,
+    work_lost: WorkLostParam = None,
     surface: SurfaceParam = None,
     error_code: ErrorCodeParam = None,
     occurred_after: OccurredAfterParam = None,
@@ -95,11 +95,11 @@ async def list_error_reports(
     failures arrive.
     """
     filters = ErrorReportFilters(
-        surface=surface,
-        error_code=error_code,
-        occurred_after=None if occurred_after is None else _instant(occurred_after),
-        occurred_before=None if occurred_before is None else _instant(occurred_before),
-        work_lost_only=work_lost,
+        surfaces=tuple(surface or ()),
+        error_codes=tuple(error_code or ()),
+        occurred_after=max(map(_instant, occurred_after or ()), default=None),
+        occurred_before=min(map(_instant, occurred_before or ()), default=None),
+        work_lost_only=any(work_lost or ()),
     )
     page = await error_reports.recent(
         context=caller.context(),

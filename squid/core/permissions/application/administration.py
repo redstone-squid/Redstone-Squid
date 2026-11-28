@@ -183,8 +183,7 @@ class PermissionAdministrationService:
             return MAX_ROLE_RANK + 1
         roles = {role.id: role for role in await uow.permission_admin.list_roles()}
         assignments = await uow.permission_admin.list_assignments(
-            subject_account_id=subject.account_id,
-            guild_id=subject.guild_id,
+            filters=PermissionSubjectFilters.for_subject(account_id=subject.account_id, guild_id=subject.guild_id),
         )
         # The same two tests the resolver applies to a rule: an assignment that
         # confers nothing any more must not confer rank either. The store's
@@ -507,9 +506,7 @@ class PermissionAdministrationService:
         """List stored direct grants matching the supplied subject and guild filters."""
         async with self._read() as uow:
             return await uow.permission_admin.list_rules(
-                subject_account_id=filters.account_id,
-                subject_role_id=filters.discord_role_id,
-                guild_id=filters.guild_id,
+                filters=filters,
             )
 
     @application_operation
@@ -522,9 +519,7 @@ class PermissionAdministrationService:
         """List permission-role assignments matching the supplied subject and guild filters."""
         async with self._read() as uow:
             return await uow.permission_admin.list_assignments(
-                subject_account_id=filters.account_id,
-                subject_role_id=filters.discord_role_id,
-                guild_id=filters.guild_id,
+                filters=filters,
             )
 
     @application_operation
@@ -533,7 +528,9 @@ class PermissionAdministrationService:
     ) -> tuple[PermissionAuditEntry, ...]:
         """The most recent permission mutations."""
         async with self._read() as uow:
-            return (await uow.permission_admin.list_audit(guild_id=guild_id, page_size=limit)).items
+            return (
+                await uow.permission_admin.list_audit(filters=GuildListFilters.for_guild(guild_id), page_size=limit)
+            ).items
 
     @application_operation
     async def audit_page(
@@ -546,9 +543,7 @@ class PermissionAdministrationService:
     ) -> Page[PermissionAuditEntry]:
         """Page permission mutations newest first."""
         async with self._read() as uow:
-            return await uow.permission_admin.list_audit(
-                guild_id=filters.guild_id, selector=selector, page_size=page_size
-            )
+            return await uow.permission_admin.list_audit(filters=filters, selector=selector, page_size=page_size)
 
     @application_operation
     async def stored_grant(self, grant_id: int, *, context: ActingContext) -> PermissionGrant:
@@ -639,7 +634,7 @@ class PermissionAdministrationService:
     ) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
         async with self._read() as uow:
-            roles = await uow.permission_admin.list_roles(guild_id=filters.guild_id)
+            roles = await uow.permission_admin.list_roles(filters=filters)
             return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
     @application_operation

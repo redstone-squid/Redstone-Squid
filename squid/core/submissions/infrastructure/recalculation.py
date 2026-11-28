@@ -130,17 +130,16 @@ class PostgresRecalculationProposals:
 
 def _filtered[S: Select[Any]](statement: S, filters: RecalculationProposalFilters, now: Instant) -> S:
     proposal = SubmissionRecalculationProposal
-    if filters.build_id is not None:
-        statement = statement.where(proposal.build_id == filters.build_id)
-    match filters.status:
-        case RecalculationProposalStatus.PENDING:
-            statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at > now)
-        case RecalculationProposalStatus.APPLIED:
-            statement = statement.where(proposal.applied_revision.is_not(None))
-        case RecalculationProposalStatus.EXPIRED:
-            statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at <= now)
-        case None:
-            pass
+    for build_id in filters.build_ids:
+        statement = statement.where(proposal.build_id == build_id)
+    for status in filters.statuses:
+        match status:
+            case RecalculationProposalStatus.PENDING:
+                statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at > now)
+            case RecalculationProposalStatus.APPLIED:
+                statement = statement.where(proposal.applied_revision.is_not(None))
+            case RecalculationProposalStatus.EXPIRED:
+                statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at <= now)
     return statement
 
 

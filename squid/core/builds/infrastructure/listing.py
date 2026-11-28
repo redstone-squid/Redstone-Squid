@@ -21,24 +21,24 @@ def filter_build_listing[S: Select[Any]](
     statement = statement.where(Build.submission_status.in_(statuses))
     if submitter_account_id is not None:
         statement = statement.where(Build.submitter_account_id == submitter_account_id)
-    if filters.category is not None:
-        statement = statement.where(Build.category == filters.category)
-    if filters.version is not None:
+    for category in filters.categories:
+        statement = statement.where(Build.category == category)
+    for version_id in filters.version_ids:
         statement = statement.where(
             select(BuildVersion.build_id)
-            .where(BuildVersion.build_id == Build.id, BuildVersion.version_id == filters.version)
+            .where(BuildVersion.build_id == Build.id, BuildVersion.version_id == version_id)
             .exists()
         )
-    if filters.creator_name_id is not None:
+    for creator_name_id in filters.creator_name_ids:
         statement = statement.where(
             select(BuildCredit.id)
             .where(
                 BuildCredit.build_id == Build.id,
-                BuildCredit.alias_id == filters.creator_name_id,
+                BuildCredit.alias_id == creator_name_id,
             )
             .exists()
         )
-    if filters.public_account_id is not None:
+    for public_account_id in filters.public_account_ids:
         linked = attributed_credits()
         identifiers = public_account_ids()
         statement = statement.where(
@@ -47,7 +47,7 @@ def filter_build_listing[S: Select[Any]](
             .join(identifiers, identifiers.c.account_id == linked.c.account_id)
             .where(
                 linked.c.build_id == Build.id,
-                identifiers.c.public_id == filters.public_account_id,
+                identifiers.c.public_id == public_account_id,
             )
             .exists()
         )

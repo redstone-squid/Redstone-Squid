@@ -51,7 +51,7 @@ class CreditedBuild:
 
 @dataclass(frozen=True, slots=True)
 class SubmissionListFilters:
-    status: SubmissionStatus | None = None
+    statuses: tuple[SubmissionStatus, ...] = ()
 
 
 ALL_SUBMISSIONS = SubmissionListFilters()

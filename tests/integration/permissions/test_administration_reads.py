@@ -12,7 +12,11 @@ from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
 from squid.core.permissions.domain import Reason
-from squid.core.permissions.domain.models import AccountGrantSubject, ExternalRoleGrantSubject, PermissionSubjectFilters
+from squid.core.permissions.domain.models import (
+    AccountGrantSubject,
+    ExternalRoleGrantSubject,
+    PermissionSubjectFilters,
+)
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 OWNER = ActingContext.direct(UserActor(account_id=None, discord_user_id=1, is_bot_owner=True))
@@ -38,7 +42,9 @@ async def test_a_stored_grant_is_explained_and_revoked_by_its_id(
     admin = administration(migrated_session_factory)
     subject = AccountGrantSubject(await account(migrated_session_factory))
     await admin.grant(context=OWNER, subject=subject, pattern=NODE)
-    (grant,) = await admin.rules_for(context=OWNER, filters=PermissionSubjectFilters(account_id=subject.account_id))
+    (grant,) = await admin.rules_for(
+        context=OWNER, filters=PermissionSubjectFilters.for_subject(account_id=subject.account_id)
+    )
 
     (decision,) = await admin.explain(subject, context=OWNER, nodes=(NODE,))
     assert decision.allowed
@@ -46,7 +52,12 @@ async def test_a_stored_grant_is_explained_and_revoked_by_its_id(
     assert decision.decisive_rule is not None
 
     await admin.revoke_stored(grant.id, context=OWNER)
-    assert await admin.rules_for(context=OWNER, filters=PermissionSubjectFilters(account_id=subject.account_id)) == ()
+    assert (
+        await admin.rules_for(
+            context=OWNER, filters=PermissionSubjectFilters.for_subject(account_id=subject.account_id)
+        )
+        == ()
+    )
     with pytest.raises(NotFoundError):
         await admin.revoke_stored(grant.id, context=OWNER)
 
@@ -56,11 +67,16 @@ async def test_an_assignment_is_removed_by_its_id(migrated_session_factory: asyn
     role = await admin.create_role(context=OWNER, slug="api-reviewer", name="Reviewer", rank=3)
     subject = ExternalRoleGrantSubject(guild_id=10, discord_role_id=20)
     await admin.assign(await admin.role_by_id(role.id, context=OWNER), context=OWNER, subject=subject)
-    (assignment,) = await admin.assignments_for(context=OWNER, filters=PermissionSubjectFilters(discord_role_id=20))
+    (assignment,) = await admin.assignments_for(
+        context=OWNER, filters=PermissionSubjectFilters.for_subject(discord_role_id=20)
+    )
 
     await admin.unassign_stored(assignment.id, context=OWNER)
 
-    assert await admin.assignments_for(context=OWNER, filters=PermissionSubjectFilters(discord_role_id=20)) == ()
+    assert (
+        await admin.assignments_for(context=OWNER, filters=PermissionSubjectFilters.for_subject(discord_role_id=20))
+        == ()
+    )
 
 
 async def test_explaining_an_account_in_a_guild_needs_discord(

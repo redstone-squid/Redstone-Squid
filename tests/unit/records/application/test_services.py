@@ -190,7 +190,7 @@ class FakeRuns:
             (
                 key
                 for key, record in self.published_records.items()
-                if filters.version_scope is None or record.version_scope is filters.version_scope
+                if all(record.version_scope is scope for scope in filters.version_scopes)
             ),
             reverse=True,
         )
@@ -200,7 +200,7 @@ class FakeRuns:
 
     async def count_published_records(self, *, filters: RecordListFilters = ALL_RECORDS) -> int:
         return sum(
-            filters.version_scope is None or record.version_scope is filters.version_scope
+            all(record.version_scope is scope for scope in filters.version_scopes)
             for record in self.published_records.values()
         )
 

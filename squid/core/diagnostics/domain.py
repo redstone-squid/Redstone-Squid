@@ -32,8 +32,8 @@ class ErrorReportNotFoundError(NotFoundError):
 class ErrorReportFilters:
     """Which unexpired reports a listing returns. Every supplied filter must match."""
 
-    surface: str | None = None
-    error_code: ErrorCode | None = None
+    surfaces: tuple[str, ...] = ()
+    error_codes: tuple[ErrorCode, ...] = ()
     occurred_after: Instant | None = None
     """Inclusive lower bound."""
     occurred_before: Instant | None = None

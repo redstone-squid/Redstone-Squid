@@ -6,7 +6,8 @@ from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import Provide
-from litestar.params import FromPath, FromQuery, JSONBody, PathParameter, QueryParameter
+from litestar.params import FromPath, FromQuery, JSONBody, PathParameter
+from msgspec import Meta
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
@@ -89,10 +90,10 @@ async def get_record(
 async def list_records(
     records: PublicRecords,
     caller: CurrentCaller,
-    build_kind: FromQuery[BuildKind | None] = None,
-    criterion: FromQuery[RecordCriterion | None] = None,
-    version_scope: FromQuery[VersionScope | None] = None,
-    status: FromQuery[RecordStatus | None] = None,
+    build_kind: FromQuery[list[BuildKind] | None] = None,
+    criterion: FromQuery[list[RecordCriterion] | None] = None,
+    version_scope: FromQuery[list[VersionScope] | None] = None,
+    status: FromQuery[list[RecordStatus] | None] = None,
     tag_id: FromQuery[list[int] | None] = None,
     tag_slug: FromQuery[list[str] | None] = None,
     sort: FromQuery[RecordListSort] = RecordListSort.ID,
@@ -110,10 +111,10 @@ async def list_records(
         selector=resolve_selector(offset=offset, cursor=cursor),
         sort=sort,
         filters=RecordListFilters(
-            build_kind,
-            criterion,
-            version_scope,
-            status,
+            tuple(dict.fromkeys(build_kind or ())),
+            tuple(dict.fromkeys(criterion or ())),
+            tuple(dict.fromkeys(version_scope or ())),
+            tuple(dict.fromkeys(status or ())),
             tag_ids=tuple(dict.fromkeys(tag_id or ())),
             tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
         ),
@@ -155,9 +156,9 @@ async def lookup_door_ranges(
 async def list_door_ranges(
     publications: RangePublications,
     caller: CurrentCaller,
-    orientation: FromQuery[DoorOrientationLiteral | None] = None,
-    height: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
-    depth: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
+    orientation: FromQuery[list[DoorOrientationLiteral] | None] = None,
+    height: FromQuery[list[Annotated[int, Meta(ge=1, le=2**31 - 1)]] | None] = None,
+    depth: FromQuery[list[Annotated[int, Meta(ge=1, le=2**31 - 1)]] | None] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
@@ -165,7 +166,7 @@ async def list_door_ranges(
 ) -> Page[RangeRegistration]:
     """List registered door range queries newest first, with the names of their tags and version."""
     page = await publications.list_page(
-        RangeListFilters(orientation, height, depth),
+        RangeListFilters(tuple(orientation or ()), tuple(height or ()), tuple(depth or ())),
         selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=caller.context(),

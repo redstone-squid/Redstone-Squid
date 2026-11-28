@@ -339,6 +339,7 @@ _DRAFT_DELETE_LINKS = {
         "context": Provide(authenticated_submission_context),
     },
 )
+@private_response
 async def list_correction_inbox(
     drafts: Drafts,
     context: SubmissionContext,
@@ -811,7 +812,7 @@ async def submission_reader(caller: NamedDependency[SkipValidation[Caller]]) -> 
 async def list_submissions(
     services: Services,
     context: SubmissionContext,
-    status: FromQuery[SubmissionStatus | None] = None,
+    status: FromQuery[list[SubmissionStatus] | None] = None,
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
@@ -821,7 +822,7 @@ async def list_submissions(
     page = await services.viewer_queries.submissions(
         resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size,
-        filters=SubmissionListFilters(status),
+        filters=SubmissionListFilters(tuple(status or ())),
         context=context,
     )
     return Page.from_domain(page)

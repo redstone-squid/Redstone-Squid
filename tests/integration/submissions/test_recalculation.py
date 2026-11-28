@@ -289,7 +289,7 @@ async def test_staff_list_filters_by_status_and_build_and_pages_oldest_first(
     )
     service = revision_service(repository, builds)
     context = ActingContext.for_actor(UserActor(account_id=staff.id))
-    pending = RecalculationProposalFilters(RecalculationProposalStatus.PENDING)
+    pending = RecalculationProposalFilters((RecalculationProposalStatus.PENDING,))
 
     first = await service.list_page(pending, sort=RecalculationProposalSort.OLDEST, page_size=2, context=context)
     assert first.next is not None
@@ -305,13 +305,13 @@ async def test_staff_list_filters_by_status_and_build_and_pages_oldest_first(
     assert first.total == 3
     assert second.next is None
     applied = await service.list_page(
-        RecalculationProposalFilters(RecalculationProposalStatus.APPLIED), context=context
+        RecalculationProposalFilters((RecalculationProposalStatus.APPLIED,)), context=context
     )
     expired = await service.list_page(
-        RecalculationProposalFilters(RecalculationProposalStatus.EXPIRED), context=context
+        RecalculationProposalFilters((RecalculationProposalStatus.EXPIRED,)), context=context
     )
     assert [row.id for row in applied.items] == [variants["applied"].id]
     assert [row.id for row in expired.items] == [variants["expired"].id]
-    assert (await service.list_page(RecalculationProposalFilters(build_id=build.id), context=context)).total == 4
+    assert (await service.list_page(RecalculationProposalFilters(build_ids=(build.id,)), context=context)).total == 4
     with pytest.raises(AuthorizationError):
         await service.list_page(pending, context=ActingContext.for_actor(owner))

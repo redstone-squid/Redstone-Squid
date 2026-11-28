@@ -128,7 +128,7 @@ async def test_record_listing_serializes_holders_and_metrics_and_passes_filters(
     kwargs = records.list_page.call_args.kwargs
     assert kwargs["sort"] is RecordListSort.TITLE
     assert kwargs["filters"] == RecordListFilters(
-        build_kind=BuildKind.DOOR, status=RecordStatus.UNRESOLVED, tag_slugs=("flush",)
+        build_kinds=(BuildKind.DOOR,), statuses=(RecordStatus.UNRESOLVED,), tag_slugs=("flush",)
     )
 
 
@@ -350,7 +350,7 @@ async def test_registered_ranges_list_filters_and_names_their_tags() -> None:
             {"id": 20, "name": "Flush", "slug": "flush", "operator": None, "value": None}
         ]
         assert item["published_at"] == "2026-11-14T00:00:00Z"
-        assert publications.list_page.call_args.args == (RangeListFilters("Door", 3, None),)
+        assert publications.list_page.call_args.args == (RangeListFilters(("Door",), (3,), ()),)
         assert (await client.get("/records/ranges/door", params={"height": 0})).status_code == 400
 
 

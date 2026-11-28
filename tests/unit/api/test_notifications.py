@@ -230,7 +230,7 @@ async def test_inbox_items_carry_typed_payloads_links_and_the_unread_count() -> 
     )
     notifications.inbox_result = Inbox(Page(items=entries, total=2, next=None, prev=None), unread_count=7)
 
-    page = await list_inbox.fn(notifications, ACCOUNT, unread_only=True)
+    page = await list_inbox.fn(notifications, ACCOUNT, unread_only=[True])
 
     assert notifications.inbox_reads[0][3] is True
     assert page.unread_count == 7
@@ -284,7 +284,9 @@ async def test_subscriptions_filter_by_subject_and_name_their_subjects() -> None
         ),
     )
 
-    response = await list_subscriptions.fn(notifications, ACCOUNT, kind=SubscriptionKind.CREATOR, subject_id=creator)
+    response = await list_subscriptions.fn(
+        notifications, ACCOUNT, kind=[SubscriptionKind.CREATOR], subject_id=[creator]
+    )
 
     (item,) = response.content.items
     assert (item.id, item.subject_label, item.subject_href, item.filter_summary) == (

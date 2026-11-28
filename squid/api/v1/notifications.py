@@ -118,9 +118,11 @@ async def update_preferences(
 async def list_subscriptions(
     notifications: Notifications,
     caller: UserCaller,
-    kind: Annotated[SubscriptionKind | None, QueryParameter(description="Only list follows of this kind.")] = None,
+    kind: Annotated[
+        list[SubscriptionKind] | None, QueryParameter(description="Only list follows of this kind.")
+    ] = None,
     subject_id: Annotated[
-        UUID | None, QueryParameter(description="Only list follows of this creator or record.")
+        list[UUID] | None, QueryParameter(description="Only list follows of this creator or record.")
     ] = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
     offset: OffsetParam = None,
@@ -136,7 +138,7 @@ async def list_subscriptions(
     return Response(
         content=Page.from_domain(
             snapshot.subscriptions(
-                SubscriptionListFilters(kind, subject_id),
+                SubscriptionListFilters(tuple(kind or ()), tuple(subject_id or ())),
                 sort=sort,
                 selector=resolve_selector(offset=offset, cursor=cursor),
                 page_size=page_size,
@@ -259,13 +261,16 @@ async def list_inbox(
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
     cursor: CursorParam = None,
-    unread_only: Annotated[bool, QueryParameter(description="Only list unread items.")] = False,
+    unread_only: Annotated[list[bool] | None, QueryParameter(description="Only list unread items.")] = None,
 ) -> InboxPage:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     _account_id(caller)
     selector = resolve_selector(offset=offset, cursor=cursor, sort=sort)
     inbox = await notifications.inbox(
-        context=caller.context(), selector=selector, page_size=page_size, filters=InboxListFilters(unread_only)
+        context=caller.context(),
+        selector=selector,
+        page_size=page_size,
+        filters=InboxListFilters(any(unread_only or ())),
     )
     return InboxPage.from_domain(inbox)
 

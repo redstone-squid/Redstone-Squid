@@ -140,8 +140,8 @@ class RecalculationProposalSort(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RecalculationProposalFilters:
-    status: RecalculationProposalStatus | None = None
-    build_id: int | None = None
+    statuses: tuple[RecalculationProposalStatus, ...] = ()
+    build_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

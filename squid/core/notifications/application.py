@@ -59,8 +59,8 @@ class FollowedSubject:
 
 @dataclass(frozen=True, slots=True)
 class SubscriptionListFilters:
-    kind: SubscriptionKind | None
-    subject_id: UUID | None
+    kinds: tuple[SubscriptionKind, ...]
+    subject_ids: tuple[UUID, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,8 +74,8 @@ class NotificationEditorSnapshot:
         follows = [
             follow
             for follow in self.follows
-            if (filters.kind is None or follow.subscription.kind is filters.kind)
-            and (filters.subject_id is None or follow.subscription.subject_id == filters.subject_id)
+            if all(follow.subscription.kind is kind for kind in filters.kinds)
+            and all(follow.subscription.subject_id == subject for subject in filters.subject_ids)
         ]
         return sort.page(
             follows,

@@ -63,7 +63,7 @@ class SchematicJobSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class VideoListFilters:
-    schematic_id: int | None = None
+    schematic_ids: tuple[int, ...] = ()
 
 
 ALL_VIDEOS = VideoListFilters()

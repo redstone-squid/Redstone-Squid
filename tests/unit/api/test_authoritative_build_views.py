@@ -139,7 +139,7 @@ async def test_pending_view_requires_an_authenticated_human() -> None:
             graph.build_queries,
             graph.permissions,
             ANONYMOUS,
-            status=BuildStatusFilter.PENDING,
+            status=[BuildStatusFilter.PENDING],
         )
 
     assert graph.build_queries.calls == []
@@ -155,7 +155,7 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
             graph.build_queries,
             graph.permissions,
             SERVICE,
-            status=BuildStatusFilter.REJECTED,
+            status=[BuildStatusFilter.REJECTED],
         )
 
     assert graph.build_queries.calls == []
@@ -172,7 +172,7 @@ async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
             graph.build_queries,
             graph.permissions,
             owned,
-            status=BuildStatusFilter.REJECTED,
+            status=[BuildStatusFilter.REJECTED],
         )
 
     assert graph.build_queries.calls == []
@@ -187,7 +187,7 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
             graph.build_queries,
             graph.permissions,
             ACCOUNT,
-            status=BuildStatusFilter.PENDING,
+            status=[BuildStatusFilter.PENDING],
         )
 
 
@@ -199,7 +199,7 @@ async def test_administrator_reads_the_pending_queue() -> None:
         graph.build_queries,
         graph.permissions,
         ACCOUNT,
-        status=BuildStatusFilter.PENDING,
+        status=[BuildStatusFilter.PENDING],
     )
 
     assert graph.build_queries.calls[-1].statuses == frozenset({BuildStatus.PENDING})
@@ -296,7 +296,7 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
 async def test_submitters_see_their_own_builds_in_every_status() -> None:
     graph = fakes(builds=[persisted_build(5), persisted_build(4, BuildStatus.REJECTED)])
 
-    page = (await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT, submitted_by="me")).content
+    page = (await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT, submitted_by=["me"])).content
 
     call = graph.build_queries.calls[-1]
     assert call.statuses == frozenset(BuildStatus)
@@ -310,7 +310,7 @@ async def test_an_account_submitter_can_list_builds_without_discord() -> None:
     graph = fakes(builds=[persisted_build(5)])
     minecraft_only = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
-    page = (await list_builds.fn(graph.build_queries, graph.permissions, minecraft_only, submitted_by="me")).content
+    page = (await list_builds.fn(graph.build_queries, graph.permissions, minecraft_only, submitted_by=["me"])).content
 
     assert graph.build_queries.calls[-1].submitter_account_id == 7
     assert [item.id for item in page.items] == [5]
@@ -326,7 +326,7 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)
 
     await list_builds.fn(
-        graph.build_queries, graph.permissions, other, submitted_by="me", cursor=PageCursor("id", 9, 9).encode()
+        graph.build_queries, graph.permissions, other, submitted_by=["me"], cursor=PageCursor("id", 9, 9).encode()
     )
 
     call = graph.build_queries.calls[-1]
@@ -338,4 +338,4 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
 async def test_own_builds_reject_a_service_credential() -> None:
     graph = fakes()
     with pytest.raises(AuthenticationError):
-        await list_builds.fn(graph.build_queries, graph.permissions, SERVICE, submitted_by="me")
+        await list_builds.fn(graph.build_queries, graph.permissions, SERVICE, submitted_by=["me"])

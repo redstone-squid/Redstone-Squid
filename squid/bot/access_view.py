@@ -249,13 +249,14 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             nodes.append(
                 self._role_browser(
                     await self._admin.roles(
-                        context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters(self._guild_id)
+                        context=ActingContext.for_actor(await self._actor()),
+                        filters=GuildListFilters.for_guild(self._guild_id),
                     )
                 )
             )
         elif page in {"role-settings", "role-actions"}:
             roles = await self._admin.roles(
-                context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters(self._guild_id)
+                context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters.for_guild(self._guild_id)
             )
             role = next((r for r in roles if r.id == self._role_tools), None)
             if role is None:
@@ -350,7 +351,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         decisions = (await self._bot.services.permissions.check(actor, *visible)).decisions
         role_only = self._discord_role_id is not None
         allowed = tuple(d for d in decisions if d.allowed and (not role_only or d.decisive_rule))
-        target = PermissionSubjectFilters(self._account_id, self._discord_role_id)
+        target = PermissionSubjectFilters.for_subject(self._account_id, self._discord_role_id)
         rules = await self._admin.rules_for(context=ActingContext.for_actor(await self._actor()), filters=target)
         assignments = tuple(
             row
@@ -727,7 +728,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 (
                     role
                     for role in await self._admin.roles(
-                        context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters(self._guild_id)
+                        context=ActingContext.for_actor(await self._actor()),
+                        filters=GuildListFilters.for_guild(self._guild_id),
                     )
                     if str(role.id) == item.value
                 ),
@@ -973,7 +975,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         role
                         for role in await self._admin.roles(
                             context=ActingContext.for_actor(await self._actor()),
-                            filters=GuildListFilters(self._guild_id),
+                            filters=GuildListFilters.for_guild(self._guild_id),
                         )
                         if str(role.id) == item.value
                     ),
@@ -1093,7 +1095,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         roles = {
             role.id: role.name
             for role in await self._admin.roles(
-                context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters(self._guild_id)
+                context=ActingContext.for_actor(await self._actor()), filters=GuildListFilters.for_guild(self._guild_id)
             )
         }
         guild = self._bot.get_guild(self._guild_id) if self._bot else None
@@ -1241,7 +1243,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 role.slug
                 for role in await self._admin.roles(
                     context=ActingContext.for_actor(await self._actor()),
-                    filters=GuildListFilters(_scope(scope, self._guild_id)),
+                    filters=GuildListFilters.for_guild(_scope(scope, self._guild_id)),
                 )
             }
             slug = stem

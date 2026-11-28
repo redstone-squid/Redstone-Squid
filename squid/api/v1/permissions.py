@@ -6,6 +6,7 @@ permissions here; core refuses guild delegates, who use `/access` in their serve
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Self
 from uuid import UUID
@@ -13,6 +14,7 @@ from uuid import UUID
 from litestar import Router, delete, get, patch, post
 from litestar.di import Provide
 from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter
+from msgspec import Meta
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
@@ -72,6 +74,7 @@ GuildQuery = Annotated[
     str | None,
     QueryParameter(pattern=SNOWFLAKE_PATTERN, description="Only rows about this guild, or resolve in it."),
 ]
+SnowflakeList = FromQuery[list[Annotated[str, Meta(pattern=SNOWFLAKE_PATTERN)]] | None]
 _EFFECTS = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}
 
 
@@ -81,8 +84,39 @@ class IncludedRoleRequest(BaseModel):
     role_id: int
 
 
-class SubjectQuery(PermissionSubjectFilters):
+@dataclass(frozen=True, slots=True)
+class SubjectQuery:
     """The subject named by `account_id`, or by `guild_id` with `discord_role_id`."""
+
+    account_id: int | None
+    discord_role_id: int | None
+    guild_id: int | None
+
+    @classmethod
+    async def filters(
+        cls,
+        services: Services,
+        caller: Caller,
+        account_ids: list[UUID] | None,
+        role_ids: list[str] | None,
+        guild_ids: list[str] | None,
+    ) -> PermissionSubjectFilters:
+        if account_ids and role_ids:
+            msg = "account_id and discord_role_id cannot be combined"
+            raise ValidationError(
+                msg,
+                issues=tuple(
+                    SimpleIssue(field=f"/query/{key}", code=FieldErrorCode.INCOMPATIBLE_FIELDS)
+                    for key in ("account_id", "discord_role_id")
+                ),
+            )
+        accounts = [
+            await services.accounts.resolve_public_id(account_id, context=caller.context())
+            for account_id in dict.fromkeys(account_ids or ())
+        ]
+        return PermissionSubjectFilters(
+            tuple(accounts), tuple(map(int, role_ids or ())), tuple(map(int, guild_ids or ()))
+        )
 
     @classmethod
     async def read(
@@ -93,21 +127,18 @@ class SubjectQuery(PermissionSubjectFilters):
         discord_role_id: str | None,
         guild_id: str | None,
     ) -> Self:
-        if account_id is not None and discord_role_id is not None:
-            msg = "account_id and discord_role_id cannot be combined"
-            raise ValidationError(
-                msg,
-                issues=tuple(
-                    SimpleIssue(field=f"/query/{key}", code=FieldErrorCode.INCOMPATIBLE_FIELDS)
-                    for key in ("account_id", "discord_role_id")
-                ),
-            )
-        account = (
-            None
-            if account_id is None
-            else await services.accounts.resolve_public_id(account_id, context=caller.context())
+        filters = await cls.filters(
+            services,
+            caller,
+            [account_id] if account_id is not None else None,
+            [discord_role_id] if discord_role_id is not None else None,
+            [guild_id] if guild_id is not None else None,
         )
-        return cls(account, _int(discord_role_id), _int(guild_id))
+        return cls(
+            next(iter(filters.account_ids), None),
+            next(iter(filters.discord_role_ids), None),
+            next(iter(filters.guild_ids), None),
+        )
 
     def subject(self) -> GrantSubject:
         if self.account_id is not None:
@@ -163,16 +194,16 @@ async def list_grants(
     admin: PermissionAdmin,
     services: Services,
     caller: CurrentCaller,
-    account_id: AccountQuery = None,
-    discord_role_id: DiscordRoleQuery = None,
-    guild_id: GuildQuery = None,
+    account_id: FromQuery[list[UUID] | None] = None,
+    discord_role_id: SnowflakeList = None,
+    guild_id: SnowflakeList = None,
     page_size: PageSizeParam = 50,
     sort: FromQuery[GrantListSort] = GrantListSort.OLDEST,
     cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[GrantDetail]:
     """List stored grants, oldest first. Grants are granted and revoked, never edited."""
-    query = await SubjectQuery.read(services, caller, account_id, discord_role_id, guild_id)
+    query = await SubjectQuery.filters(services, caller, account_id, discord_role_id, guild_id)
     grants = await admin.rules_for(
         context=caller.context(),
         filters=query,
@@ -218,7 +249,8 @@ async def create_grant(
     stored = next(
         grant
         for grant in await admin.rules_for(
-            context=caller.context(), filters=PermissionSubjectFilters(subject.account_id, subject.discord_role_id)
+            context=caller.context(),
+            filters=PermissionSubjectFilters.for_subject(subject.account_id, subject.discord_role_id),
         )
         if grant.pattern == data.pattern and grant.scope_guild_id == scope
     )
@@ -254,14 +286,14 @@ async def revoke_grant(grant_id: FromPath[int], admin: PermissionAdmin, caller: 
 async def list_roles(
     admin: PermissionAdmin,
     caller: CurrentCaller,
-    guild_id: GuildQuery = None,
+    guild_id: SnowflakeList = None,
     page_size: PageSizeParam = 50,
     sort: FromQuery[RoleListSort] = RoleListSort.HIGHEST_RANK,
     cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[RoleDetail]:
     """List global roles, and one guild's own roles when `guild_id` is given, highest rank first."""
-    roles = await admin.roles(context=caller.context(), filters=GuildListFilters(_int(guild_id)))
+    roles = await admin.roles(context=caller.context(), filters=GuildListFilters(tuple(map(int, guild_id or ()))))
     return Page[RoleDetail].from_domain(
         sort.page(roles, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size),
         RoleDetail.of,
@@ -435,16 +467,16 @@ async def list_assignments(
     admin: PermissionAdmin,
     services: Services,
     caller: CurrentCaller,
-    account_id: AccountQuery = None,
-    discord_role_id: DiscordRoleQuery = None,
-    guild_id: GuildQuery = None,
+    account_id: FromQuery[list[UUID] | None] = None,
+    discord_role_id: SnowflakeList = None,
+    guild_id: SnowflakeList = None,
     page_size: PageSizeParam = 50,
     sort: FromQuery[AssignmentListSort] = AssignmentListSort.OLDEST,
     cursor: CursorParam = None,
     offset: OffsetParam = None,
 ) -> Page[AssignmentDetail]:
     """List role assignments, oldest first. A `guild_id` filter keeps every account assignment."""
-    query = await SubjectQuery.read(services, caller, account_id, discord_role_id, guild_id)
+    query = await SubjectQuery.filters(services, caller, account_id, discord_role_id, guild_id)
     assignments = await admin.assignments_for(
         context=caller.context(),
         filters=query,
@@ -485,7 +517,8 @@ async def create_assignment(
     stored = next(
         row
         for row in await admin.assignments_for(
-            context=caller.context(), filters=PermissionSubjectFilters(subject.account_id, subject.discord_role_id)
+            context=caller.context(),
+            filters=PermissionSubjectFilters.for_subject(subject.account_id, subject.discord_role_id),
         )
         if row.role_id == role.id and row.scope_guild_id == scope
     )
@@ -552,7 +585,7 @@ async def list_audit(
     admin: PermissionAdmin,
     services: Services,
     caller: CurrentCaller,
-    guild_id: GuildQuery = None,
+    guild_id: SnowflakeList = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
@@ -561,7 +594,7 @@ async def list_audit(
     """List permission changes newest first. Anchors keep a reader's place while changes arrive."""
     page = await admin.audit_page(
         context=caller.context(),
-        filters=GuildListFilters(_int(guild_id)),
+        filters=GuildListFilters(tuple(map(int, guild_id or ()))),
         selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
     )

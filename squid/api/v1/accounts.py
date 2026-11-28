@@ -577,7 +577,9 @@ async def account_creator_stats(
 ) -> CreatorStats:
     """Summarize the builds publicly attributed to an account, following merge redirects."""
     await accounts.resolve_public_id(account_id, context=caller.context())
-    return await build_queries.creator_stats(BuildListFilters(public_account_id=account_id), context=caller.context())
+    return await build_queries.creator_stats(
+        BuildListFilters(public_account_ids=(account_id,)), context=caller.context()
+    )
 
 
 @get(

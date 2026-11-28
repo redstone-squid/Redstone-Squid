@@ -547,7 +547,7 @@ async def test_publications_and_listings_name_tags_and_summarize_holders(
     live = await publisher.lookup(DoorRangeQuery(height=3), context=anonymous)
     assert [holder.build_id for holder in live.holders] == [build_id]
 
-    page = await publisher.list_page(RangeListFilters(orientation="Door", height=3), context=anonymous)
+    page = await publisher.list_page(RangeListFilters(orientations=("Door",), heights=(3,)), context=anonymous)
     assert page.total == 2
     assert [item.query_id for item in page.items] == [flush, published.query_id]
     assert page.items[0].labels.restrictions == (RangeTag(901, "Flush", "flush"),)

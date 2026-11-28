@@ -188,7 +188,7 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
     assert (
         await admin.assignments_for(
             context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
-            filters=PermissionSubjectFilters(account_id=subject),
+            filters=PermissionSubjectFilters.for_subject(account_id=subject),
         )
         == ()
     )
@@ -253,14 +253,14 @@ async def test_multi_recipient_assignment_undo_preserves_existing_membership(
     assert result.receipt is not None
     assert await admin.assignments_for(
         context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
-        filters=PermissionSubjectFilters(discord_role_id=99, guild_id=42),
+        filters=PermissionSubjectFilters.for_subject(discord_role_id=99, guild_id=42),
     )
     await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(owner))
     assert await admin.assignments_for(
         context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
-        filters=PermissionSubjectFilters(account_id=subject, guild_id=42),
+        filters=PermissionSubjectFilters.for_subject(account_id=subject, guild_id=42),
     )
     assert not await admin.assignments_for(
         context=ActingContext.direct(UserActor(discord_user_id=42, is_bot_owner=True)),
-        filters=PermissionSubjectFilters(discord_role_id=99, guild_id=42),
+        filters=PermissionSubjectFilters.for_subject(discord_role_id=99, guild_id=42),
     )

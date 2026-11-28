@@ -478,8 +478,9 @@ async def test_approval_and_claims_attribute_only_selected_credits(
     assert other is not None
     assert other.credits[0].account_id is None
 
-    name_filter = BuildListFilters(creator_name_id=claimed.credits[0].name_id)
-    account_filter = BuildListFilters(public_account_id=claimed.credits[0].account_id)
+    assert claimed.credits[0].name_id is not None
+    name_filter = BuildListFilters(creator_name_ids=(claimed.credits[0].name_id,))
+    account_filter = BuildListFilters(public_account_ids=(claimed.credits[0].account_id,))
     async with factory() as uow:
         stats = await uow.builds.creator_stats(name_filter)
         assert stats.build_count == 2

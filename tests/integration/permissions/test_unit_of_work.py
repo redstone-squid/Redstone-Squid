@@ -16,6 +16,7 @@ from squid.core.permissions.domain.models import (
     AuditSubjectKind,
     ExternalRoleGrantSubject,
     PatternMode,
+    PermissionSubjectFilters,
     RolePermissionSubject,
 )
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -61,7 +62,14 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
     # Transaction-local authorization must not replace cached committed rules.
     assert not (await permissions.check(subject, node)).allowed
     async with factory() as uow:
-        assert bool(await uow.permission_admin.list_rules(subject_account_id=account_id)) == commit
+        assert (
+            bool(
+                await uow.permission_admin.list_rules(
+                    filters=PermissionSubjectFilters.for_subject(account_id=account_id)
+                )
+            )
+            == commit
+        )
         assert bool((await uow.permission_admin.list_audit()).items) == commit
         assert (await uow.permissions.epoch() > epoch) == commit
     await PermissionEpochWatcher(cache, uow_factory=factory).refresh()

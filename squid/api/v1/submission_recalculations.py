@@ -9,7 +9,8 @@ from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter, SkipValidation
+from litestar.params import FromPath, FromQuery, JSONBody, SkipValidation
+from msgspec import Meta
 from pydantic import BaseModel, Field
 
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
@@ -93,8 +94,8 @@ _WRITE = contract(cli=transport_only())
 async def list_proposals(
     caller: CurrentCaller,
     proposals: Proposals,
-    status: FromQuery[RecalculationProposalStatus | None] = None,
-    build_id: Annotated[int | None, QueryParameter(ge=1)] = None,
+    status: FromQuery[list[RecalculationProposalStatus] | None] = None,
+    build_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
     sort: FromQuery[RecalculationProposalSort] = RecalculationProposalSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
@@ -103,7 +104,7 @@ async def list_proposals(
     """Page recalculation proposals for staff review; `status=pending&sort=oldest` is the review queue."""
     caller.require_account_id()
     page = await proposals.list_page(
-        RecalculationProposalFilters(status, build_id),
+        RecalculationProposalFilters(tuple(status or ()), tuple(build_id or ())),
         sort=sort,
         selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,

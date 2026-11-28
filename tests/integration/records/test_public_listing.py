@@ -53,7 +53,7 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
 
     async with factory() as uow:
         records = uow.records
-        smallest = RecordListFilters(criterion=RecordCriterion.SMALLEST, version_scope=VersionScope.ALL_TIME)
+        smallest = RecordListFilters(criteria=(RecordCriterion.SMALLEST,), version_scopes=(VersionScope.ALL_TIME,))
         assert await records.count_published_records(filters=smallest) == 2
         by_title = await records.list_published_records(sort=RecordListSort.TITLE, filters=smallest, page_size=1)
         (first,) = by_title.items
@@ -72,12 +72,15 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
         assert two.status is RecordStatus.RESOLVED
 
         everything = await records.count_published_records(filters=RecordListFilters())
-        assert await records.count_published_records(filters=RecordListFilters(status=RecordStatus.RESOLVED)) == (
+        assert await records.count_published_records(filters=RecordListFilters(statuses=(RecordStatus.RESOLVED,))) == (
             everything
         )
-        assert await records.count_published_records(filters=RecordListFilters(build_kind=BuildKind.EXTENDER)) == 0
+        assert await records.count_published_records(filters=RecordListFilters(build_kinds=(BuildKind.EXTENDER,))) == 0
         assert await records.count_published_records(filters=RecordListFilters(tag_slugs=("no-such-tag",))) == 0
         assert await records.count_published_records(filters=RecordListFilters(tag_ids=(2**40,))) == 0
+        incompatible = RecordListFilters(statuses=(RecordStatus.RESOLVED, RecordStatus.UNRESOLVED))
+        page = await records.list_published_records(filters=incompatible, page_size=1)
+        assert (page.total, page.items) == (0, ())
         recent = (
             await records.list_published_records(sort=RecordListSort.RECENTLY_CHANGED, page_size=everything)
         ).items

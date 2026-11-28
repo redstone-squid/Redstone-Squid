@@ -73,3 +73,22 @@ def test_public_list_revalidates_its_representation(app_factory: tuple[Litestar,
         cached = client.get("/v1/builds", headers={"If-None-Match": f"W/{etag}"})
         assert (cached.status_code, cached.content, cached.headers["ETag"]) == (304, b"", etag)
         assert client.get("/v1/builds", headers={"If-None-Match": '"old"'}).status_code == 200
+
+
+def test_ranked_search_rejects_a_cursor(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+    with TestClient(app) as client:
+        response = client.get("/v1/search", params={"q": "piston", "cursor": PageCursor("id", 3, 3).encode()})
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_PAGE_CURSOR"
+
+
+@pytest.mark.parametrize(("param", "values"), [("sort", ["missing"]), ("status", ["missing", "approved"])])
+def test_unknown_list_values_identify_the_query_field(
+    app_factory: tuple[Litestar, MockDatabaseManager], param: str, values: list[str]
+) -> None:
+    app, _database = app_factory
+    with TestClient(app) as client:
+        response = client.get("/v1/builds", params={param: values})
+    assert response.status_code == 422
+    assert [issue["field"] for issue in response.json()["context"]["fields"]] == [f"/query/{param}"]

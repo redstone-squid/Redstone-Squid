@@ -77,7 +77,9 @@ class PermissionRoleProvider:
                 terms=(role.name, role.slug),
                 kind="permission_role",
             )
-            for role in await self._roles.roles(filters=GuildListFilters(guild_id), context=ActingContext.current())
+            for role in await self._roles.roles(
+                filters=GuildListFilters.for_guild(guild_id), context=ActingContext.current()
+            )
         )
 
 

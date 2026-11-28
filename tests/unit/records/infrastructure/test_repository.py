@@ -110,9 +110,9 @@ async def test_list_filters_are_applied_to_both_rows_and_count() -> None:
     session.scalar.return_value = 0
     repository = PostgresRecordRepository(lambda: session)
     filters = RecordListFilters(
-        build_kind=BuildKind.DOOR,
-        version_scope=VersionScope.UP_TO_DATE,
-        status=RecordStatus.UNRESOLVED,
+        build_kinds=(BuildKind.DOOR,),
+        version_scopes=(VersionScope.UP_TO_DATE,),
+        statuses=(RecordStatus.UNRESOLVED,),
         tag_ids=(17,),
     )
     await repository.list_published_records(selector=PageSelector(offset=8), filters=filters, page_size=9)

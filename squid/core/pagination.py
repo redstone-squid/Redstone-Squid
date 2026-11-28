@@ -199,14 +199,12 @@ def collection_page[T](
     by_id = sort.value == "id"
 
     def key(row: T) -> tuple[Any, ...]:
-        return (identifier(row),) if by_id else (*display_key(row), identifier(row))
+        return (-int(identifier(row)),) if by_id else (*display_key(row), identifier(row))
 
-    ordered = sorted(rows, key=key, reverse=by_id)
+    ordered = sorted(rows, key=key)
     if selector.offset is not None:
         return offset_page(ordered, offset=selector.offset, page_size=page_size)
 
-    # Bisect in ascending key order even when the display order is reversed.
-    ascending = ordered[::-1] if by_id else ordered
     start, end = 0, len(ordered)
     cursor = selector.cursor
     if cursor is not None:
@@ -215,7 +213,7 @@ def collection_page[T](
         if by_id:
             if type(cursor.key) is not id_type or cursor.key != cursor.id:
                 raise InvalidPageCursorError
-            boundary = (cursor.id,)
+            boundary = (-int(cursor.id),)
         else:
             if not isinstance(cursor.key, str):
                 raise InvalidPageCursorError
@@ -227,17 +225,9 @@ def collection_page[T](
                 raise InvalidPageCursorError
             boundary = (*fields, cursor.id)
         if cursor.backward:
-            end = (
-                len(ordered) - bisect_right(ascending, boundary, key=key)
-                if by_id
-                else bisect_left(ascending, boundary, key=key)
-            )
+            end = bisect_left(ordered, boundary, key=key)
         else:
-            start = (
-                len(ordered) - bisect_left(ascending, boundary, key=key)
-                if by_id
-                else bisect_right(ascending, boundary, key=key)
-            )
+            start = bisect_right(ordered, boundary, key=key)
     if cursor is not None and cursor.backward:
         start = max(0, end - page_size)
     else:

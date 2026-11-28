@@ -19,9 +19,9 @@ from squid.core.records.application.range_snapshots import (
 
 @dataclass(frozen=True, slots=True)
 class RangeListFilters:
-    orientation: str | None = None
-    height: int | None = None
-    depth: int | None = None
+    orientations: tuple[str, ...] = ()
+    heights: tuple[int, ...] = ()
+    depths: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

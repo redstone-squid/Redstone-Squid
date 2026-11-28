@@ -223,10 +223,10 @@ class RecordStatus(StrEnum):
 class RecordListFilters:
     """Filters for current results; every given tag must be one of the record's types or restrictions."""
 
-    build_kind: BuildKind | None = None
-    criterion: RecordCriterion | None = None
-    version_scope: VersionScope | None = None
-    status: RecordStatus | None = None
+    build_kinds: tuple[BuildKind, ...] = ()
+    criteria: tuple[RecordCriterion, ...] = ()
+    version_scopes: tuple[VersionScope, ...] = ()
+    statuses: tuple[RecordStatus, ...] = ()
     tag_ids: tuple[int, ...] = ()
     tag_slugs: tuple[str, ...] = ()
     """Current or former slugs."""

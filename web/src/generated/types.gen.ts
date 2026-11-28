@@ -4482,6 +4482,10 @@ export type AccountCreditedBuildsData = {
 
 export type AccountCreditedBuildsErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -4787,6 +4791,10 @@ export type AccountIdentityListData = {
 
 export type AccountIdentityListErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -4799,7 +4807,7 @@ export type AccountIdentityListErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -5917,6 +5925,10 @@ export type BuildsHistoryListData = {
 
 export type BuildsHistoryListErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Not Found
      */
     404: ProblemDetail;
@@ -6028,14 +6040,14 @@ export type BuildsListData = {
     };
     path?: never;
     query?: {
-        status?: BuildStatusFilter | null;
-        category?: BuildCategory | null;
-        version_id?: number | null;
+        status?: Array<BuildStatusFilter> | null;
+        category?: Array<BuildCategory> | null;
+        version_id?: Array<number> | null;
         tag_id?: Array<number> | null;
         tag_slug?: Array<string> | null;
-        account_id?: string | null;
-        creator_name_id?: number | null;
-        submitted_by?: 'me' | null;
+        account_id?: Array<string> | null;
+        creator_name_id?: Array<number> | null;
+        submitted_by?: Array<'me'> | null;
         /**
          * A named display order for build listings.
          *
@@ -6460,7 +6472,7 @@ export type CliDevicesListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -6684,28 +6696,32 @@ export type DiagnosticsErrorsListData = {
         /**
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
-        work_lost?: boolean;
+        work_lost?: Array<boolean> | null;
         /**
          * Only failures from this surface, such as `application_command` or `route`.
          */
-        surface?: string | null;
+        surface?: Array<string> | null;
         /**
          * Only failures that carried this application error code.
          */
-        error_code?: ErrorCode | null;
+        error_code?: Array<ErrorCode> | null;
         /**
          * Only failures at or after this time. A time without an offset is UTC.
          */
-        occurred_after?: string | null;
+        occurred_after?: Array<string> | null;
         /**
          * Only failures before this time. A time without an offset is UTC.
          */
-        occurred_before?: string | null;
+        occurred_before?: Array<string> | null;
     };
     url: '/v1/diagnostics/errors';
 };
 
 export type DiagnosticsErrorsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -6853,7 +6869,7 @@ export type PaperInstallationsListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -7565,11 +7581,11 @@ export type NotificationSubscriptionsListData = {
         /**
          * Only list follows of this kind.
          */
-        kind?: SubscriptionKind | null;
+        kind?: Array<SubscriptionKind> | null;
         /**
          * Only list follows of this creator or record.
          */
-        subject_id?: string | null;
+        subject_id?: Array<string> | null;
         sort?: ChronologicalSort;
         /**
          * Number of items to skip. Excludes cursor.
@@ -7589,6 +7605,10 @@ export type NotificationSubscriptionsListData = {
 
 export type NotificationSubscriptionsListErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -7597,7 +7617,7 @@ export type NotificationSubscriptionsListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -7767,7 +7787,7 @@ export type NotificationInboxListData = {
         /**
          * Only list unread items.
          */
-        unread_only?: boolean;
+        unread_only?: Array<boolean> | null;
     };
     url: '/v1/accounts/me/notifications/inbox';
 };
@@ -8035,18 +8055,9 @@ export type PermissionsGrantsListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Only rows about this account.
-         */
-        account_id?: string | null;
-        /**
-         * Only rows about this Discord role.
-         */
-        discord_role_id?: string | null;
-        /**
-         * Only rows about this guild, or resolve in it.
-         */
-        guild_id?: string | null;
+        account_id?: Array<string> | null;
+        discord_role_id?: Array<string> | null;
+        guild_id?: Array<string> | null;
         /**
          * Maximum number of items to return.
          */
@@ -8214,10 +8225,7 @@ export type PermissionsRolesListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Only rows about this guild, or resolve in it.
-         */
-        guild_id?: string | null;
+        guild_id?: Array<string> | null;
         /**
          * Maximum number of items to return.
          */
@@ -8684,18 +8692,9 @@ export type PermissionsAssignmentsListData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Only rows about this account.
-         */
-        account_id?: string | null;
-        /**
-         * Only rows about this Discord role.
-         */
-        discord_role_id?: string | null;
-        /**
-         * Only rows about this guild, or resolve in it.
-         */
-        guild_id?: string | null;
+        account_id?: Array<string> | null;
+        discord_role_id?: Array<string> | null;
+        guild_id?: Array<string> | null;
         /**
          * Maximum number of items to return.
          */
@@ -8929,10 +8928,7 @@ export type PermissionsAuditData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Only rows about this guild, or resolve in it.
-         */
-        guild_id?: string | null;
+        guild_id?: Array<string> | null;
         /**
          * Maximum number of items to return.
          */
@@ -9034,10 +9030,10 @@ export type RecordsListData = {
     };
     path?: never;
     query?: {
-        build_kind?: BuildKind | null;
-        criterion?: RecordCriterion | null;
-        version_scope?: VersionScope | null;
-        status?: RecordStatus | null;
+        build_kind?: Array<BuildKind> | null;
+        criterion?: Array<RecordCriterion> | null;
+        version_scope?: Array<VersionScope> | null;
+        status?: Array<RecordStatus> | null;
         tag_id?: Array<number> | null;
         tag_slug?: Array<string> | null;
         /**
@@ -9138,9 +9134,9 @@ export type RecordsListDoorRangesData = {
     };
     path?: never;
     query?: {
-        orientation?: 'Door' | 'Skydoor' | 'Trapdoor' | null;
-        height?: number | null;
-        depth?: number | null;
+        orientation?: Array<'Door' | 'Skydoor' | 'Trapdoor'> | null;
+        height?: Array<number> | null;
+        depth?: Array<number> | null;
         /**
          * Maximum number of items to return.
          */
@@ -9565,6 +9561,10 @@ export type RecordsRecomputeQueueData = {
 
 export type RecordsRecomputeQueueErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -9965,7 +9965,7 @@ export type AccountSchematicVideoListData = {
     body?: never;
     path?: never;
     query?: {
-        schematic_id?: number | null;
+        schematic_id?: Array<number> | null;
         /**
          * Maximum number of items to return.
          */
@@ -10739,6 +10739,10 @@ export type SubmissionsReviewQueueData = {
 
 export type SubmissionsReviewQueueErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -10775,7 +10779,7 @@ export type SubmissionsListData = {
     body?: never;
     path?: never;
     query?: {
-        status?: SubmissionStatus | null;
+        status?: Array<SubmissionStatus> | null;
         /**
          * Number of items to skip. Excludes cursor.
          */
@@ -10794,6 +10798,10 @@ export type SubmissionsListData = {
 };
 
 export type SubmissionsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -10898,6 +10906,10 @@ export type SubmissionCorrectionInboxData = {
 };
 
 export type SubmissionCorrectionInboxErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -11392,6 +11404,10 @@ export type SubmissionAttemptsListData = {
 };
 
 export type SubmissionAttemptsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -12135,8 +12151,8 @@ export type SubmissionRevisionListData = {
     body?: never;
     path?: never;
     query?: {
-        status?: RecalculationProposalStatus | null;
-        build_id?: number | null;
+        status?: Array<RecalculationProposalStatus> | null;
+        build_id?: Array<number> | null;
         /**
          * Display order of a proposal listing. `ID` is the order for full traversal.
          */
@@ -12159,7 +12175,11 @@ export type SubmissionRevisionListData = {
 
 export type SubmissionRevisionListErrors = {
     /**
-     * Unprocessable Entity
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -12210,7 +12230,11 @@ export type SubmissionRevisionHistoryData = {
 
 export type SubmissionRevisionHistoryErrors = {
     /**
-     * Unprocessable Entity
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unprocessable Content
      */
     422: ValidationProblemDetail;
     /**
@@ -13060,8 +13084,9 @@ export type VoteSessionListData = {
     body?: never;
     path?: never;
     query?: {
+        kind?: Array<ReviewKind> | null;
         kind_any?: Array<ReviewKind> | null;
-        status?: VoteStatus | null;
+        status?: Array<VoteStatus> | null;
         /**
          * Review listing orders. Session IDs follow creation.
          */

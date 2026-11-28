@@ -6,6 +6,7 @@ explicit security declaration.
 """
 
 from copy import deepcopy
+from inspect import signature
 from typing import Any, override
 
 from litestar import Litestar, Request
@@ -44,7 +45,8 @@ def install_openapi_contract(app: Litestar) -> None:
     validate_contract(app)
     for route, handler in iter_contract_routes(app):
         if route.path.startswith("/v1/"):
-            handler.responses = {**responses(429), **(handler.responses or {})}
+            errors = responses(400, 422, 429) if "page_size" in signature(handler.fn).parameters else responses(429)
+            handler.responses = {**errors, **(handler.responses or {})}
 
 
 def openapi_document(app: Litestar) -> dict[str, Any]:

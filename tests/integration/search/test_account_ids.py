@@ -122,7 +122,7 @@ async def test_account_ids_follow_claims_and_identity_visibility(
     async with uow_factory() as uow:
         listed = await uow.builds.list_page(
             statuses=frozenset({BuildStatus.APPROVED}),
-            filters=BuildListFilters(public_account_id=account.public_account_id),
+            filters=BuildListFilters(public_account_ids=(account.public_account_id,)),
             page_size=10,
         )
         assert {build.id for build in listed.items} == {by_alias, by_java}

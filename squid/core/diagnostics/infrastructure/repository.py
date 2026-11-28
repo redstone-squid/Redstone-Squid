@@ -101,10 +101,10 @@ def _matches(reference: str, *, prefix: bool):
 def _unexpired[S: Select[Any]](statement: S, now: Instant, filters: ErrorReportFilters) -> S:
     """Keep reports still retained at `now` that match every supplied filter."""
     statement = statement.where(ErrorReport.expires_at > now)
-    if filters.surface is not None:
-        statement = statement.where(ErrorReport.surface == filters.surface)
-    if filters.error_code is not None:
-        statement = statement.where(ErrorReport.error_code == filters.error_code)
+    for surface in filters.surfaces:
+        statement = statement.where(ErrorReport.surface == surface)
+    for error_code in filters.error_codes:
+        statement = statement.where(ErrorReport.error_code == error_code)
     if filters.occurred_after is not None:
         statement = statement.where(ErrorReport.occurred_at >= filters.occurred_after)
     if filters.occurred_before is not None:

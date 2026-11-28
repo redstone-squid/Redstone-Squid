@@ -1,9 +1,10 @@
 """SQL for reading one page of a listing by offset or cursor."""
 
 from dataclasses import dataclass, replace
+from math import isfinite
 from typing import Any, cast
 
-from sqlalchemy import ColumnElement, Select, SQLColumnExpression, and_, or_
+from sqlalchemy import BigInteger, ColumnElement, Select, SmallInteger, SQLColumnExpression, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.pagination import (
@@ -128,7 +129,15 @@ def _fits(column: SQLColumnExpression[Any], value: object) -> bool:
     """Whether a decoded cursor value can be compared with `column` without a database error."""
     try:
         # Mapped attributes and expressions both carry a SQL type; the protocol just doesn't say so.
-        expected = cast(ColumnElement[Any], column).type.python_type
+        sql_type = cast(ColumnElement[Any], column).type
+        expected = sql_type.python_type
     except NotImplementedError:
         return isinstance(value, str | int | float)
-    return isinstance(value, expected) or (expected is float and type(value) is int)
+    if expected is int:
+        bits = 64 if isinstance(sql_type, BigInteger) else 16 if isinstance(sql_type, SmallInteger) else 32
+        return type(value) is int and -(1 << (bits - 1)) <= value < 1 << (bits - 1)
+    if expected is float:
+        return (type(value) is int and value.bit_length() < 1024) or (isinstance(value, float) and isfinite(value))
+    if isinstance(value, str) and ("\x00" in value or any(0xD800 <= ord(char) <= 0xDFFF for char in value)):
+        return False
+    return isinstance(value, expected)

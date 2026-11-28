@@ -8,8 +8,9 @@ from uuid import UUID
 from litestar import Request, Response, Router, get, patch
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
-from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
+from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody
 from litestar.response import File
+from msgspec import Meta
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import (
@@ -261,14 +262,14 @@ async def list_builds(
     build_queries: BuildQueries,
     permissions: Permissions,
     caller: CurrentCaller,
-    status: FromQuery[BuildStatusFilter | None] = None,
-    category: FromQuery[BuildCategory | None] = None,
-    version_id: Annotated[int | None, QueryParameter(ge=1)] = None,
+    status: FromQuery[list[BuildStatusFilter] | None] = None,
+    category: FromQuery[list[BuildCategory] | None] = None,
+    version_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
     tag_id: FromQuery[list[int] | None] = None,
     tag_slug: FromQuery[list[str] | None] = None,
-    account_id: FromQuery[UUID | None] = None,
-    creator_name_id: Annotated[int | None, QueryParameter(ge=1)] = None,
-    submitted_by: FromQuery[Literal["me"] | None] = None,
+    account_id: FromQuery[list[UUID] | None] = None,
+    creator_name_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
+    submitted_by: FromQuery[list[Literal["me"]] | None] = None,
     sort: FromQuery[BuildListSort] = BuildListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
@@ -282,8 +283,9 @@ async def list_builds(
     lives at /v1/search.
     """
     submitter_id = caller.require_account_id() if submitted_by is not None else None
-    if status is not None:
-        statuses = frozenset({status.to_domain()})
+    if status:
+        requested = frozenset(item.to_domain() for item in status)
+        statuses = requested if len(requested) == 1 else frozenset()
     else:
         statuses = frozenset(BuildStatus) if submitter_id is not None else frozenset({BuildStatus.APPROVED})
     if statuses != {BuildStatus.APPROVED} and submitter_id is None:
@@ -292,12 +294,12 @@ async def list_builds(
         statuses=statuses,
         submitter_account_id=submitter_id,
         filters=BuildListFilters(
-            category,
-            version_id,
+            tuple(dict.fromkeys(category or ())),
+            tuple(dict.fromkeys(version_id or ())),
             tag_ids=tuple(dict.fromkeys(tag_id or ())),
             tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
-            public_account_id=account_id,
-            creator_name_id=creator_name_id,
+            public_account_ids=tuple(dict.fromkeys(account_id or ())),
+            creator_name_ids=tuple(dict.fromkeys(creator_name_id or ())),
         ),
         sort=sort,
         selector=resolve_selector(offset=offset, cursor=cursor),

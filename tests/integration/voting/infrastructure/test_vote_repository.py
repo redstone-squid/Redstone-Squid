@@ -1073,7 +1073,7 @@ async def test_review_listing_pages_build_votes_in_creation_order_without_other_
         deadline=Instant.now().add(hours=1),
         menu=generic_menu(None),
     )
-    queue = ReviewFilters(status=VoteStatus.OPEN)
+    queue = ReviewFilters(statuses=(VoteStatus.OPEN,))
 
     first = await transact(
         repository, lambda uow: uow.votes.list_reviews(queue, sort=ReviewSort.OLDEST, selector=FIRST_PAGE, page_size=1)

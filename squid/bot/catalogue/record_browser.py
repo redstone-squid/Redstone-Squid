@@ -40,7 +40,7 @@ class RecordSource:
         page = await self._records.list_page(
             selector=PageSelector(offset=position.offset),
             page_size=fetch_size,
-            filters=RecordListFilters(version_scope=self._version_scope),
+            filters=RecordListFilters(version_scopes=(self._version_scope,)),
             context=ActingContext.current(),
         )
         # This source exposes offset jumps; the service may return cursor links at offset zero.

@@ -165,7 +165,7 @@ async def test_filters_narrow_the_listing_and_its_total(repository: PostgresErro
     await repository.save(make_report(correlation_id="c" * 32, occurred_at=NOW.subtract(hours=30)))
     window = ErrorReportFilters(occurred_after=NOW.subtract(hours=2), occurred_before=NOW)
 
-    route = ErrorReportFilters(surface="route", error_code=ErrorCode.INTERNAL_ERROR)
+    route = ErrorReportFilters(surfaces=("route",), error_codes=(ErrorCode.INTERNAL_ERROR,))
     listed = await repository.list_recent(selector=FIRST_PAGE, page_size=5, now=NOW, filters=route)
 
     assert [report.correlation_id for report in listed.items] == ["a" * 32]

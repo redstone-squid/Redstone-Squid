@@ -569,6 +569,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -605,21 +635,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -878,6 +893,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -914,21 +944,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1538,6 +1553,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -1604,21 +1649,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3365,6 +3395,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -3401,21 +3446,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5187,6 +5217,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -5208,21 +5268,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5521,7 +5566,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/BuildStatusFilter"
+                  "items": {
+                    "$ref": "#/components/schemas/BuildStatusFilter"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -5539,7 +5587,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/BuildCategory"
+                  "items": {
+                    "$ref": "#/components/schemas/BuildCategory"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -5557,13 +5608,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -5618,8 +5671,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -5637,13 +5693,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -5654,13 +5712,17 @@
             "name": "submitted_by",
             "in": "query",
             "schema": {
-              "type": [
-                "null",
-                "string"
-              ],
-              "enum": [
-                "me",
-                null
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "string",
+                    "const": "me"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "required": false,
@@ -5783,6 +5845,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -5819,21 +5896,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6979,6 +7041,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -7030,21 +7107,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7529,9 +7591,18 @@
             "name": "work_lost",
             "in": "query",
             "schema": {
-              "type": "boolean",
-              "description": "Return only failures that permanently abandoned work, such as a dead-lettered job.",
-              "default": false
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "boolean"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return only failures that permanently abandoned work, such as a dead-lettered job."
             },
             "description": "Return only failures that permanently abandoned work, such as a dead-lettered job.",
             "required": false,
@@ -7545,13 +7616,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minLength": 1,
               "description": "Only failures from this surface, such as `application_command` or `route`."
             },
             "description": "Only failures from this surface, such as `application_command` or `route`.",
@@ -7566,7 +7639,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/ErrorCode"
+                  "items": {
+                    "$ref": "#/components/schemas/ErrorCode"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -7586,8 +7662,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "date-time"
+                  "items": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -7607,8 +7686,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "date-time"
+                  "items": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -7636,6 +7718,36 @@
                 "schema": {
                   "$ref": "#/components/schemas/Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -7675,21 +7787,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -8172,6 +8269,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -8223,21 +8335,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10098,12 +10195,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10113,12 +10210,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -10461,7 +10558,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/SubscriptionKind"
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionKind"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -10481,8 +10581,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -10581,6 +10684,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -10632,21 +10765,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11173,9 +11291,18 @@
             "name": "unread_only",
             "in": "query",
             "schema": {
-              "type": "boolean",
-              "description": "Only list unread items.",
-              "default": false
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "boolean"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only list unread items."
             },
             "description": "Only list unread items.",
             "required": false,
@@ -11206,6 +11333,21 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11251,21 +11393,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12022,16 +12149,17 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Only rows about this account."
+              ]
             },
-            "description": "Only rows about this account.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -12043,16 +12171,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this Discord role."
+              ]
             },
-            "description": "Only rows about this Discord role.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -12064,16 +12192,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this guild, or resolve in it."
+              ]
             },
-            "description": "Only rows about this guild, or resolve in it.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -12179,6 +12307,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -12230,21 +12373,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12624,16 +12752,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this guild, or resolve in it."
+              ]
             },
-            "description": "Only rows about this guild, or resolve in it.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -12739,6 +12867,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -12775,21 +12918,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14129,16 +14257,17 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Only rows about this account."
+              ]
             },
-            "description": "Only rows about this account.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -14150,16 +14279,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this Discord role."
+              ]
             },
-            "description": "Only rows about this Discord role.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -14171,16 +14300,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this guild, or resolve in it."
+              ]
             },
-            "description": "Only rows about this guild, or resolve in it.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -14286,6 +14415,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -14337,21 +14481,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14973,16 +15102,16 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "pattern": "^[1-9][0-9]{0,19}$",
-              "description": "Only rows about this guild, or resolve in it."
+              ]
             },
-            "description": "Only rows about this guild, or resolve in it.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -15088,6 +15217,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -15124,21 +15268,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15316,7 +15445,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/BuildKind"
+                  "items": {
+                    "$ref": "#/components/schemas/BuildKind"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -15334,7 +15466,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/RecordCriterion"
+                  "items": {
+                    "$ref": "#/components/schemas/RecordCriterion"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -15352,7 +15487,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/VersionScope"
+                  "items": {
+                    "$ref": "#/components/schemas/VersionScope"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -15370,7 +15508,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/RecordStatus"
+                  "items": {
+                    "$ref": "#/components/schemas/RecordStatus"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -15539,12 +15680,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15554,12 +15695,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -15719,15 +15860,21 @@
             "name": "orientation",
             "in": "query",
             "schema": {
-              "type": [
-                "null",
-                "string"
-              ],
-              "enum": [
-                "Door",
-                "Skydoor",
-                "Trapdoor",
-                null
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "Door",
+                      "Skydoor",
+                      "Trapdoor"
+                    ]
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "required": false,
@@ -15741,14 +15888,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "maximum": 2147483647,
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -15761,14 +15909,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "maximum": 2147483647,
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -15889,12 +16038,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15904,12 +16053,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -17153,6 +17302,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -17189,21 +17368,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17365,6 +17529,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -17401,21 +17580,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17593,6 +17757,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -17614,21 +17793,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18490,13 +18654,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -18603,6 +18769,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -18624,21 +18805,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -19304,12 +19470,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -19319,12 +19485,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -20869,6 +21035,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -20905,21 +21101,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -20971,7 +21152,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/SubmissionStatus"
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionStatus"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -21068,6 +21252,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -21104,21 +21318,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -21405,6 +21604,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -21441,21 +21670,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -23041,6 +23255,36 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -23107,21 +23351,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -25565,7 +25794,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/RecalculationProposalStatus"
+                  "items": {
+                    "$ref": "#/components/schemas/RecalculationProposalStatus"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -25583,13 +25815,15 @@
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "minimum": 1
+              ]
             },
             "required": false,
             "deprecated": false,
@@ -25682,8 +25916,8 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -25698,11 +25932,26 @@
             }
           },
           "422": {
-            "description": "Unprocessable Entity",
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -25851,8 +26100,8 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -25867,11 +26116,26 @@
             }
           },
           "422": {
-            "description": "Unprocessable Entity",
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -26935,12 +27199,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -26950,12 +27214,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -27886,12 +28150,12 @@
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "422": {
+            "description": "Unprocessable Content",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -27901,12 +28165,12 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             },
@@ -28501,9 +28765,30 @@
           "vote sessions"
         ],
         "summary": "ListReviewVotes",
-        "description": "Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.\n\nRepeat `kind_any` to choose several; without it every review kind is listed.",
+        "description": "Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.\n\nEach `kind` must match. Repeat `kind_any` to include several kinds.",
         "operationId": "vote_session_list",
         "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewKind"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
           {
             "name": "kind_any",
             "in": "query",
@@ -28531,7 +28816,10 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/VoteStatus"
+                  "items": {
+                    "$ref": "#/components/schemas/VoteStatus"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
@@ -28644,6 +28932,21 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "description": "Too Many Requests",
             "content": {
@@ -28680,21 +28983,6 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },

@@ -87,8 +87,8 @@ class PostgresViewerRepository:
     ) -> Page[SubmissionSummary]:
         session = self._session()
         where = BuildSubmission.submitter_account_id == account_id if account_id is not None else true()
-        if filters.status is not None:
-            where = where & (BuildSubmission.decision == filters.status)
+        for status in filters.statuses:
+            where = where & (BuildSubmission.decision == status)
         total = await session.scalar(select(func.count()).select_from(BuildSubmission).where(where))
         query = (
             select(BuildSubmission, Build.display_name, Build.submission_status)

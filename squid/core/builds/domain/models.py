@@ -129,14 +129,14 @@ class BuildCategory(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class BuildListFilters:
-    category: BuildCategory | None = None
-    version: int | None = None
+    categories: tuple[BuildCategory, ...] = ()
+    version_ids: tuple[int, ...] = ()
     tag_ids: tuple[int, ...] = ()
     tag_slugs: tuple[str, ...] = ()
     """Current or former slugs."""
-    public_account_id: uuid.UUID | None = None
+    public_account_ids: tuple[uuid.UUID, ...] = ()
     """A publicly attributed account in any credit role."""
-    creator_name_id: int | None = None
+    creator_name_ids: tuple[int, ...] = ()
 
 
 EMPTY_BUILD_FILTERS = BuildListFilters()

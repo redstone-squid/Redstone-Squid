@@ -7,6 +7,7 @@ from litestar.di import Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, FromQuery, JSONBody, PathParameter, QueryParameter
 from litestar.response import Redirect
+from msgspec import Meta
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
@@ -300,7 +301,7 @@ async def list_own_schematic_videos(
     schematics: Schematics,
     caller: CurrentCaller,
     request: Request,
-    schematic_id: Annotated[int | None, QueryParameter(ge=1)] = None,
+    schematic_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     sort: FromQuery[ChronologicalSort] = ChronologicalSort.NEWEST,
@@ -314,7 +315,7 @@ async def list_own_schematic_videos(
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     page = await schematics.videos.list_videos(
-        filters=VideoListFilters(schematic_id),
+        filters=VideoListFilters(tuple(schematic_id or ())),
         selector=resolve_selector(offset=offset, cursor=cursor, sort=sort),
         page_size=page_size,
         context=caller.context(),

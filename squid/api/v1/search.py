@@ -4,7 +4,7 @@ import logging
 from collections.abc import Sequence
 from typing import Annotated
 
-from litestar import Router, get
+from litestar import Request, Router, get
 from litestar.di import Provide
 from litestar.params import QueryParameter
 
@@ -29,6 +29,7 @@ from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError
+from squid.core.pagination import InvalidPageCursorError
 from squid.core.search.application.results import SearchHit
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
@@ -70,11 +71,17 @@ async def suggest_terms(
     )
 
 
+async def require_offset_search(request: Request) -> None:
+    if "cursor" in request.query_params:
+        raise InvalidPageCursorError
+
+
 @get(
     "/",
     responses=responses(400, 422, 503),
     response_class=ListResponse,
     operation_id="search_execute",
+    before_request=require_offset_search,
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )

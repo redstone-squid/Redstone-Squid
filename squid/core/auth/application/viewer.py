@@ -114,7 +114,7 @@ class ViewerQueries:
             await self._reader(context, uow)
             await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)
             return await uow.viewer.submissions(
-                None, selector, page_size, filters=SubmissionListFilters(SubmissionStatus.PENDING)
+                None, selector, page_size, filters=SubmissionListFilters((SubmissionStatus.PENDING,))
             )
 
     @application_operation

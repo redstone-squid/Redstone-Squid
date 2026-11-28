@@ -398,8 +398,6 @@ class BuildRepository:
 
         Ties in the sort value fall back to the ID and unknown values sort last, so every sort is total.
         """
-        if not statuses:
-            return Page((), 0, None, None)
         session = self._session()
         listing = filter_build_listing(
             select(Build), statuses=statuses, submitter_account_id=submitter_account_id, filters=filters

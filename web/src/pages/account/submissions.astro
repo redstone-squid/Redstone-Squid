@@ -16,7 +16,8 @@ import { readPageAddress, pageHref } from "@/server/pagination";
 const headers = { Cookie: requireSession(Astro) };
 
 const statuses: SubmissionStatus[] = ["pending", "approved", "rejected", "cancelled", "stale"];
-const status = statuses.find((value) => value === Astro.url.searchParams.get("status"));
+const selected = Astro.url.searchParams.getAll("status");
+const status = statuses.filter((value) => selected.includes(value));
 const page = await load(
   submissionsList({
     client: Astro.locals.api,
