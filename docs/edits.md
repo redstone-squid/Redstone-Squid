@@ -158,13 +158,20 @@ edit adds a new history entry rather than removing one.
   records that handlers compare before replacing.
 
 
-## Build edit policy
+## Who may edit
 
-The submitting account and accounts resolved from saved creator credits can edit a build.
-Creators can change names, descriptions, and showcase tags directly. They can also correct
+Credits are public attribution and grant nothing by themselves. Edit rights belong to
+*maintainers*:
+
+- A build's maintainers are its submitter and the accounts linked to its `creator` credits
+  (`Build.maintainer_account_ids`). Designer, layout, and contributor credits are
+  attribution only. Maintainers receive the build's review outcome notifications.
+
+Maintainers can change names, descriptions, and showcase tags directly, and can correct
 pending submissions. Changes to other published facts go through a build edit vote.
-Attribution is reserved to accounts with `build.submission.edit`, which can apply other
-edits directly too.
+Credits are reserved to accounts with `build.submission.edit`, which can apply other edits
+directly too. Because only staff can change credits, staff also control who maintains a
+published build.
 
 A review retains the whole proposed patch and its base revision. A passing vote applies the
 patch only if the author still qualifies and the reviewed revision and diff still match. The

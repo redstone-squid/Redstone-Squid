@@ -144,7 +144,7 @@ class BuildFieldsEdit:
             self._suggestions
             and decision is BuildEditDecision.DENY
             and current.submission_status is BuildStatus.APPROVED
-            and not current.is_creator(actor.linked_account_id)
+            and not current.is_maintainer(actor.linked_account_id)
         )
         if suggestion:
             decision = BuildEditDecision.REVIEW

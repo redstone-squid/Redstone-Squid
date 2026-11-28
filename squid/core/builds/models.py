@@ -306,22 +306,22 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
         values["sponsor"] = None if self.sponsor is None else asdict(self.sponsor)
         return values
 
-    def is_creator(self, account_id: int | None) -> bool:
-        """Recognize the submitter and accounts linked to saved creator credits."""
-        return account_id is not None and (
-            account_id == self.submitter_account_id or account_id in self.credited_creator_account_ids
-        )
+    @property
+    def maintainer_account_ids(self) -> frozenset[int]:
+        """The submitter and accounts linked to `creator` credits; other credit roles are attribution only."""
+        if self.submitter_account_id is None:
+            return self.credited_creator_account_ids
+        return self.credited_creator_account_ids | {self.submitter_account_id}
+
+    def is_maintainer(self, account_id: int | None) -> bool:
+        return account_id in self.maintainer_account_ids
 
     def edit_access(self, account_id: int | None, *, may_edit_any: bool) -> EditAccess:
         """Whether this account may open an editor for the build.
 
-        The edit policy decides whether a creator's change can apply directly or needs review.
+        The edit policy decides whether a maintainer's change can apply directly or needs review.
         """
-        if may_edit_any:
-            return EditAccess.FULL
-        if not self.is_creator(account_id):
-            return EditAccess.NONE
-        return EditAccess.FULL
+        return EditAccess.FULL if may_edit_any or self.is_maintainer(account_id) else EditAccess.NONE
 
     def copy_for_edit(self, *, source_messages: tuple[MessageRef, ...] | None = None) -> Build:
         """Create an unsaved copy for previewing edits, without ORM history.

@@ -12,19 +12,19 @@ class BuildEditDecision(StrEnum):
     DENY = "deny"
 
 
-_CREATOR_DIRECT = frozenset({"display_name", "extra_user_info", "showcase_tags"})
+_MAINTAINER_DIRECT = frozenset({"display_name", "extra_user_info", "showcase_tags"})
 _MODERATOR_ONLY = frozenset({"credits", "creators_ign", "ai_generated", "extra_info"})
 
 
 def decide_build_edit(
-    fields: Set[str], *, status: BuildStatus | None, is_creator: bool, is_moderator: bool
+    fields: Set[str], *, status: BuildStatus | None, is_maintainer: bool, is_moderator: bool
 ) -> BuildEditDecision:
-    """Require review for creator changes to published build facts beyond presentation fields."""
+    """Require review for maintainer changes to published build facts beyond presentation fields."""
     if is_moderator:
         return BuildEditDecision.DIRECT
-    if not is_creator or fields & _MODERATOR_ONLY:
+    if not is_maintainer or fields & _MODERATOR_ONLY:
         return BuildEditDecision.DENY
-    if status is BuildStatus.PENDING or fields <= _CREATOR_DIRECT:
+    if status is BuildStatus.PENDING or fields <= _MAINTAINER_DIRECT:
         return BuildEditDecision.DIRECT
     return BuildEditDecision.REVIEW
 
@@ -39,12 +39,12 @@ class BuildEditMode(StrEnum):
 
     @classmethod
     def for_build(
-        cls, *, may_submit: bool, is_creator: bool, is_moderator: bool, status: BuildStatus | None
+        cls, *, may_submit: bool, is_maintainer: bool, is_moderator: bool, status: BuildStatus | None
     ) -> BuildEditMode:
         if not may_submit:
             return cls.UNAVAILABLE
         if is_moderator:
             return cls.DIRECT
-        if is_creator:
+        if is_maintainer:
             return cls.FIELD_DEPENDENT
         return cls.PROPOSE if status is BuildStatus.APPROVED else cls.UNAVAILABLE

@@ -246,7 +246,7 @@ class BuildService:
         return decide_build_edit(
             fields,
             status=build.submission_status,
-            is_creator=build.is_creator(actor.linked_account_id),
+            is_maintainer=build.is_maintainer(actor.linked_account_id),
             is_moderator=is_moderator,
         )
 
@@ -282,7 +282,7 @@ class BuildService:
                 build is None
                 or build.revision != target.revision
                 or not (
-                    build.is_creator(author_account_id)
+                    build.is_maintainer(author_account_id)
                     or (target.public_suggestion and build.submission_status is BuildStatus.APPROVED)
                 )
             ):

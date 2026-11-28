@@ -182,7 +182,7 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     actor = UserActor(account_id=creator.id)
     current = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
-    assert current.is_creator(actor.account_id)
+    assert current.is_maintainer(actor.account_id)
     target = build_target(build.id)
 
     with pytest.raises(AuthorizationError):

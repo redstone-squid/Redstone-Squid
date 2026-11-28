@@ -447,7 +447,7 @@ async def test_approval_and_claims_attribute_only_selected_credits(
     assert pending is not None
     assert pending.credits[0].account_id is None
     assert pending.credits[0].proposed_account_id == public_id
-    assert not pending.is_creator(creator.id)
+    assert not pending.is_maintainer(creator.id)
     await transact(factory, lambda uow: uow.builds.approve(first), commit=True)
     approved = await transact(factory, lambda uow: uow.builds.get_by_id(first.id))
     assert approved is not None

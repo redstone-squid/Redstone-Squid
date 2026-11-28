@@ -115,7 +115,7 @@ class BrowserViews:
             allowed = permissions.allowed_nodes
             edit_mode = BuildEditMode.for_build(
                 may_submit=BUILD_SUBMISSION_CREATE.name in allowed,
-                is_creator=build.is_creator(self.account_id),
+                is_maintainer=build.is_maintainer(self.account_id),
                 is_moderator=BUILD_SUBMISSION_EDIT.name in allowed,
                 status=build.submission_status,
             )

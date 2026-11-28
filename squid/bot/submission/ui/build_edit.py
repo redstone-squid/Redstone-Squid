@@ -581,7 +581,10 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             return
         self.needs_vote = (
             decide_build_edit(
-                fields, status=self.build.submission_status, is_creator=True, is_moderator=self.workspace.is_moderator
+                fields,
+                status=self.build.submission_status,
+                is_maintainer=True,
+                is_moderator=self.workspace.is_moderator,
             )
             is BuildEditDecision.REVIEW
         )
