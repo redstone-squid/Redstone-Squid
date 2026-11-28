@@ -14,16 +14,14 @@ const workbenchBudget = { initialKiB: 144, completeKiB: 200 };
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    // Loads on every page, so it must stay tiny: the head's scripts and the footer's
-    // appearance switch.
+    // Loads on every page, so it must stay tiny: the document head, header search and footer appearance switch.
     entries: [
       "src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=1&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=2&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=3&lang.ts",
       "src/layouts/AppearanceSwitch.astro?astro&type=script&index=0&lang.ts",
-      "src/layouts/DocumentHead.astro?astro&type=script&index=3&lang.ts",
-      "src/layouts/AppearanceSwitch.astro?astro&type=script&index=0&lang.ts",
+      "src/layouts/HeaderSearch.astro?astro&type=script&index=0&lang.ts",
     ],
     label: "Shared page scripts",
     initialKiB: 1,

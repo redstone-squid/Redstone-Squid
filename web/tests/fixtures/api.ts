@@ -540,6 +540,8 @@ async function routeRequest(request: Request): Promise<Response> {
     if (query.includes("syntax:error") || query === "(")
       return problem(request, 400, "invalid_query");
     const page: SearchPage = {
+      normalized_query: query,
+      expression: null,
       items: [
         { resource_kind: "build", score: 1, build: builds[0] },
         {
@@ -568,7 +570,7 @@ async function routeRequest(request: Request): Promise<Response> {
           },
         },
       ],
-      total: 1,
+      total: 3,
       next: null,
       prev: null,
       filters: [],

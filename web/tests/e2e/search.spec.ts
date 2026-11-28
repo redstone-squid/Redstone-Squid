@@ -5,11 +5,8 @@ for (const prefix of ["", "/zh-cn"]) {
     await page.goto(`${prefix}/about`);
     const header = page.getByRole("banner");
     const trigger = header.locator('[popovertarget="header-search-field"]');
-    if (await trigger.isVisible()) await trigger.click();
-    else
-      await page.keyboard.press(
-        (await page.evaluate(() => /Mac/.test(navigator.platform))) ? "Meta+k" : "Control+k",
-      );
+    await page.setViewportSize({ width: 390, height: 800 });
+    await trigger.click();
     const query = header.getByRole("searchbox");
     await expect(query).toBeFocused();
     await query.fill("door");
@@ -20,3 +17,16 @@ for (const prefix of ["", "/zh-cn"]) {
     await expect(main.locator(`a[href^="${prefix}/builds/"]`).first()).toBeVisible();
   });
 }
+
+test("keyboard shortcut focuses and selects the wide header query", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/search?q=door");
+  const modifier = await page.evaluate(() =>
+    /Mac|iPhone|iPad/.test(navigator.platform) ? "Meta" : "Control",
+  );
+  await page.keyboard.press(`${modifier}+k`);
+  const input = page.getByRole("banner").getByRole("searchbox");
+  await expect(input).toBeFocused();
+  await page.keyboard.type("flush");
+  await expect(input).toHaveValue("flush");
+});

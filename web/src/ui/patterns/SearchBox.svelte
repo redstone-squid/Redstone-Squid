@@ -42,7 +42,7 @@
   const labelVisibility = $derived(compact ? "hidden" : "visible");
 </script>
 
-<search class={cn("block min-w-0", className)}>
+<search class={cn("block min-w-0", compact && "@6xl:[&_input]:pe-14", className)}>
   <form method="get" {action} class="flex min-w-0 items-end gap-2">
     {#each hidden as [key, hiddenValue], index (index)}
       <input type="hidden" name={key} value={hiddenValue} />

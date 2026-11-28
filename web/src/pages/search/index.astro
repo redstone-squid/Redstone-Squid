@@ -23,7 +23,6 @@ const results = q
 <CatalogueLayout title={m.searchTitle()} canonicalPath="/search" noindex>
   <PageHeader title={m.searchTitle()} />
   <SearchBox
-    client:load
     action={localizePath("/search")}
     value={q}
     label={m.navSearch()}
