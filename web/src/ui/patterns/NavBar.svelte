@@ -17,14 +17,14 @@
   type Props = {
     home: { label: string; href: string; logo?: string };
     links: { label: string; href: string; current?: boolean }[];
-    logo?: Snippet;
+    children?: Snippet;
     actions?: Snippet;
     /** Names the navigation landmark. */
     label: string;
     menuLabel: string;
     class?: string;
   };
-  let { home, links, logo, actions, label, menuLabel, class: className }: Props = $props();
+  let { home, links, children, actions, label, menuLabel, class: className }: Props = $props();
   const id = $props.id();
 </script>
 
@@ -34,7 +34,7 @@
       href={home.href}
       class="inline-flex shrink-0 items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
     >
-      {#if logo}{@render logo()}{:else if home.logo !== undefined}<img
+      {#if children}{@render children()}{:else if home.logo !== undefined}<img
           class="size-8"
           src={home.logo}
           width="32"

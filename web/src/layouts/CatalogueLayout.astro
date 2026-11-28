@@ -48,7 +48,7 @@ const nav = [
             current: activePath === href || activePath.startsWith(`${href}/`),
           }))}
         >
-          <Logo slot="logo" class="size-8" width="32" height="32" aria-hidden="true" />
+          <Logo class="size-8" width="32" height="32" aria-hidden="true" />
           <Fragment slot="actions">
             <LanguageSelector />
             <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
