@@ -1979,6 +1979,16 @@ export type PageSquidApiV1SchemasMinecraftAuthInstallationResponse = {
 };
 
 /**
+ * Page[PlayerGrantResponse]
+ */
+export type PageSquidApiV1SchemasMinecraftAuthPlayerGrantResponse = {
+    items: Array<PlayerGrantResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[NotificationSubscriptionDetail]
  */
 export type PageSquidApiV1SchemasNotificationsNotificationSubscriptionDetail = {
@@ -2224,6 +2234,16 @@ export type PermissionNodeDetail = {
     description: string;
     default_allowed: boolean;
     tags: Array<Tag>;
+};
+
+/**
+ * PlayerGrantResponse
+ */
+export type PlayerGrantResponse = {
+    id: string;
+    origin: MinecraftClientOrigin;
+    server_label: string | null;
+    expires_at: string;
 };
 
 /**
@@ -7370,6 +7390,65 @@ export type MinecraftChallengeApproveResponses = {
 };
 
 export type MinecraftChallengeApproveResponse = MinecraftChallengeApproveResponses[keyof MinecraftChallengeApproveResponses];
+
+export type MinecraftGrantsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        sort?: ChronologicalSort;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/minecraft/auth/grants';
+};
+
+export type MinecraftGrantsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type MinecraftGrantsListError = MinecraftGrantsListErrors[keyof MinecraftGrantsListErrors];
+
+export type MinecraftGrantsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasMinecraftAuthPlayerGrantResponse;
+};
+
+export type MinecraftGrantsListResponse = MinecraftGrantsListResponses[keyof MinecraftGrantsListResponses];
 
 export type MinecraftGrantRevokeData = {
     body?: never;

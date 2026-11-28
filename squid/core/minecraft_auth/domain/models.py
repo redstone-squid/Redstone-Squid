@@ -103,6 +103,15 @@ class IssuedPlayerChallenge:
 
 
 @dataclass(frozen=True, slots=True)
+class PlayerGrantSummary:
+    id: UUID
+    origin: MinecraftClientOrigin
+    server_label: str | None
+    issued_at: Instant
+    expires_at: Instant
+
+
+@dataclass(frozen=True, slots=True)
 class IssuedPlayerGrant:
     """A player grant and its one-time plaintext token response."""
 

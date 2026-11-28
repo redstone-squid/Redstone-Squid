@@ -13,6 +13,7 @@ from squid.core.minecraft_auth.domain import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
+    PlayerGrantSummary,
     PublicServerProfile,
 )
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
@@ -85,6 +86,19 @@ class InstallationCreateRequest(StrictSchema):
             msg = "Installation label must not be blank."
             raise ValueError(msg)
         return self
+
+
+class PlayerGrantResponse(StrictSchema):
+    id: UUID
+    origin: MinecraftClientOrigin
+    server_label: str | None
+    expires_at: datetime
+
+    @classmethod
+    def from_domain(cls, grant: PlayerGrantSummary) -> Self:
+        return cls(
+            id=grant.id, origin=grant.origin, server_label=grant.server_label, expires_at=grant.expires_at.to_stdlib()
+        )
 
 
 class InstallationResponse(StrictSchema):

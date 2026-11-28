@@ -41,6 +41,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     IssuedPlayerGrantResponse,
     PaperChallengeCreateRequest,
     PaperChallengeExchangeRequest,
+    PlayerGrantResponse,
     ServerProfileSchema,
 )
 from squid.core.actors import ActingContext, ServiceActor
@@ -407,6 +408,40 @@ async def approve_challenge(
     return ChallengeApprovalResponse.from_domain(challenge)
 
 
+@get(
+    "/grants",
+    responses=responses(400, 401, 403, 503),
+    operation_id="minecraft_grants_list",
+    security=[WEB],
+    opt=contract(cli=browser_only()),
+    status_code=200,
+    dependencies={
+        "context": Provide(current_browser_context),
+        "installation": Provide(authenticated_paper_installation),
+        "verification_uri": Provide(get_minecraft_verification_uri),
+    },
+)
+async def list_grants(
+    players: MinecraftPlayerAuthorization,
+    context: BrowserContext,
+    sort: FromQuery[ChronologicalSort] = ChronologicalSort.OLDEST,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 50,
+) -> Page[PlayerGrantResponse]:
+    """List the signed-in account's active Minecraft player grants."""
+    owned = await players.list_active_grants(context=context)
+    page = sort.page(
+        owned,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+        identifier=lambda row: row.id,
+        created_at=lambda row: row.issued_at,
+        id_type=UUID,
+    )
+    return Page.from_domain(page, PlayerGrantResponse.from_domain)
+
+
 @delete(
     "/grants/{grant_id:uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -453,6 +488,7 @@ router = Router(
         start_fabric_challenge,
         exchange_fabric_challenge,
         approve_challenge,
+        list_grants,
         revoke_grant,
     ],
     after_request=prevent_credential_storage,

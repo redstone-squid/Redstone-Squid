@@ -32,6 +32,7 @@ from squid.core.minecraft_auth.domain import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
+    PlayerGrantSummary,
     PublicServerProfile,
 )
 from squid.core.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
@@ -244,6 +245,11 @@ class FakePlayers(PlayerAuthorizationService):
         return grant(origin=MinecraftClientOrigin.FABRIC)
 
     @override
+    async def list_active_grants(self, *, context: ActingContext) -> tuple[PlayerGrantSummary, ...]:
+        assert context.effective.require_account_id() == ACCOUNT_ID
+        return (PlayerGrantSummary(GRANT_ID, MinecraftClientOrigin.FABRIC, None, NOW, NOW.add(hours=1)),)
+
+    @override
     async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:
         account_id = context.effective.require_account_id()
         self.revoked_as = (grant_id, account_id)
@@ -406,9 +412,13 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
             "/minecraft/auth/challenges/approval",
             json={"user_code": USER_CODE},
         )
+        grants = await client.get("/minecraft/auth/grants")
         grant_revoked = await client.delete(f"/minecraft/auth/grants/{GRANT_ID}")
         installation_revoked = await client.delete(f"/minecraft/auth/paper/installations/{INSTALLATION_ID}")
 
+    assert grants.json()["items"] == [
+        {"id": str(GRANT_ID), "origin": "fabric", "server_label": None, "expires_at": "2026-08-11T13:00:00Z"}
+    ]
     assert created.status_code == 201
     assert created.json()["secret"] == INSTALLATION_SECRET
     assert "secret_hash" not in created.text

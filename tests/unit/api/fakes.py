@@ -57,6 +57,7 @@ from squid.core.minecraft_auth.domain.models import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftPlayerContext,
+    PlayerGrantSummary,
     PublicServerProfile,
     PublishedPaperServer,
 )
@@ -480,6 +481,10 @@ class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
     @override
     async def approve(self, *, context: ActingContext, user_code: str) -> PlayerAuthorizationChallenge:
         raise InvalidChallengeError
+
+    @override
+    async def list_active_grants(self, *, context: ActingContext) -> tuple[PlayerGrantSummary, ...]:
+        return ()
 
     @override
     async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:

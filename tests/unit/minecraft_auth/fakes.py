@@ -5,7 +5,12 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile, PublishedPaperServer
+from squid.core.minecraft_auth.domain import (
+    MinecraftClientOrigin,
+    PlayerGrantSummary,
+    PublicServerProfile,
+    PublishedPaperServer,
+)
 from squid.core.minecraft_auth.errors import (
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
@@ -241,6 +246,27 @@ class FakeMinecraftAuthorizationRepository:
 
     async def get_grant(self, grant_id: UUID) -> PlayerGrant | None:
         return self.grants.get(grant_id)
+
+    async def list_active_grants(self, *, account_id: int, now: Instant) -> tuple[PlayerGrantSummary, ...]:
+        rows = []
+        for grant in self.grants.values():
+            if grant.account_id != account_id or not grant.is_active_at(now):
+                continue
+            installation = self.installations.get(grant.installation_id) if grant.installation_id else None
+            if installation and (
+                installation.revoked_at or installation.credential_version != grant.installation_credential_version
+            ):
+                continue
+            rows.append(
+                PlayerGrantSummary(
+                    grant.id,
+                    grant.origin,
+                    installation.label if installation else None,
+                    grant.issued_at,
+                    grant.expires_at,
+                )
+            )
+        return tuple(rows)
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int, revoked_at: Instant) -> bool:
         grant = self.grants.get(grant_id)

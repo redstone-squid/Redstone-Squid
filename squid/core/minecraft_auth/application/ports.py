@@ -10,6 +10,7 @@ from squid.core.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
+    PlayerGrantSummary,
     PublicServerProfile,
     PublishedPaperServer,
 )
@@ -87,6 +88,8 @@ class MinecraftAuthorizationRepository(Protocol):
     ) -> PlayerGrant: ...
 
     async def get_grant(self, grant_id: UUID) -> PlayerGrant | None: ...
+
+    async def list_active_grants(self, *, account_id: int, now: Instant) -> tuple[PlayerGrantSummary, ...]: ...
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int, revoked_at: Instant) -> bool: ...
 

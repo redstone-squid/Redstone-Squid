@@ -41,6 +41,7 @@ from squid.core.minecraft_auth.domain import (
     IssuedPlayerGrant,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
+    PlayerGrantSummary,
     PublicServerProfile,
     PublishedPaperServer,
 )
@@ -385,6 +386,12 @@ class PlayerAuthorizationService:
             if grant.origin is not MinecraftClientOrigin.FABRIC:
                 raise InvalidPlayerTokenError
             return context
+
+    async def list_active_grants(self, *, context: ActingContext) -> tuple[PlayerGrantSummary, ...]:
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.minecraft_authorization.list_active_grants(account_id=account_id, now=self._clock())
 
     async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:
         """Revoke one player grant if it belongs to the signed-in account."""

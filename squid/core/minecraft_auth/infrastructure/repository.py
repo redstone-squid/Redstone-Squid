@@ -5,13 +5,21 @@ from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Text, func, or_, select, update
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import AccountIdentity
 from squid.core.errors import InvalidStateError
-from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile, PublishedPaperServer
+from squid.core.minecraft_auth.domain import (
+    MinecraftClientOrigin,
+    PlayerGrantSummary,
+    PublicServerProfile,
+    PublishedPaperServer,
+)
 from squid.core.minecraft_auth.errors import (
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
@@ -297,6 +305,38 @@ class PostgresMinecraftAuthorizationRepository:
         session = self._session()
         record = await session.get(PlayerGrant, grant_id)
         return None if record is None else record
+
+    async def list_active_grants(self, *, account_id: int, now: Instant) -> tuple[PlayerGrantSummary, ...]:
+        rows = await self._session().execute(
+            select(
+                PlayerGrant.id,
+                PlayerGrant.origin,
+                PaperInstallation.label,
+                PlayerGrant.issued_at,
+                PlayerGrant.expires_at,
+            )
+            .outerjoin(PaperInstallation, PaperInstallation.id == PlayerGrant.installation_id)
+            .where(
+                PlayerGrant.account_id == account_id,
+                PlayerGrant.revoked_at.is_(None),
+                PlayerGrant.issued_at <= now,
+                PlayerGrant.expires_at > now,
+                select(AccountIdentity.id)
+                .where(
+                    AccountIdentity.account_id == account_id,
+                    AccountIdentity.provider == IdentityProvider.JAVA,
+                    AccountIdentity.subject == sql_cast(PlayerGrant.java_uuid, Text),
+                    AccountIdentity.verified_at.is_not(None),
+                )
+                .exists(),
+                or_(
+                    PlayerGrant.installation_id.is_(None),
+                    (PaperInstallation.revoked_at.is_(None))
+                    & (PaperInstallation.credential_version == PlayerGrant.installation_credential_version),
+                ),
+            )
+        )
+        return tuple(PlayerGrantSummary(*row) for row in rows)
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int, revoked_at: Instant) -> bool:
         """Revoke one account-owned grant, idempotently."""
