@@ -11,15 +11,11 @@ import simcord
 
 from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext
-from squid.core.builds.application import BuildQueryService, BuildService
-from squid.core.builds.domain import BuildStatus
-from squid.core.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
-from squid.core.search.application import SearchService
-from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage
-from squid.core.search.domain import SearchRequest, SearchScope
+from squid.core.search.domain import SearchScope
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
+from tests.e2e.discord.catalogue_services import CatalogueQueries, CatalogueSearch
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import staff_member, staff_permissions
 from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
@@ -182,37 +178,6 @@ async def test_attachment_reviewer_reaches_end_of_queue_privately() -> None:
         assert result.response is not None
         assert result.response.ephemeral
         assert any("End of the attachment queue" in line for line in displayed_text(result.response.message))
-
-
-class CatalogueQueries(BuildQueryService):
-    def __init__(self) -> None:
-        self.pending_build = DoorBuild(id=73, submission_status=BuildStatus.PENDING)
-
-    @override
-    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
-        assert build_id == self.pending_build.id
-        return self.pending_build
-
-
-class CatalogueSearch(SearchService):
-    def __init__(self) -> None:
-        self.requests: list[SearchRequest] = []
-
-    @override
-    async def fields(self, *, context: ActingContext) -> FieldRegistry:
-        return DEFAULT_FIELD_REGISTRY
-
-    @override
-    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
-        self.requests.append(request)
-        if request.scope is SearchScope.RECORDS:
-            hit = RecordSearchHit("7", "Smallest spiral door", None, 5, "Aurora", "smallest", "all_time")
-        elif request.scope is SearchScope.METADATA:
-            hit = MetadataSearchHit("9", "Spiral piston layout", "pattern")
-        else:
-            assert request.scope is SearchScope.BUILDS
-            hit = BuildSearchHit("73", "Five-wide door", "approved")
-        return SearchPage((hit,), total=1, next=None, prev=None)
 
 
 @pytest.mark.parametrize(

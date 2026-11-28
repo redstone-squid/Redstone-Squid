@@ -91,7 +91,7 @@ class AccountFake(AccountService):
     async def get_creator_alias(self, alias: int | str, *, context: ActingContext) -> CreatorAlias | None:
         if alias != 7 and (not isinstance(alias, str) or alias.casefold() != "builder"):
             return None
-        return CreatorAlias(id=7, name="Builder", account_id=42, public_account_id=CREATOR_PUBLIC_ID)
+        return CreatorAlias(id=7, name="Builder", account_id=42)
 
     @override
     async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
@@ -325,12 +325,7 @@ def test_creator_alias_never_exposes_linked_account(
 
     assert response.status_code == 200
     assert by_id.json() == response.json()
-    assert response.json() == {
-        "id": 7,
-        "name": "Builder",
-        "claimed": True,
-        "account_id": "22222222-2222-2222-2222-222222222222",
-    }
+    assert response.json() == {"id": 7, "name": "Builder"}
     assert "user_id" not in response.text
 
 

@@ -87,6 +87,7 @@ async def creator_name_summary(
 @post(
     "/{alias_id:int}/claims",
     operation_id="creator_credit_claim",
+    response_headers={"Cache-Control": "private, no-store"},
     security=[WEB_WRITE, DEVICE],
     guards=[requires(ACCOUNT_SELF_MANAGE)],
     responses=responses(400, 401, 403, 404, 409, 422, 503),

@@ -9,6 +9,7 @@ from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ, PERM_GRANT_GUILD, SETTINGS_SERVER_VIEW
 from squid.core.settings.domain.guild import GuildSettings
 from squid.core.voting.domain.models import VoteConfiguration, VoteKind
+from tests.e2e.discord.catalogue_services import CatalogueQueries, CatalogueSearch
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import (
     AccessRevision,
@@ -70,8 +71,15 @@ async def test_creator_finds_a_typed_credited_name_and_posts_it_publicly() -> No
     accounts = FakeAccountRepository()
     holder = accounts.seed_account(123)
     accounts.seed_alias("Glinte", account=holder)
+    search = CatalogueSearch()
     async with command_environment(
-        "squid.bot.accounts.cog", services=bot_services(accounts=InMemoryAccountService(accounts))
+        "squid.bot.accounts.cog",
+        services=bot_services(
+            accounts=InMemoryAccountService(accounts),
+            permissions=staff_permissions(),
+            build_queries=CatalogueQueries(),
+            search=search,
+        ),
     ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))

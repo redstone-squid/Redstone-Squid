@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.accounts.domain import ClaimStatus
 from squid.core.accounts.models import AliasClaim, CreatorAlias
@@ -23,11 +23,11 @@ class CreatorAliasDetail(BaseModel):
 
 
 class CreditClaimRequest(BaseModel):
-    credit_ids: list[UUID]
+    credit_ids: list[UUID] = Field(min_length=1)
 
 
 class CreditClaimApproval(BaseModel):
-    credit_ids: list[UUID]
+    credit_ids: list[UUID] = Field(min_length=1)
     reassign: bool = False
 
 

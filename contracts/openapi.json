@@ -4894,7 +4894,7 @@
           "builds"
         ],
         "summary": "ListBuilds",
-        "description": "List builds in a named order, approved ones unless another status is selected.\n\nEvery tag_id and tag_slug must match. account_id selects builds crediting that account as a\ncreator or designer. With submitted_by=me the caller sees their own builds in every status;\nother unpublished listings require build.submission.view_pending permission. Text search\nlives at /v1/search.",
+        "description": "List builds in a named order, approved ones unless another status is selected.\n\nEvery tag_id and tag_slug must match. account_id and creator_name_id select builds with a\nmatching credit in any role. With submitted_by=me the caller sees their own builds in every status;\nother unpublished listings require build.submission.view_pending permission. Text search\nlives at /v1/search.",
         "operationId": "builds_list",
         "parameters": [
           {
@@ -25152,6 +25152,13 @@
           "201": {
             "description": "Document created, URL follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -29114,7 +29121,8 @@
               "type": "string",
               "format": "uuid"
             },
-            "type": "array"
+            "type": "array",
+            "minItems": 1
           },
           "reassign": {
             "type": "boolean",
@@ -29180,7 +29188,8 @@
               "type": "string",
               "format": "uuid"
             },
-            "type": "array"
+            "type": "array",
+            "minItems": 1
           }
         },
         "type": "object",
