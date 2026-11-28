@@ -21,6 +21,20 @@ BEGIN
         build_exists := FOUND;
     END IF;
 
+    IF TG_TABLE_NAME = 'build_credits' THEN
+        IF TG_OP <> 'DELETE' AND NEW.alias_id IS NOT NULL THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || NEW.alias_id::text, 'upsert');
+        END IF;
+        IF TG_OP <> 'INSERT' AND OLD.alias_id IS NOT NULL THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || OLD.alias_id::text, 'upsert');
+        END IF;
+    ELSIF TG_TABLE_NAME = 'builds' AND TG_OP = 'UPDATE' THEN
+        IF NEW.submission_status IS DISTINCT FROM OLD.submission_status THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || c.alias_id::text, 'upsert')
+            FROM (SELECT DISTINCT alias_id FROM public.build_credits WHERE build_id = NEW.id AND alias_id IS NOT NULL ORDER BY alias_id) c;
+        END IF;
+    END IF;
+
     -- A link change queues only the Discord sync.
     IF TG_TABLE_NAME <> 'build_links' THEN
         PERFORM public.upsert_search_projection_request(

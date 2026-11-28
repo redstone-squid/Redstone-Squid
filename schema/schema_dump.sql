@@ -113,16 +113,15 @@ $$;
 CREATE FUNCTION public.build_credit_accounts(target_build_id bigint DEFAULT NULL::bigint) RETURNS TABLE(build_id bigint, "position" smallint, account_id integer, name text, role text)
     LANGUAGE sql STABLE
     AS $$
-    SELECT c.build_id, c.position, coalesce(i.account_id, a.account_id), c.name, c.role
+    SELECT c.build_id, c.position, coalesce(c.account_id, i.account_id), c.name, c.role
     FROM public.build_credits c
-    LEFT JOIN public.creator_aliases a ON a.id = c.alias_id
-    LEFT JOIN public.account_identities i ON i.subject = c.subject AND i.provider = CASE c.kind
+    LEFT JOIN public.account_identities i ON c.account_source = 'automatic' AND i.subject = c.subject AND i.provider = CASE c.kind
         WHEN 'discord' THEN 'discord'
         WHEN 'minecraft_java' THEN 'java'
         WHEN 'minecraft_bedrock' THEN 'bedrock'
     END
     WHERE (target_build_id IS NULL OR c.build_id = target_build_id)
-      AND coalesce(i.account_id, a.account_id) IS NOT NULL;
+      AND coalesce(c.account_id, i.account_id) IS NOT NULL;
 $$;
 
 
@@ -138,8 +137,8 @@ SELECT jsonb_build_object(
     'build', jsonb_build_object('submission_status', b.submission_status, 'extra_info', b.extra_info, 'width', b.width, 'height', b.height, 'depth', b.depth, 'completion_time', b.completion_time, 'submission_time', b.submission_time, 'category', b.category, 'ai_generated', b.ai_generated, 'version_spec', b.version_spec, 'completion_at', b.completion_at, 'completion_evidence', b.completion_evidence, 'description', b.description, 'submitter_account_id', b.submitter_account_id, 'display_name', b.display_name, 'server_address', b.server_address, 'server_coordinates', b.server_coordinates, 'server_command', b.server_command, 'source_submission_draft_id', b.source_submission_draft_id, 'sponsor_installation_id', b.sponsor_installation_id, 'sponsor_display_name', b.sponsor_display_name, 'sponsor_address', b.sponsor_address, 'sponsor_description', b.sponsor_description, 'sponsor_website_url', b.sponsor_website_url),
     'doors', (SELECT jsonb_build_object('orientation', d.orientation, 'door_width', d.door_width, 'door_height', d.door_height, 'door_depth', d.door_depth, 'expansion', d.expansion, 'normal_opening_time', d.normal_opening_time, 'normal_closing_time', d.normal_closing_time, 'visible_opening_time', d.visible_opening_time, 'visible_closing_time', d.visible_closing_time) FROM public.doors d WHERE d.build_id = b.id),
     'extenders', (SELECT jsonb_build_object('orientation', d.orientation, 'extension_length', d.extension_length, 'extender_type', d.extender_type, 'extension_time', d.extension_time, 'retraction_time', d.retraction_time) FROM public.extenders d WHERE d.build_id = b.id),
-    'creators', COALESCE((SELECT jsonb_agg(jsonb_build_object('alias_id', a.id, 'name', a.name, 'account_id', a.account_id) ORDER BY a.id) FROM public.build_credits c JOIN public.creator_aliases a ON a.id = c.alias_id WHERE c.build_id = b.id), '[]'::jsonb),
-    'credits', COALESCE((SELECT jsonb_agg(jsonb_build_object('kind', c.kind, 'name', c.name, 'username', c.username, 'subject', c.subject, 'role', c.role, 'attribution', c.attribution, 'source_message_id', c.source_message_id, 'alias_id', c.alias_id) ORDER BY c.position) FROM public.build_credits c WHERE c.build_id = b.id), '[]'::jsonb),
+    'creators', COALESCE((SELECT jsonb_agg(jsonb_build_object('alias_id', a.id, 'name', a.name, 'account_id', c.account_id) ORDER BY a.id) FROM public.build_credits c JOIN public.creator_aliases a ON a.id = c.alias_id WHERE c.build_id = b.id), '[]'::jsonb),
+    'credits', COALESCE((SELECT jsonb_agg(jsonb_build_object('credit_id', c.id, 'account_id', c.account_id, 'account_source', c.account_source, 'proposed_account_id', c.proposed_account_id, 'kind', c.kind, 'name', c.name, 'username', c.username, 'subject', c.subject, 'role', c.role, 'attribution', c.attribution, 'source_message_id', c.source_message_id, 'alias_id', c.alias_id) ORDER BY c.position) FROM public.build_credits c WHERE c.build_id = b.id), '[]'::jsonb),
     'versions', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', v.id, 'edition', v.edition, 'major_version', v.major_version, 'minor_version', v.minor_version, 'patch_number', v.patch_number, 'data_version', v.data_version) ORDER BY v.id) FROM public.build_versions bv JOIN public.versions v ON v.id = bv.version_id WHERE bv.build_id = b.id), '[]'::jsonb),
     'tags', COALESCE((SELECT jsonb_agg(jsonb_build_object('tag_id', r.tag_id, 'value_type', r.value_type, 'numeric_value', r.numeric_value::text, 'text_value', r.text_value, 'boolean_value', r.boolean_value, 'display_unit_key', r.display_unit_key, 'display_order', r.display_order, 'evidence', r.evidence, 'origin', r.origin, 'created_by_account_id', r.created_by_account_id) ORDER BY r.tag_id) FROM public.build_tag_assignments r  WHERE r.build_id = b.id), '[]'::jsonb),
     'links', COALESCE((SELECT jsonb_agg(jsonb_build_object('url', r.url, 'media_type', r.media_type) ORDER BY r.media_type, r.url) FROM public.build_links r  WHERE r.build_id = b.id), '[]'::jsonb),
@@ -617,6 +616,20 @@ BEGIN
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
         build_exists := FOUND;
+    END IF;
+
+    IF TG_TABLE_NAME = 'build_credits' THEN
+        IF TG_OP <> 'DELETE' AND NEW.alias_id IS NOT NULL THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || NEW.alias_id::text, 'upsert');
+        END IF;
+        IF TG_OP <> 'INSERT' AND OLD.alias_id IS NOT NULL THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || OLD.alias_id::text, 'upsert');
+        END IF;
+    ELSIF TG_TABLE_NAME = 'builds' AND TG_OP = 'UPDATE' THEN
+        IF NEW.submission_status IS DISTINCT FROM OLD.submission_status THEN
+            PERFORM public.upsert_search_projection_request('metadata', 'creator:' || c.alias_id::text, 'upsert')
+            FROM (SELECT DISTINCT alias_id FROM public.build_credits WHERE build_id = NEW.id AND alias_id IS NOT NULL ORDER BY alias_id) c;
+        END IF;
     END IF;
 
     -- A link change queues only the Discord sync.
@@ -1840,6 +1853,11 @@ CREATE TABLE public.build_credits (
     attribution text NOT NULL,
     source_message_id bigint,
     alias_id integer,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id integer,
+    proposed_account_id integer,
+    account_source text DEFAULT 'automatic'::text NOT NULL,
+    CONSTRAINT build_credits_account_source_check CHECK ((account_source = ANY (ARRAY['automatic'::text, 'reviewed'::text, 'conflict'::text]))),
     CONSTRAINT build_credits_attribution_valid CHECK ((attribution = ANY (ARRAY['explicit'::text, 'assumed_sender'::text, 'confirmed'::text, 'legacy'::text]))),
     CONSTRAINT build_credits_generic_reference CHECK (((kind <> 'name'::text) OR ((subject IS NULL) AND (username IS NULL)))),
     CONSTRAINT build_credits_kind_valid CHECK ((kind = ANY (ARRAY['name'::text, 'discord'::text, 'minecraft_java'::text, 'minecraft_bedrock'::text]))),
@@ -2587,6 +2605,8 @@ CREATE TABLE public.creator_alias_claims (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     resolved_at timestamp with time zone,
     resolved_by_account_id integer,
+    selected_credits jsonb DEFAULT '{}'::jsonb NOT NULL,
+    approved_credit_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT creator_alias_claims_resolution_complete CHECK (((status = 'pending'::text) = (resolved_at IS NULL))),
     CONSTRAINT creator_alias_claims_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))
 );
@@ -2597,6 +2617,13 @@ CREATE TABLE public.creator_alias_claims (
 --
 
 COMMENT ON TABLE public.creator_alias_claims IS 'An account''s request to be credited under a creator alias.';
+
+
+--
+-- Name: COLUMN creator_alias_claims.selected_credits; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.creator_alias_claims.selected_credits IS 'Credit IDs selected at filing and the effective owners staff will review.';
 
 
 --
@@ -2642,7 +2669,7 @@ CREATE TABLE public.creator_aliases (
 -- Name: TABLE creator_aliases; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.creator_aliases IS 'A creator name credited on a build, optionally claimed by an account.';
+COMMENT ON TABLE public.creator_aliases IS 'A searchable spelling shared by build credits. Ownership is recorded on each credit.';
 
 
 --
@@ -6940,7 +6967,15 @@ ALTER TABLE ONLY public.api_keys
 --
 
 ALTER TABLE ONLY public.build_credits
-    ADD CONSTRAINT build_credits_pkey PRIMARY KEY (build_id, "position");
+    ADD CONSTRAINT build_credits_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: build_credits build_credits_position_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_credits
+    ADD CONSTRAINT build_credits_position_key UNIQUE (build_id, "position") DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -8668,13 +8703,6 @@ CREATE INDEX creator_alias_claims_account_idx ON public.creator_alias_claims USI
 
 
 --
--- Name: creator_alias_claims_one_pending_per_account; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX creator_alias_claims_one_pending_per_account ON public.creator_alias_claims USING btree (alias_id, account_id) WHERE (status = 'pending'::text);
-
-
---
 -- Name: creator_alias_claims_resolved_by_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8812,6 +8840,20 @@ CREATE INDEX idx_builds_category ON public.builds USING btree (category);
 --
 
 CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission_time DESC);
+
+
+--
+-- Name: ix_build_credits_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_build_credits_account_id ON public.build_credits USING btree (account_id);
+
+
+--
+-- Name: ix_build_credits_proposed_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_build_credits_proposed_account_id ON public.build_credits USING btree (proposed_account_id);
 
 
 --
@@ -10592,6 +10634,14 @@ ALTER TABLE ONLY public.api_keys
 
 
 --
+-- Name: build_credits build_credits_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_credits
+    ADD CONSTRAINT build_credits_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
+
+
+--
 -- Name: build_credits build_credits_alias_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10605,6 +10655,14 @@ ALTER TABLE ONLY public.build_credits
 
 ALTER TABLE ONLY public.build_credits
     ADD CONSTRAINT build_credits_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: build_credits build_credits_proposed_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_credits
+    ADD CONSTRAINT build_credits_proposed_account_id_fkey FOREIGN KEY (proposed_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
 
 
 --

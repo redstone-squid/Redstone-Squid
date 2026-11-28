@@ -12,7 +12,7 @@ CREATE TABLE public.creator_aliases (
     CONSTRAINT creator_aliases_normalized_name_folded CHECK (((normalized_name = btrim(normalized_name)) AND (normalized_name !~ '[A-Z]'::text)))
 );
 
-COMMENT ON TABLE public.creator_aliases IS 'A creator name credited on a build, optionally claimed by an account.';
+COMMENT ON TABLE public.creator_aliases IS 'A searchable spelling shared by build credits. Ownership is recorded on each credit.';
 
 ALTER TABLE ONLY public.creator_aliases ALTER COLUMN id SET DEFAULT nextval('public.creator_aliases_id_seq'::regclass);
 
