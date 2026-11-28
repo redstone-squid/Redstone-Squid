@@ -185,6 +185,8 @@ class DatabaseWorker:
                 self._process_schematic_renders,
             ),
         ]
+        if self._services.mirror_build_image is not None:
+            jobs.append(job("build-image-mirrors", 5, self._services.mirror_build_image, critical=False))
         if self._services.media_runner is not None:
             jobs.append(
                 job(

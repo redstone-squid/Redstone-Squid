@@ -127,11 +127,18 @@ class BrowserViews:
                 BuildMedia(kind=item.kind, url=item.url, width=item.width, height=item.height) for item in retained
             ]
             preview = detail.preview
+            mirrors = {item.source_url: item.url for item in retained if item.source_url}
+            if preview and preview.kind == "image" and preview.url in mirrors:
+                preview = replace(preview, url=mirrors[preview.url])
             if preview is None:
                 first = next((item for item in retained if item.kind == "image"), None)
                 if first is not None:
                     preview = PublicBuildPreview("image", first.url, first.width, first.height)
-            detail = replace(detail, media=[*gallery, *detail.media], preview=preview)
+            detail = replace(
+                detail,
+                media=[*gallery, *(item for item in detail.media if item.kind != "image" or item.url not in mirrors)],
+                preview=preview,
+            )
         return detail
 
     async def record(self, detail: PublicRecordDetail) -> PublicRecordDetail:

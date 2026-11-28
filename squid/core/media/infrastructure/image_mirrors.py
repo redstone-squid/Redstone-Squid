@@ -70,7 +70,10 @@ async def fetch_image(source: str, path: Path) -> None:
 
 
 class BuildImageMirrorWorker:
-    def __init__(self, sessions: async_sessionmaker[AsyncSession], processing: MediaProcessingService) -> None:
+    def __init__(
+        self, sessions: async_sessionmaker[AsyncSession], processing: MediaProcessingService, public_base_url: str
+    ) -> None:
+        self.public_base_url = public_base_url.rstrip("/")
         self.sessions = sessions
         self.processing = processing
 
@@ -89,7 +92,7 @@ class BuildImageMirrorWorker:
                 ON CONFLICT (build_id,url) DO UPDATE SET attempts=build_image_mirrors.attempts+1,
                     retry_at=now()+interval '10 minutes'
                 WHERE build_image_mirrors.content IS NULL AND build_image_mirrors.retry_at<=now()
-                RETURNING id,url,attempts
+                RETURNING id,build_id,url,attempts
             """)
                 )
             ).first()
@@ -116,8 +119,14 @@ class BuildImageMirrorWorker:
         async with self.sessions.begin() as session:
             await session.execute(
                 text("""
-                UPDATE build_image_mirrors SET content=:content, content_type=:mime
+                UPDATE build_image_mirrors SET content=:content, content_type=:mime, public_url=:public_url
                 WHERE id=:id AND attempts=:attempts
             """),
-                dict(content=content, mime=result.report.output.content_type, id=row.id, attempts=row.attempts),
+                dict(
+                    public_url=f"{self.public_base_url}/v1/builds/{row.build_id}/images/{row.id}",
+                    content=content,
+                    mime=result.report.output.content_type,
+                    id=row.id,
+                    attempts=row.attempts,
+                ),
             )

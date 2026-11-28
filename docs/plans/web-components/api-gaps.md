@@ -31,16 +31,11 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Creators and accounts
 
-24. **Creator pages (P13).** Exact name lookup returns `{id, name}`. `GET /v1/creator-aliases/summary?name=` summarizes a credited name and `GET /v1/accounts/{account_id}/creator-stats` summarizes a public account across names. Both count distinct approved builds and distinct records held now or ever.
-25. **Creator builds (P13).** Filter `GET /v1/builds` by `account_id` or `creator_name_id`. Each build appears once. Each credit carries its own public attribution.
-26. **Credit claims (P13, A3, X4).** Submit credit IDs to `POST /v1/creator-aliases/{id}/claims`. Applicants read `GET /v1/accounts/me/claims`. Staff read pending claims oldest first at `GET /v1/claims` and post decisions to `/v1/claims/{id}/approve` or `/reject`. Approval can cover a subset and applies only to those credits. Historical links migrate as automatic attributions, with conflicting credits left unassigned.
 27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
 53. **Merge code normalization.** `POST /v1/accounts/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
 ### Submissions
-
-**Creator credit picker.** One picker accepts a new name, suggests names printed on public builds, and offers clearly labeled public profiles. Typing or selecting a name fills only the published credit, even with one matching profile. Selecting a profile proposes its account alongside the credited name. Names on public builds remain searchable when an account is hidden; suggestions must respect identity visibility and must not expose the hidden association. Submission reviewers can change or clear the proposed account while keeping the credited name. Approval attributes only that build credit.
 
 36. **Finalization push (phase 2).** S3 polls `/drafts/{id}/status` with `If-None-Match`. Add a long-poll or SSE stream only if polling proves costly.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
@@ -49,11 +44,11 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 ### Cross-cutting
 
 51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
-55. **One pagination system (implemented).** Every list returns `{items, total, next, prev}`. `next` and `prev` are the query parameters for the neighbouring page, so clients merge them into the next request and never build addresses themselves. A request uses at most one of:
+55. **One pagination system.** Paginated lists return `{items, total, next, prev}`. `next` and `prev` are the query parameters for the neighbouring page, so clients merge them into the next request and never build addresses themselves. A request uses at most one of:
     - **`offset`**, up to 10,000, for numbered pages. The website turns `?page=N` into `offset=(N-1)*page_size`. A row inserted or deleted mid-browse can repeat or skip one item, which is fine for browsing.
     - **`cursor`**, an opaque token from `next` or `prev`. It holds the boundary row's sort value and ID, so following it still works after that row is deleted, filtered out or edited. A malformed cursor, or one sent with a different `sort`, answers 400 `INVALID_PAGE_CURSOR` and the client starts again from the first page. Following cursors on `sort=id` sees each surviving row once. Ranked search has no seekable order and stays offset-only.
     - Lists take `page_size` (1–50). Items in this document name only their filters and sorts (item 58).
-    - Queues, inboxes and logs, where rows arrive or leave while someone works through them, should be read by cursor: the review queue, tag proposals, alias claims, correction proposals, the notification inbox, diagnostics and the permission audit log. Completions are not lists: `suggest` keeps `limit`, and its `cursor` is the caret position.
+    - Queues, inboxes and logs, where rows arrive or leave while someone works through them, should be read by cursor: the review queue, tag proposals, credit claims, correction proposals, the notification inbox, diagnostics and the permission audit log. The staff credit-claim queue and the applicant’s claim history currently return unpaged arrays. For completions, `suggest` keeps `limit`, and its `cursor` is the caret position.
     - **Planned: `changed_since=<sequence>`** for sync clients, the only feed that guarantees nothing is lost. A cursor on a sort value that can change (`updated`) can still miss a row that moves across the page boundary.
     - ETags on lists serve `If-None-Match` caching only.
 58. **Filters and sorts (builds and search implemented; records has only the `id` sort).** Every list follows these rules; items above name only their own filters and sorts.
@@ -73,8 +68,8 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
    - A missing or expired cookie returns 200 with a null user, empty permissions, zero personal counts and a null review queue. The queue count is null whenever the viewer lacks access and zero when a visible queue is empty.
    - A local PostgreSQL benchmark of the signed-in staff endpoint measured 6.2 ms median and 7.6 ms p95 over 25 warm requests, with 10,000 builds (1,000 pending) and 10,000 drafts (10 owned).
 2. **Detail responses include a nullable `viewer`** so one request supplies the controls for the resource. Anonymous callers get null. Keep personalized responses out of shared caches and enforce each permission on the action itself.
-   - `BuildDetail.viewer` includes `can_edit`, `can_review`, `can_download_private_schematics`, a map of followed creator IDs to subscription IDs, and the caller’s nullable `ballot`. The vote session belongs to the build (item 6).
-   - `PublicRecordDetail.viewer` includes a nullable `subscription_id`. `CreatorProfileDetail.viewer` includes a nullable `subscription_id`, `is_self` and `can_claim`. `TagDetail.viewer` includes a nullable `filter_subscription_id`.
+   - `BuildDetail.viewer` includes `can_edit`, `can_review`, `can_download_private_schematics`, a map of followed public account IDs to subscription IDs, and the caller’s nullable `ballot`. The vote session belongs to the build (item 6).
+   - `PublicRecordDetail.viewer` includes a nullable `subscription_id`. `PublicAccountDetail.viewer` includes a nullable `subscription_id`, `is_self` and `can_claim`. Claims select build credits under a printed name (item 26). `TagDetail.viewer` includes a nullable `filter_subscription_id`.
 3. **`GET /v1/auth/providers`** returns configured providers as `[{id}]` in display order. A1 uses the stable provider slug for its localized sign-in button. A3 combines discovery with `/me` identities and calls `POST /v1/auth/{provider}/link` with the browser CSRF token. Navigate to the returned `authorization_url`. The callback requires the account that started linking and reports `identity_in_use` if a different account owns the identity.
 4. **Callback failures return to A1** with a stable `auth_error` query parameter. Use `cancelled` for provider denial, `invalid_state` for missing, expired or mismatched state, and `provider_unavailable` for provider failures. Consume and validate state even on denial. Only a validated attempt can carry its saved return destination into a retry. Successful sign-in retains the existing return redirect.
 
@@ -83,7 +78,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 5. **Build summaries.** Cards receive the subtitle, typed category and status, creator names with nullable public IDs, and current and former record counts. External preview dimensions can be unknown.
 6. **Build detail.** P5 receives current and former records, a typed gallery, public schematic count and primary download, submission and approval metadata, and the public history count. Missing historical approval dates are null. An unpublished primary schematic contributes neither metadata nor a download link.
 7. **Public history.** `GET /v1/builds/{id}/history` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
-9. **Catalogue filters and sorts.** `GET /v1/builds` takes `category`, `version_id`, repeated `tag_id` and `tag_slug`, `account_id`, `status` and `submitted_by=me`, which lists the caller's builds in every status unless `status` narrows it. Sorts are `id`, `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume` and `title`. Text search is `/v1/search`, where the same filters are query clauses (`tag:`, `creator:`, `version:`).
+9. **Catalogue filters and sorts.** `GET /v1/builds` takes `category`, `version_id`, repeated `tag_id` and `tag_slug`, `account_id`, `creator_name_id`, `status` and `submitted_by=me`, which lists the caller's builds in every status unless `status` narrows it. Sorts are `id`, `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume` and `title`. Text search is `/v1/search`, where the same filters are query clauses (`tag:`, `creator:`, `version:`).
 10. **Edit through drafts.** A web draft with `source_build_id` starts with the approved build's public editable answers and pins its build revision. Finalization applies authorized changes or returns a review vote ID. A stale revision returns 412 with field differences and preserves the draft. Moderators can read the full edit form at `GET /v1/builds/{id}/form`.
 
 ### Records
@@ -106,13 +101,21 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 
 22. **Tag page builds.** `GET /v1/builds?tag_slug=` (items 9 and 59) avoids the waterfall of tag, then query name, then search on P12.
 
+### Creators and accounts
+
+24. **Creator pages (P13).** `GET /v1/creator-aliases/lookup?name=` returns `{id, name}`. `GET /v1/creator-aliases/summary?name=` summarizes a credited name and `GET /v1/accounts/{account_id}/creator-stats` summarizes a public account across names. Both count distinct approved builds and distinct records held now or ever.
+25. **Creator builds (P13).** Filter `GET /v1/builds` by `account_id` or `creator_name_id`. Each build appears once. Each credit carries a stable `credit_id`, its printed name and a nullable public `account_id`.
+26. **Credit claims (P13, A3, X4).** Send `{credit_ids: [...]}` to `POST /v1/creator-aliases/{id}/claims`. Applicants read `GET /v1/accounts/me/claims`. Staff read pending claims oldest first at `GET /v1/claims` and post decisions to `/v1/claims/{id}/approve` or `/reject`. Approval takes the selected `credit_ids` and requires `reassign: true` to replace an existing owner. Later builds under the same name are unaffected. Historical links migrate as automatic attributions, with conflicting credits left unassigned.
+
 ### Notifications
 
 29. **Typed payloads.** `InboxNotificationDetail.payload` is a union discriminated by `kind`. Build kinds carry `build: {id, title}`, record kinds carry `records: [{id, title}]`, and the item has an `href`. Builds link to `/builds/{id}` even while pending or rejected, so those links need item 8.
 30. **Inbox list improvements.** The inbox page carries `unread_count`, `unread_only=true` filters it, and `POST /v1/accounts/me/notifications/inbox/read-all` marks everything read as one undoable edit. Its optional `through_id` leaves items that arrived after the page loaded unread.
-31. **Readable subscriptions.** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. Creator follows link to `/accounts/{id}`, which survives alias renames. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
+31. **Readable subscriptions.** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. Creator follows link to `/accounts/{id}`, so a follow covers that account across credited names. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
 
 ### Submissions
+
+**Creator credit picker.** The `creators` suggestion source returns names printed on approved builds, including names credited to hidden accounts. The separate `creator_profiles` source returns visible accounts. A submitter can credit “RedFox” and explicitly nominate Alice via `proposed_account_id`. A name match alone assigns no account. Reviewers can change or clear the nomination before approving the build.
 
 32. **Draft progress.** Drafts and draft summaries carry `progress: {sections: [{section_id, required, filled}], missing: [field_id]}`. The server counts the visible required answers the way finalization checks them. Progress is null if the server no longer serves the draft's form revision. Summaries also carry `source_build_id` and `issue_count`. Submitted drafts leave the list, and A5 reads `builds?submitted_by=me`, so summaries have no `build_id`.
 33. **Live validation.** Changes reject out-of-bounds values with 422 field errors carrying `params` (item 50). The manifest's `constraints` let S2 check bounds as the user types, and `progress.missing` lists unanswered required fields before finalizing. Drafts never store invalid answers: S2 keeps an out-of-bounds value in the form, shows the field error, and skips autosave until the value is valid.
@@ -151,7 +154,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 
 ### Home and servers
 
-48. **Home data.** P1 makes parallel calls: `records?sort=recently_changed&page_size=6`, `builds?sort=newest&page_size=6`, and `GET /v1/stats` for `{builds, records, creators}`. `builds` and `records` match the default lists' totals. `creators` counts the creators and designers on approved builds, one per public account. A per-month record chart can come later, since P1 doesn't show one.
+48. **Home data.** P1 makes parallel calls: `records?sort=recently_changed&page_size=6`, `builds?sort=newest&page_size=6`, and `GET /v1/stats` for `{builds, records, creators}`. `builds` and `records` match the default lists' totals. `creators` counts the creators and designers on approved builds, deduplicated by public account where available, otherwise by credited name ID, provider subject or lowercased name, in that order. A per-month record chart can come later, since P1 doesn't show one.
 49. **Server directory.** `GET /v1/minecraft/servers` pages Paper servers with a public profile, oldest first, for P16. Turning on the public profile is the opt-in to being listed. `sponsor_opt_in` only credits the server on builds submitted from it, and it shows here as `sponsor`.
 
 ### Cross-cutting
@@ -160,7 +163,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 52. **Cookie and origin strategy.** Decided: islands call the API on the site's own origin, where the gateway already routes `/v1`, and take the CSRF token from `GET /v1/auth/csrf`. No Astro proxy. See "Same-origin API" in [README.md](README.md). No API change needed.
 54. **A stable revision-conflict code.** Every stale-revision failure answers 412 with code `REVISION_CONFLICT`. This covers a stale `If-Match` or `base_revision`, a draft or build whose row moved under a change, and a lost commit race. Public context carries `expected` and `current` when the server knows them, plus `build_id` for builds and `changes` for a stale build edit draft. An `If-Match` tag for another item is a malformed request: it answers 412 `DOMAIN_ERROR`.
 59. **Resource addresses.** A resource lives at `/{collection}/{id}`, keyed by an ID that never changes. Names are found by lookup, never used as path keys.
-    - **Lookups** are `GET /{collection}/lookup?{key}=`, returning one resource or 404 with the same body as the ID route. Query parameters carry any text, whereas creator names in a path would need percent-encoding, and `%2F` is decoded inconsistently by proxies. Tags and creator aliases have one.
+    - **Lookups** are `GET /{collection}/lookup?{key}=`, returning one resource or 404 with the same body as the ID route. Query parameters carry any text, whereas creator names in a path would need percent-encoding, and `%2F` is decoded inconsistently by proxies. Tags and credited names have one.
     - **Stored links use IDs.** Notification hrefs, follows and payloads never embed a name. The website may keep readable routes such as `/creators/{name}` and `/tags/{slug}` that resolve through a lookup.
     - **Filters** follow item 58: `tag_id` and `tag_slug`, never one parameter that guesses, and `account_id` for accounts.
     - **Values defined in code** (`/auth/{provider}`, `/suggest/{source}`, `/media/{kind}`) and opaque references (`/diagnostics/errors/{reference}`, `/schematic-renders/{recipe_hash}`) may be path segments.

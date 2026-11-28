@@ -176,6 +176,10 @@ class PublishedMediaFake(PublishedBuildMedia):
         (tmp_path / self.artifact.object_key).write_bytes(data)
 
     @override
+    async def mirrored_images(self, build_id: int, *, context: ActingContext) -> list[tuple[str, UUID]]:
+        return []
+
+    @override
     async def outputs(
         self, build_id: int, *, context: ActingContext, upload_id: UUID | None = None
     ) -> list[MediaArtifactRecord]:

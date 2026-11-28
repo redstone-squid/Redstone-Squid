@@ -234,6 +234,7 @@ class WorkerServices:
     cleanup_submission_schematics: WorkerOperation[None]
     cleanup_submission_inference: WorkerOperation[None]
     open_topic_bridge: TopicBridgeFactory | None = None
+    mirror_build_image: WorkerOperation[None] | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,8 @@ from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class PublishedMediaRepository(Protocol):
+    async def mirrored_images(self, build_id: int) -> list[tuple[str, UUID]]: ...
+    async def mirror_content(self, build_id: int, mirror_id: UUID) -> tuple[str, bytes] | None: ...
     async def published_outputs(self, build_id: int, *, upload_id: UUID | None) -> list[MediaArtifactRecord]: ...
 
 
@@ -26,6 +28,7 @@ class PublishedMediaItem:
     url: str
     width: int | None
     height: int | None
+    source_url: str | None = None
 
 
 class PublishedBuildMedia:
@@ -66,10 +69,19 @@ class PublishedBuildMedia:
                         artifact.height,
                     )
                 )
+            for source, mirror_id in await self.mirrored_images(build_id, context=context):
+                url = f"{self._public_base_url}/v1/builds/{build_id}/images/{mirror_id}"
+                items.append(PublishedMediaItem("image", url, None, None, source))
             return items
 
-    async def urls(self, build_id: int, *, context: ActingContext) -> tuple[list[str], list[str]]:
-        items = await self.gallery(build_id, context=context)
-        return [item.url for item in items if item.kind == "image"], [
-            item.url for item in items if item.kind == "video"
-        ]
+    async def mirrored_images(self, build_id: int, *, context: ActingContext) -> list[tuple[str, UUID]]:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.media_jobs.mirrored_images(build_id)
+
+    async def mirror_content(
+        self, build_id: int, mirror_id: UUID, *, context: ActingContext
+    ) -> tuple[str, bytes] | None:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.media_jobs.mirror_content(build_id, mirror_id)

@@ -196,6 +196,26 @@ async def get_build_form(
 
 
 @get(
+    "/{build_id:int}/images/{mirror_id:uuid}",
+    responses=responses(404),
+    operation_id="build_mirrored_image_get",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+    media_type="application/octet-stream",
+)
+async def get_mirrored_image(build_id: FromPath[int], mirror_id: FromPath[UUID], services: Services) -> Response[bytes]:
+    """Serve the saved image while its build and source link are public."""
+    media = services.published_build_media
+    result = await media.mirror_content(build_id, mirror_id, context=ActingContext.current()) if media else None
+    if result is None:
+        raise BuildNotFoundError(build_id)
+    mime, content = result
+    return Response(
+        content, media_type=mime, headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+    )
+
+
+@get(
     "/{build_id:int}/media/{upload_id:uuid}/content",
     responses=responses(404, 503),
     operation_id="build_media_content_get",
@@ -316,5 +336,13 @@ router = Router(
     },
     path="/builds",
     tags=["builds"],
-    route_handlers=[edit_build, get_build, get_build_form, get_build_history, get_build_media, list_builds],
+    route_handlers=[
+        edit_build,
+        get_build,
+        get_build_form,
+        get_build_history,
+        get_build_media,
+        get_mirrored_image,
+        list_builds,
+    ],
 )

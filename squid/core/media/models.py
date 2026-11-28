@@ -267,5 +267,6 @@ class BuildImageMirror(Base, kw_only=True):
     url: Mapped[str] = mapped_column(Text)
     attempts: Mapped[int] = mapped_column(server_default=text("1"))
     retry_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=text("now() + interval '10 minutes'"))
+    public_url: Mapped[str | None] = mapped_column(Text)
     content: Mapped[bytes | None]
     content_type: Mapped[str | None] = mapped_column(Text)

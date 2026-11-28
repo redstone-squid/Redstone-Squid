@@ -15,6 +15,7 @@ def upgrade() -> None:
     url text NOT NULL,
     attempts integer NOT NULL DEFAULT 1,
     retry_at timestamptz NOT NULL DEFAULT (now() + interval '10 minutes'),
+    public_url text,
     content bytea,
     content_type text,
     UNIQUE (build_id, url),

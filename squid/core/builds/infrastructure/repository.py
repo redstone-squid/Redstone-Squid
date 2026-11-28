@@ -302,8 +302,8 @@ class BuildRepository:
             versions[build_id].append(f"{edition} {major}.{minor}.{patch}")
 
         links: dict[int, list[BuildLink]] = defaultdict(list)
-        for build_id, url, media_type in await session.execute(
-            select(BuildLink.build_id, BuildLink.url, BuildLink.media_type)
+        for build_id, url, media_type, mirrored_url in await session.execute(
+            select(BuildLink.build_id, BuildLink.url, BuildLink.media_type, BuildLink.mirrored_url)
             .where(
                 BuildLink.build_id.in_(public_ids),
                 BuildLink.media_type.in_(("render", "image")),
@@ -311,7 +311,9 @@ class BuildRepository:
             .order_by(BuildLink.build_id, BuildLink.url)
         ):
             if media_type in {"render", "image"}:
-                links[build_id].append(BuildLink(url=url, media_type=media_type))
+                links[build_id].append(
+                    BuildLink(url=(mirrored_url or url) if media_type == "image" else url, media_type=media_type)
+                )
 
         public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
         title_tags: dict[int, dict[str, list[str]]] = defaultdict(

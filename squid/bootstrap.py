@@ -69,6 +69,7 @@ from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaPro
 from squid.core.media.application.services import MediaProcessingService
 from squid.core.media.domain import MediaLimits
 from squid.core.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
+from squid.core.media.infrastructure.image_mirrors import BuildImageMirrorWorker
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -405,10 +406,7 @@ class _ServiceGraph:
         return MediaStorageCleanup(self.media_job_service, self.artifacts)
 
     @cached_property
-    def media_runner(self) -> MediaProcessingJobRunner | None:
-        jobs = self.media_jobs
-        if jobs is None:
-            return None
+    def media_processing(self) -> MediaProcessingService:
         media = self.config.media
         processing = MediaProcessingService(
             FfmpegMediaProcessor(
@@ -423,14 +421,21 @@ class _ServiceGraph:
                     threads=media.threads,
                 ),
             ),
-            limits=jobs.limits,
+            limits=self.media_job_service.limits,
         )
         self.resources.push_async_callback(processing.aclose)
+        return processing
+
+    @cached_property
+    def media_runner(self) -> MediaProcessingJobRunner | None:
+        jobs = self.media_jobs
+        if jobs is None:
+            return None
         return MediaProcessingJobRunner(
             jobs,
             self.artifacts,
-            processing,
-            working_directory=media.working_directory,
+            self.media_processing,
+            working_directory=self.config.media.working_directory,
         )
 
     @cached_property
@@ -801,6 +806,15 @@ def create_worker_services(
         schematics=graph.schematics,
         schematic_jobs=graph.schematic_jobs,
         schematic_renders=SchematicRenderJobService(uow_factory=graph.uow_factory),
+        mirror_build_image=(
+            BuildImageMirrorWorker(
+                db.async_session,
+                graph.media_processing,
+                str(config.media.public_base_url or config.schematics.render_public_base_url),
+            ).process
+            if graph.media_runner and graph.published_build_media
+            else None
+        ),
         media_runner=graph.media_runner,
         media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submissions.finalization_worker,

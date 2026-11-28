@@ -221,7 +221,14 @@ class PublicBuildSummary:
 def _public_preview(build: Build) -> PublicBuildPreview | None:
     sources: tuple[tuple[Literal["render", "image"], tuple[str, ...]], ...] = (
         ("render", build.render_urls),
-        ("image", build.image_urls),
+        (
+            "image",
+            tuple(
+                (link.mirrored_url if build.submission_status is BuildStatus.APPROVED else None) or link.url
+                for link in build.links
+                if link.media_type == "image"
+            ),
+        ),
     )
     for kind, urls in sources:
         for candidate in urls:

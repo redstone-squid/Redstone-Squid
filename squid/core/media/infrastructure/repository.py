@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -66,6 +66,31 @@ class PostgresMediaJobRepository(MediaJobRepository):
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
         self._publications = PostgresArtifactPublicationRepository(session)
+
+    async def mirrored_images(self, build_id: int) -> list[tuple[str, UUID]]:
+        rows = await self._session().execute(
+            text("""
+            SELECT m.url,m.id FROM build_image_mirrors m JOIN builds b ON b.id=m.build_id
+            JOIN build_links l USING (build_id,url)
+            WHERE m.build_id=:build AND b.submission_status=1 AND l.media_type='image' AND m.content IS NOT NULL
+            ORDER BY m.url
+        """),
+            {"build": build_id},
+        )
+        return [(row.url, row.id) for row in rows]
+
+    async def mirror_content(self, build_id: int, mirror_id: UUID) -> tuple[str, bytes] | None:
+        row = (
+            await self._session().execute(
+                text("""
+            SELECT m.content_type,m.content FROM build_image_mirrors m JOIN builds b ON b.id=m.build_id
+            JOIN build_links l USING (build_id,url)
+            WHERE m.build_id=:build AND m.id=:id AND b.submission_status=1 AND l.media_type='image' AND m.content IS NOT NULL
+        """),
+                {"build": build_id, "id": mirror_id},
+            )
+        ).first()
+        return (row.content_type, row.content) if row else None
 
     async def published_outputs(self, build_id: int, *, upload_id: UUID | None) -> list[MediaArtifactRecord]:
         stmt = (

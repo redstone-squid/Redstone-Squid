@@ -152,6 +152,7 @@ def worker_services(**overrides: object) -> WorkerServices:
     defaults: dict[str, Any] = {
         "event_wake_listener": None,
         "media_runner": None,
+        "mirror_build_image": None,
         "open_topic_bridge": None,
         "refresh_search_index": _unconfigured_job,
         "record_queue_health": _unconfigured_job,

@@ -136,3 +136,10 @@ docker build --target runtime-media --build-arg WITH_OBSERVABILITY=0 -t redstone
 docker run --rm --entrypoint sh redstone-squid-media-worker -ec \
   'test "$(id -u)" = 10001; test -w "$TMPDIR"; test -w /var/lib/app/media-tmp; ffmpeg -version; ffprobe -version'
 ```
+
+With processing enabled and a public media base URL configured, the worker also copies image links
+from new and existing builds. Every five seconds it selects one eligible link, newest builds first.
+It accepts public IPv4 HTTP(S) destinations on ports 80 and 443 and up to 8 MiB per image.
+After validation the worker stores the bytes in PostgreSQL with the source link. Include these
+bytes in database capacity and backup estimates. Failed links keep their original URL and receive
+up to three attempts, ten minutes apart. Removing the link also removes its copy.

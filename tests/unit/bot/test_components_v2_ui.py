@@ -26,7 +26,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, BuildLink, DoorBuild
 from squid.core.edits.domain import Revision, RevisionConflictError
-from squid.core.media.application.build_media import PublishedBuildMedia
+from squid.core.media.application.build_media import PublishedBuildMedia, PublishedMediaItem
 from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.search.application import SearchService
 from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchPage
@@ -195,16 +195,16 @@ async def test_build_card_displays_retained_media_only_on_approved_builds(
     display_build.submission_status = status
     images = [f"https://example.com/v1/builds/7/media/{index}/content" for index in range(12)]
     media = AsyncMock(spec=PublishedBuildMedia)
-    media.urls.return_value = (images, [])
+    media.gallery.return_value = [PublishedMediaItem("image", url, None, None) for url in images]
 
     card = await render_build_card(display_build, MediaPreviewClient(), published_media=media)
     components = list(render_payload([card]).layout.walk_children())
 
     if status is BuildStatus.PENDING:
-        media.urls.assert_not_awaited()
+        media.gallery.assert_not_awaited()
         assert images[0] not in str(render_payload([card]).layout.to_components())
     else:
-        media.urls.assert_awaited_once_with(7, context=discord_screen_context)
+        media.gallery.assert_awaited_once_with(7, context=discord_screen_context)
         assert [item.media.url for item in components if isinstance(item, discord.ui.Thumbnail)] == images[:1]
         gallery_urls = [
             entry.media.url for item in components if isinstance(item, discord.ui.MediaGallery) for entry in item.items

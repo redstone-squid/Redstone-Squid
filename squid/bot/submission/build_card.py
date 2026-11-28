@@ -131,11 +131,15 @@ async def render_build_card(
             summary = await schematic_summaries.summary_for(build.id, context=ActingContext.current())
         except Exception:
             logger.warning("Could not read schematic measurements for build %s", build.id, exc_info=True)
+    mirrored_sources: set[str] = set()
     attached_images: list[str] = []
     attached_videos: list[str] = []
     if published_media is not None and build.submission_status is BuildStatus.APPROVED:
-        attached_images, attached_videos = await published_media.urls(build.id, context=ActingContext.current())
-    thumbnail, media = await _get_media_urls(build, media_previews, attached_images, attached_videos)
+        items = await published_media.gallery(build.id, context=ActingContext.current())
+        attached_images = [item.url for item in items if item.kind == "image"]
+        attached_videos = [item.url for item in items if item.kind == "video"]
+        mirrored_sources = {item.source_url for item in items if item.source_url}
+    thumbnail, media = await _get_media_urls(build, media_previews, attached_images, attached_videos, mirrored_sources)
     return build_card(build, thumbnail=thumbnail, media=media, schematic=summary)
 
 
@@ -295,12 +299,15 @@ async def _get_media_urls(
     media_previews: MediaPreviewClient,
     attached_images: Sequence[str] = (),
     attached_videos: Sequence[str] = (),
+    mirrored_sources: set[str] | None = None,
 ) -> tuple[str | None, list[str]]:
     """Choose an image thumbnail and retain the remaining images and direct video files."""
     images = list(attached_images)
     video_previews: list[str] = []
     videos = list(attached_videos)
     for url in (*build.image_urls, *build.video_urls):
+        if mirrored_sources and url in mirrored_sources:
+            continue
         parsed = urlsplit(url)
         mimetype, _ = mimetypes.guess_type(parsed.path)
         if mimetype is not None and mimetype.startswith("image/"):

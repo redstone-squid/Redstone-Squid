@@ -27,10 +27,11 @@ from sqlalchemy import (
     UniqueConstraint,
     desc,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 from whenever import Instant
 
 from squid.config import EMBEDDING_DIMENSION
@@ -49,6 +50,7 @@ from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.persistence_types import DoorExpansionJSON
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
+from squid.core.media.models import BuildImageMirror
 from squid.core.messages.domain import MessageRef
 from squid.core.persistence.base import Base
 from squid.core.persistence.types import InstantUTC, IntEnumSmallInt, StrEnumText
@@ -652,6 +654,16 @@ class BuildLink(Base):
     )
     url: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
     media_type: Mapped[MediaTypeLiteral | None] = mapped_column(Text, default=None)  # TODO: nullable
+
+    mirrored_url: Mapped[str | None] = column_property(
+        select(BuildImageMirror.public_url)
+        .where(BuildImageMirror.build_id == build_id, BuildImageMirror.url == url)
+        .correlate_except(BuildImageMirror)
+        .scalar_subquery(),
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
 
