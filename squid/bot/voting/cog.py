@@ -67,6 +67,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self.reactions.start()
         self._detach_domain_events = self._domain_events.subscribe(
             {
+                "build.review_requested": PostSubmittedBuildHandler(self.bot).handle,
                 "build.submitted": PostSubmittedBuildHandler(self.bot).handle,
                 "vote_session.closed": DeleteVotedMessageHandler(self.bot).handle,
             }

@@ -15,6 +15,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
+from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
 from squid.core.messages.models import Message
@@ -110,6 +111,14 @@ class VoteRepository:
         session_id = await self._create_session(
             session, author_account_id, VoteKind.BUILD_EDIT, pass_threshold, fail_threshold, menu
         )
+        submission = BuildSubmission(
+            build_id=target.build_id,
+            submitter_account_id=author_account_id,
+            edit_vote_id=session_id,
+            base_revision=target.revision,
+            content={"patch": dict(target.patch), "changes": list(target.changes)},
+        )
+        session.add(submission)
         await session.execute(
             insert(BuildVoteSession).values(
                 vote_session_id=session_id,
@@ -117,16 +126,8 @@ class VoteRepository:
                 changes=list(target.changes),
                 public_suggestion=target.public_suggestion,
                 proposal_revision=target.revision,
+                submission_id=submission.id,
                 proposal_patch=dict(target.patch),
-            )
-        )
-        session.add(
-            BuildSubmission(
-                build_id=target.build_id,
-                submitter_account_id=author_account_id,
-                edit_vote_id=session_id,
-                base_revision=target.revision,
-                content={"patch": dict(target.patch), "changes": list(target.changes)},
             )
         )
         return session_id
@@ -153,7 +154,12 @@ class VoteRepository:
         existing = await session.scalar(
             select(BuildVoteSession.vote_session_id)
             .join(VoteSession, VoteSession.id == BuildVoteSession.vote_session_id)
-            .where(BuildVoteSession.build_id == build_id, VoteSession.kind == VoteKind.BUILD)
+            .where(
+                BuildVoteSession.build_id == build_id,
+                VoteSession.kind == VoteKind.BUILD,
+                BuildVoteSession.reviewed_revision
+                == select(Build.revision).where(Build.id == build_id).scalar_subquery(),
+            )
             .order_by(BuildVoteSession.vote_session_id)
             .limit(1)
         )
@@ -163,7 +169,16 @@ class VoteRepository:
             session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, menu
         )
         await session.execute(
-            insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
+            insert(BuildVoteSession).values(
+                vote_session_id=session_id,
+                build_id=build_id,
+                changes=list(changes),
+                submission_id=select(BuildSubmission.id)
+                .where(BuildSubmission.build_id == build_id, BuildSubmission.edit_vote_id.is_(None))
+                .limit(1)
+                .scalar_subquery(),
+                reviewed_revision=select(Build.revision).where(Build.id == build_id).scalar_subquery(),
+            )
         )
         return session_id
 
@@ -183,7 +198,16 @@ class VoteRepository:
             session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, menu
         )
         await session.execute(
-            insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
+            insert(BuildVoteSession).values(
+                vote_session_id=session_id,
+                build_id=build_id,
+                changes=list(changes),
+                submission_id=select(BuildSubmission.id)
+                .where(BuildSubmission.build_id == build_id, BuildSubmission.edit_vote_id.is_(None))
+                .limit(1)
+                .scalar_subquery(),
+                reviewed_revision=select(Build.revision).where(Build.id == build_id).scalar_subquery(),
+            )
         )
         return session_id
 
@@ -932,10 +956,14 @@ class VoteRepository:
         """Load the typed target, or the poll metadata for the kind that has no target."""
         match row.kind:
             case VoteKind.BUILD:
-                build_id = await session.scalar(
-                    select(BuildVoteSession.build_id).where(BuildVoteSession.vote_session_id == row.id)
+                target = await session.scalar(
+                    select(BuildVoteSession).where(BuildVoteSession.vote_session_id == row.id)
                 )
-                return (None if build_id is None else BuildVoteTarget(build_id)), None
+                return (
+                    None
+                    if target is None
+                    else BuildVoteTarget(target.build_id, target.reviewed_revision, target.submission_id)
+                ), None
             case VoteKind.BUILD_EDIT:
                 proposal = await session.scalar(
                     select(BuildVoteSession).where(BuildVoteSession.vote_session_id == row.id)
@@ -948,6 +976,7 @@ class VoteRepository:
                     proposal.proposal_patch,
                     tuple((field, before, after) for field, before, after in proposal.changes),
                     public_suggestion=proposal.public_suggestion,
+                    submission_id=proposal.submission_id,
                 ), None
             case VoteKind.DELETE_LOG:
                 target_row = (

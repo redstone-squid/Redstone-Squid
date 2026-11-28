@@ -39,6 +39,7 @@ class BuildStatusWriter(Protocol):
         build_id: int,
         *,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -51,6 +52,7 @@ class BuildStatusWriter(Protocol):
         *,
         context: ActingContext,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -75,7 +77,7 @@ class ApplyBuildVoteOutcomeHandler:
                     snapshot.target, author_account_id=snapshot.author_account_id, vote_id=snapshot.id, context=context
                 )
             return
-        if not isinstance(snapshot.target, BuildVoteTarget):
+        if not isinstance(snapshot.target, BuildVoteTarget) or snapshot.target.reviewed_revision is None:
             return
         if snapshot.result is VoteSessionResult.APPROVED:
             await self._builds.approve(
@@ -83,6 +85,7 @@ class ApplyBuildVoteOutcomeHandler:
                 context=context,
                 operation="moderation",
                 source="vote_outcome",
+                reviewed_revision=snapshot.target.reviewed_revision,
                 correlation_kind="domain_event",
                 correlation_id=str(event.id),
             )
@@ -92,6 +95,7 @@ class ApplyBuildVoteOutcomeHandler:
                 context=context,
                 operation="moderation",
                 source="vote_outcome",
+                reviewed_revision=snapshot.target.reviewed_revision,
                 correlation_kind="domain_event",
                 correlation_id=str(event.id),
             )

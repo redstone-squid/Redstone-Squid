@@ -44,6 +44,7 @@ class BuildRecorder(BuildService):
         build_id: int,
         *,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -58,6 +59,7 @@ class BuildRecorder(BuildService):
         build_id: int,
         *,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -130,7 +132,7 @@ def _snapshot(result: VoteSessionResult) -> VoteSessionSnapshot:
         pass_threshold=1,
         fail_threshold=-1,
         messages=(),
-        target=BuildVoteTarget(42),
+        target=BuildVoteTarget(42, 1),
     )
 
 

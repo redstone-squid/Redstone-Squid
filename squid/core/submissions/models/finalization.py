@@ -177,6 +177,7 @@ class SubmissionFinalizationResult(Base, kw_only=True):
         ),
         primary_key=True,
     )
+    submission_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     build_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now

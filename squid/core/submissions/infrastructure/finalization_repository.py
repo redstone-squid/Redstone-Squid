@@ -513,17 +513,28 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 msg = "submission target returned conflicting results for one source draft"
                 raise DataIntegrityError(msg)
         else:
-            session.add(
-                BuildSubmission(
+            submission = await session.scalar(
+                select(BuildSubmission)
+                .where(BuildSubmission.build_id == result.build_id, BuildSubmission.edit_vote_id.is_(None))
+                .with_for_update()
+            )
+            if submission is None:
+                submission = BuildSubmission(
                     build_id=result.build_id,
                     submitter_account_id=draft.owner_account_id,
                     submitted_at=now,
-                    finalization_job_id=model.id,
                     content=encode_submission(job.payload),
                 )
-            )
+                session.add(submission)
+            elif submission.finalization_job_id is not None:
+                message = "Build already has a finalization receipt"
+                raise DataIntegrityError(message)
+            else:
+                submission.content = encode_submission(job.payload)
+            submission.finalization_job_id = model.id
             session.add(
                 SubmissionFinalizationResult(
+                    submission_id=submission.id,
                     job_id=model.id,
                     build_id=result.build_id,
                     created_at=now,
@@ -622,6 +633,7 @@ def _snapshot(
         result=_result(result) if result is not None else None,
         attempt_number=job.attempt_number,
         input_sha256=_input_digest(original_input),
+        submission_id=result.submission_id if result else None,
     )
 
 

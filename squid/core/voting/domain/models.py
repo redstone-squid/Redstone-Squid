@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from math import isfinite
+from uuid import UUID
 
 from whenever import Instant
 
@@ -353,6 +354,8 @@ class BuildVoteTarget:
     """The build a review session confirms or rejects."""
 
     build_id: int
+    reviewed_revision: int | None = None
+    submission_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +367,7 @@ class BuildEditVoteTarget:
     patch: Mapping[str, JSONValue]
     changes: tuple[VoteChange, ...]
     public_suggestion: bool = False
+    submission_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

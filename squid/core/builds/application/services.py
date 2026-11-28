@@ -311,6 +311,7 @@ class BuildService:
         build_id: int,
         *,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -341,6 +342,8 @@ class BuildService:
                     raise AuthorizationError
                 await self._permissions.require(context.effective, BUILD_SUBMISSION_APPROVE, uow=uow)
             build = await self._get_for_update(uow, build_id)
+            if reviewed_revision is not None and build.revision != reviewed_revision:
+                return build
             if build.submission_status is not BuildStatus.PENDING:
                 return build
             await uow.builds.approve(build)
@@ -353,6 +356,7 @@ class BuildService:
         build_id: int,
         *,
         source: str,
+        reviewed_revision: int | None = None,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
@@ -383,6 +387,8 @@ class BuildService:
                     raise AuthorizationError
                 await self._permissions.require(context.effective, BUILD_SUBMISSION_REJECT, uow=uow)
             build = await self._get_for_update(uow, build_id)
+            if reviewed_revision is not None and build.revision != reviewed_revision:
+                return build
             if build.submission_status is not BuildStatus.PENDING:
                 return build
             await uow.builds.reject(build)

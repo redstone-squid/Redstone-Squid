@@ -105,6 +105,7 @@ class FinalizationJobSnapshot:
     issues: tuple[SubmissionAttentionIssue, ...] = ()
     result: FinalizedBuild | None = None
     attempt_number: int = 1
+    submission_id: UUID | None = None
     input_sha256: str | None = None
 
 

@@ -11,6 +11,7 @@ the messages package. Multiple messages therefore share the same ballots.
 """
 
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
@@ -225,6 +226,8 @@ class BuildVoteSession(Base, kw_only=True):
     )
     changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
     public_suggestion: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    submission_id: Mapped[UUID | None] = mapped_column(default=None)
+    reviewed_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
     proposal_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
     proposal_patch: Mapped[dict[str, JSONValue] | None] = mapped_column(JSONB(none_as_null=True), default=None)
 

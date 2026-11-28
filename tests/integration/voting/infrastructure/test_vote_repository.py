@@ -23,6 +23,7 @@ from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.posts.models import DiscordPost
 from squid.core.settings.models import ServerSetting
+from squid.core.submissions.models.reviews import BuildSubmission
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
@@ -78,6 +79,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
         VoterGuildMember,
         AccountIdentity,
         BuildVoteSession,
+        BuildSubmission,
         DeleteLogVoteSession,
         GenericVoteSession,
         Vote,

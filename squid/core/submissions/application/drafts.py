@@ -82,6 +82,12 @@ class DraftPermissions(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class DraftViewer:
+    can_edit: bool
+    can_discard: bool
+
+
+@dataclass(frozen=True, slots=True)
 class StoredDraft:
     """Draft answers together with expiry, source files, and preparation status."""
 
@@ -107,6 +113,10 @@ class StoredDraft:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
             msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation ID.")
             raise ValidationError(msg)
+
+    def viewer(self, account_id: int) -> DraftViewer:
+        editable = self.snapshot.status in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}
+        return DraftViewer(editable, editable and self.snapshot.owner_account_id == account_id)
 
     @property
     def ingested(self) -> bool:
