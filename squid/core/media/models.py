@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
@@ -251,3 +252,20 @@ class MediaDraftReference(Base, kw_only=True):
         UUID(as_uuid=True), ForeignKey("media_uploads.id", ondelete="RESTRICT"), primary_key=True
     )
     discarded: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+
+class BuildImageMirror(Base, kw_only=True):
+    """A bounded copy of an image retained for the lifetime of its source link."""
+
+    __tablename__ = "build_image_mirrors"
+    __table_args__ = (
+        UniqueConstraint("build_id", "url", name="build_image_mirrors_build_id_url_key"),
+        ForeignKeyConstraint(["build_id", "url"], ["build_links.build_id", "build_links.url"], ondelete="CASCADE"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=text("gen_random_uuid()"))
+    build_id: Mapped[int] = mapped_column(BigInteger)
+    url: Mapped[str] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(server_default=text("1"))
+    retry_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=text("now() + interval '10 minutes'"))
+    content: Mapped[bytes | None]
+    content_type: Mapped[str | None] = mapped_column(Text)
