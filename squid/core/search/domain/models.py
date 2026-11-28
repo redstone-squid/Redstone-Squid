@@ -68,6 +68,21 @@ class SearchResultAnchor:
     source_id: str
 
 
+type HistogramField = Literal["width", "opening_time"]
+
+
+@dataclass(frozen=True, slots=True)
+class SearchRange:
+    field: HistogramField
+    lower: int | None
+    upper: int | None
+
+    def __post_init__(self) -> None:
+        if self.lower is not None and self.upper is not None and self.lower > self.upper:
+            msg = f"{self.field} minimum exceeds maximum"
+            raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
+
+
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
     """Search text, filters, and paging options shared by the bot and API."""
@@ -82,6 +97,7 @@ class SearchRequest:
     group_by_build: bool = False
     parsed_query: BuildQuery | RecordQuery | None = None
     anchor: SearchResultAnchor | None = None
+    ranges: tuple[SearchRange, ...] = ()
 
     def __post_init__(self) -> None:
         if self.parsed_query is not None and self.parsed_query.scope is not self.scope:

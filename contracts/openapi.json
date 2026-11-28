@@ -19695,6 +19695,98 @@
             "allowReserved": false
           },
           {
+            "name": "distributions",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated histogram fields: width (blocks), opening_time (game ticks)."
+            },
+            "description": "Comma-separated histogram fields: width (blocks), opening_time (game ticks).",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "width_min",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "width_max",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "opening_time_min",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "opening_time_max",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "counts",
             "in": "query",
             "schema": {
@@ -42345,6 +42437,46 @@
         ],
         "title": "SearchFilterRange"
       },
+      "SearchHistogram": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "histogram",
+            "default": "histogram"
+          },
+          "bins": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHistogramBin"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bins"
+        ],
+        "title": "SearchHistogram"
+      },
+      "SearchHistogramBin": {
+        "properties": {
+          "from": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "from",
+          "to"
+        ],
+        "title": "SearchHistogramBin"
+      },
       "SearchMatch": {
         "properties": {
           "resource_kind": {
@@ -42419,6 +42551,19 @@
               "$ref": "#/components/schemas/SearchFilter"
             },
             "type": "array"
+          },
+          "distributions": {
+            "oneOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/SearchHistogram"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "counts": {
             "oneOf": [

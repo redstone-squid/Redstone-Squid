@@ -432,3 +432,14 @@ async def test_count_includes_every_visible_match_in_the_scope(
     )
 
     assert count == expected
+
+
+async def test_width_histogram_counts_each_matching_document_once_per_bin(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await seed_builds(async_session_factory, ["A", "B", "C", "Unknown"], widths={"A": [1, 2], "B": [1], "C": [40]})
+    request = SearchRequest("", scope=SearchScope.BUILDS, page_size=1)
+    query = SearchQueryParser(DEFAULT_FIELD_REGISTRY, scope=request.scope).parse(request.query)
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        assert await uow.search.histogram(request, query, "width") == [(1, 3, 2), (39, 41, 1)]

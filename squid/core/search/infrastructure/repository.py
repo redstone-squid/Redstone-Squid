@@ -7,6 +7,7 @@ from typing import override
 from sqlalchemy import Integer, Text, cast, func, literal, or_, select, true
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from squid.core.search.application import (
@@ -30,9 +31,9 @@ from squid.core.search.domain import (
 )
 from squid.core.search.domain.query import expression_applies_to
 from squid.core.search.domain.text import TermExpansion, close_distance, terms
-from squid.core.search.infrastructure.compiler import compile_query, rank_query
+from squid.core.search.infrastructure.compiler import compile_holder_query, compile_query, rank_query
 from squid.core.search.infrastructure.results import ResultOrder, ResultPager
-from squid.core.search.models import SearchDocument, SearchTerm
+from squid.core.search.models import SearchDocument, SearchTerm, SearchValue
 
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"approved"})
@@ -77,6 +78,37 @@ class PostgresSearchBackend(SearchBackend):
         if sort_field is None and not is_filter_only(query):
             order, warnings = await self._ranked(session, request, query, predicate, expansion, query_embedding)
         return await ResultPager(session, request, query, expansion).page(predicate, order, warnings=warnings)
+
+    @override
+    async def histogram(self, request: SearchRequest, query: SearchQuery, field: str) -> list[tuple[int, int, int]]:
+        session = self._session()
+        expansion = await self._expansion(session, query)
+        measurement = aliased(SearchValue)
+        value = measurement.numeric_value
+        values = (
+            select(
+                SearchDocument.id,
+                value.label("value"),
+                func.min(value).over().label("low"),
+                func.max(value).over().label("high"),
+            )
+            .join(measurement, measurement.document_id == SearchDocument.id)
+            .where(
+                self.compile_predicate(request, query, expansion),
+                measurement.field_name == field,
+                value.is_not(None),
+                or_(
+                    measurement.holder_build_id.is_(None),
+                    compile_holder_query(query, measurement.holder_build_id, expansion),
+                ),
+            )
+            .subquery()
+        )
+        # Integral units keep even a constant-valued distribution one unit wide.
+        step = func.ceil((values.c.high - values.c.low + 1) / 20)
+        lower = values.c.low + func.floor((values.c.value - values.c.low) / step) * step
+        stmt = select(lower, lower + step, func.count(values.c.id.distinct())).group_by(lower, step).order_by(lower)
+        return [(int(lo), int(hi), int(count)) for lo, hi, count in await session.execute(stmt)]
 
     @override
     async def count(self, request: SearchRequest, query: SearchQuery) -> int:

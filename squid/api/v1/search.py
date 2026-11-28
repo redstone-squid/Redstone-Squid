@@ -21,6 +21,7 @@ from squid.api.v1.schemas.search import (
     SearchCounts,
     SearchField,
     SearchFilter,
+    SearchHistogram,
     SearchResult,
     SearchResultPage,
     SearchSuggestions,
@@ -28,10 +29,11 @@ from squid.api.v1.schemas.search import (
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
-from squid.core.errors import DataIntegrityError
+from squid.core.errors import DataIntegrityError, ValidationError
 from squid.core.pagination import InvalidPageCursorError
 from squid.core.search.application.results import SearchHit
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.search.domain.models import HistogramField, SearchRange
 
 logger = logging.getLogger(__name__)
 
@@ -97,13 +99,37 @@ async def search(
     group_by_build: Annotated[
         bool, QueryParameter(description="Combine matching records and builds before pagination.")
     ] = False,
+    distributions: Annotated[
+        str | None,
+        QueryParameter(description="Comma-separated histogram fields: width (blocks), opening_time (game ticks)."),
+    ] = None,
+    width_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    width_max: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_max: Annotated[int | None, QueryParameter(ge=0)] = None,
     counts: Annotated[
         bool, QueryParameter(description="Also count the matches in every scope, for scope tabs.")
     ] = False,
 ) -> SearchResultPage:
     """Match builds, computed records, and tag entries in one ranked page."""
+    fields: list[HistogramField] = []
+    if distributions is not None:
+        for field in distributions.split(","):
+            if field != "width" and field != "opening_time":
+                msg = "distributions accepts width and opening_time"
+                raise ValidationError(msg)
+            if field not in fields:
+                fields.append(field)
     request = SearchRequest(
         query=q,
+        ranges=tuple(
+            control
+            for control in (
+                SearchRange("width", width_min, width_max),
+                SearchRange("opening_time", opening_time_min, opening_time_max),
+            )
+            if control.lower is not None or control.upper is not None
+        ),
         scope=search_scope,
         mode=SearchMode.LEXICAL,
         page_size=page_size,
@@ -144,7 +170,15 @@ async def search(
                     )
                 )
     scope_counts = await search_service.counts(request, context=caller.context()) if counts else None
+    histograms = None
+    if fields:
+        bins = await search_service.distributions(request, tuple(fields), context=caller.context())
+        histograms = {
+            field: SearchHistogram(bins=[{"from": lo, "to": hi, "count": count} for lo, hi, count in values])
+            for field, values in bins.items()
+        }
     return SearchResultPage(
+        distributions=histograms,
         items=items,
         total=result.total,
         next=PageAnchor.from_domain(result.next) if result.next is not None else None,

@@ -32,6 +32,7 @@ from squid.core.search.domain import (
     SearchScope,
     SearchSort,
 )
+from squid.core.search.domain.models import SearchRange
 from tests.support.public_builds import NoPublicBuilds
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
@@ -59,6 +60,10 @@ class FakeSearchBackend:
         self.embeddings.append(query_embedding)
         hit = BuildSearchHit("1", "Door", "approved", score=0.5)
         return SearchSlice((hit,), self.total, warnings=("degraded",))
+
+    async def histogram(self, request: SearchRequest, query: SearchQuery, field: str) -> list[tuple[int, int, int]]:
+        self.calls.append((request, query, None))
+        return [(1, 2, 3)]
 
     async def count(self, request: SearchRequest, query: SearchQuery) -> int:
         assert self.active_scopes == 1
@@ -352,3 +357,19 @@ async def test_service_counts_each_scope_and_skips_scopes_that_cannot_run_the_qu
         SearchScope.METADATA: len("metadata"),
         SearchScope.ALL: len("all"),
     }
+
+
+async def test_distribution_omits_only_its_own_control() -> None:
+    backend = FakeSearchBackend()
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds())
+    request = SearchRequest(
+        "width:2 OR width:9",
+        scope=SearchScope.BUILDS,
+        ranges=(SearchRange("width", None, 3), SearchRange("opening_time", 4, None)),
+    )
+    context = ActingContext.direct(AnonymousActor())
+    assert await service.distributions(request, ("width",), context=context) == {"width": [(1, 2, 3)]}
+    parser = SearchQueryParser(DEFAULT_FIELD_REGISTRY, scope=request.scope)
+    assert backend.calls[-1][1] == parser.parse("(width:2 OR width:9) opening_time>=4")
+    await service.search(request, context=context)
+    assert backend.calls[-1][1] == parser.parse("(width:2 OR width:9) width<=3 opening_time>=4")

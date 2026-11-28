@@ -16,6 +16,8 @@ from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
 from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage
 from squid.core.search.domain import QueryClause, SearchMode, SearchQuery, SearchRequest, SearchScope
+from squid.core.search.domain.models import HistogramField, SearchRange
+from squid.core.search.domain.query import BooleanOperator, combine_clauses
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.validation import (
     AboveMaximum,
@@ -34,6 +36,19 @@ class SearchFieldRegistryProvider(Protocol):
     """Load the current public search-field catalog."""
 
     async def registry(self) -> FieldRegistry: ...
+
+
+def _apply_ranges(parser: SearchQueryParser, query: SearchQuery, ranges: tuple[SearchRange, ...]) -> SearchQuery:
+    if not ranges:
+        return query
+    expressions = [query.expression] if query.expression is not None else []
+    for control in ranges:
+        for operator, value in ((">=", control.lower), ("<=", control.upper)):
+            if value is not None:
+                clause = parser.parse(f"{control.field}{operator}{value}").expression
+                assert clause is not None
+                expressions.append(clause)
+    return parser.query(combine_clauses(BooleanOperator.AND, *expressions))
 
 
 class SearchService:
@@ -76,7 +91,9 @@ class SearchService:
         return lexical results with a warning.
         """
         registry = (
-            await self.fields(context=context) if request.parsed_query is None or request.sort is not None else None
+            await self.fields(context=context)
+            if request.parsed_query is None or request.sort is not None or request.ranges
+            else None
         )
         query: SearchQuery | None = request.parsed_query
         clauses: tuple[QueryClause, ...] = ()
@@ -85,6 +102,9 @@ class SearchService:
             parser = SearchQueryParser(registry, scope=request.scope)
             query = parser.parse(request.query)
             clauses = parser.clauses(query)
+        if request.ranges:
+            assert registry is not None
+            query = _apply_ranges(SearchQueryParser(registry, scope=request.scope), query, request.ranges)
         sort_field = None
         if request.sort is not None:
             assert registry is not None
@@ -153,6 +173,21 @@ class SearchService:
         )
 
     @application_operation
+    async def distributions(
+        self, request: SearchRequest, fields: tuple[HistogramField, ...], *, context: ActingContext
+    ) -> dict[str, list[tuple[int, int, int]]]:
+        async with self._uow_factory() as uow:
+            registry = await uow.search_fields.registry()
+            parser = SearchQueryParser(registry, scope=request.scope)
+            typed = request.parsed_query or parser.parse(request.query)
+            bins: dict[str, list[tuple[int, int, int]]] = {}
+            for field in fields:
+                ranges = tuple(control for control in request.ranges if control.field != field)
+                query = _apply_ranges(parser, typed, ranges)
+                bins[field] = await uow.search.histogram(request, query, field)
+            return bins
+
+    @application_operation
     async def counts(self, request: SearchRequest, *, context: ActingContext) -> dict[SearchScope, int | None]:
         """Count the matches of `request.query` in every scope.
 
@@ -164,7 +199,8 @@ class SearchService:
             counts: dict[SearchScope, int | None] = {}
             for scope in SearchScope:
                 try:
-                    query = SearchQueryParser(registry, scope=scope).parse(request.query)
+                    parser = SearchQueryParser(registry, scope=scope)
+                    query = _apply_ranges(parser, parser.parse(request.query), request.ranges)
                 except ValidationError:
                     counts[scope] = None
                     continue

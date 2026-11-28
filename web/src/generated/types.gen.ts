@@ -3456,6 +3456,23 @@ export type SearchFilterRange = {
 };
 
 /**
+ * SearchHistogram
+ */
+export type SearchHistogram = {
+    kind?: 'histogram';
+    bins: Array<SearchHistogramBin>;
+};
+
+/**
+ * SearchHistogramBin
+ */
+export type SearchHistogramBin = {
+    from: number;
+    to: number;
+    count: number;
+};
+
+/**
  * SearchMatch
  */
 export type SearchMatch = {
@@ -3473,6 +3490,9 @@ export type SearchResultPage = {
     next: PageAnchor | null;
     prev: PageAnchor | null;
     filters: Array<SearchFilter>;
+    distributions?: {
+        [key: string]: SearchHistogram;
+    } | null;
     /**
      * Present when requested with `counts=true`. Counts ignore grouping and ranking limits.
      */
@@ -10294,6 +10314,14 @@ export type SearchExecuteData = {
          * Combine matching records and builds before pagination.
          */
         group_by_build?: boolean;
+        /**
+         * Comma-separated histogram fields: width (blocks), opening_time (game ticks).
+         */
+        distributions?: string | null;
+        width_min?: number | null;
+        width_max?: number | null;
+        opening_time_min?: number | null;
+        opening_time_max?: number | null;
         /**
          * Also count the matches in every scope, for scope tabs.
          */

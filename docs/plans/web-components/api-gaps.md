@@ -6,15 +6,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ## Not finished
 
-### Search
-
-19. **Search response additions (implemented except distributions).**
-    - `filters` lists the parsed query's clauses, each `{kind, field, operator, value, negated, text, without}`. `without` is the normalized query with that clause removed, so a chip removes itself by navigating there, even inside an OR group, and the client never edits query text.
-    - Syntax errors stay a 400 `INVALID_QUERY` with `context.position` and `context.suggestions`. The parser stops at the first error, so the query box shows one error at a time.
-    - `?counts=true` adds `counts: {all, builds, records, metadata}` for the scope tabs, each null when the query cannot run in that scope. Counts include every match before grouping, while a ranked page's `total` stops at the ranked candidates. Clients request counts with the first page only.
-    - Records-table columns come from item 18's `metric` fields rather than the page, so they stay put while paging.
-    - Phase 2: `?distributions=width,opening_time,category` returns `{field: {kind: "buckets", buckets: [{value, count}]} | {kind: "histogram", bins: [{from, to, count}]}}` for chart 6 and filter counts.
-
 ### Tags
 
 21. **`GET /v1/tags` filters:** `kind`, `authority`, and `q` as a name and alias prefix match for pickers. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
@@ -29,6 +20,16 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 
 ## Finished
+
+### Search
+
+19. **Search response additions.**
+    - `filters` lists the parsed query's clauses, each `{kind, field, operator, value, negated, text, without}`. `without` is the normalized query with that clause removed, so a chip removes itself by navigating there, even inside an OR group, and the client never edits query text.
+    - Syntax errors stay a 400 `INVALID_QUERY` with `context.position` and `context.suggestions`. The parser stops at the first error, so the query box shows one error at a time.
+    - `?counts=true` adds `counts: {all, builds, records, metadata}` for the scope tabs, each null when the query cannot run in that scope. Counts include every match before grouping, while a ranked page's `total` stops at the ranked candidates. Clients request counts with the first page only.
+    - Records-table columns come from item 18's `metric` fields rather than the page, so they stay put while paging.
+    - `?distributions=width,opening_time` adds a histogram per requested field in blocks or game ticks. Each histogram has `kind: "histogram"` and up to 20 occupied `bins` with inclusive `from`, exclusive `to`, and a distinct matching document count. Missing measurements contribute nothing. A record with qualifying holders in several bins contributes once to each.
+    - Inclusive `width_min`, `width_max`, `opening_time_min`, and `opening_time_max` filter hits and scope counts. Each histogram keeps the typed query and the other control, ignoring its own bounds, grouping, ranking limits, and pagination.
 
 ### Collections
 

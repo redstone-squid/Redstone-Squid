@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -280,6 +280,14 @@ class SearchCounts(BaseModel):
         return cls(**{scope.value: counts.get(scope) for scope in SearchScope})
 
 
+SearchHistogramBin = TypedDict("SearchHistogramBin", {"from": int, "to": int, "count": int})
+
+
+class SearchHistogram(BaseModel):
+    kind: Literal["histogram"] = "histogram"
+    bins: list[SearchHistogramBin]
+
+
 class SearchResultPage(BaseModel):
     """One page of ranked search results with the parsed query's filters."""
 
@@ -290,6 +298,7 @@ class SearchResultPage(BaseModel):
     next: PageAnchor | None
     prev: PageAnchor | None
     filters: list[SearchFilter]
+    distributions: dict[str, SearchHistogram] | None = None
     counts: SearchCounts | None = Field(
         description="Present when requested with `counts=true`. Counts ignore grouping and ranking limits."
     )

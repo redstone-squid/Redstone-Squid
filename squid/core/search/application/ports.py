@@ -39,6 +39,10 @@ class SearchBackend(Protocol):
         """
         ...
 
+    async def histogram(self, request: SearchRequest, query: SearchQuery, field: str) -> list[tuple[int, int, int]]:
+        """Return occupied half-open bins with distinct document counts."""
+        ...
+
     async def count(self, request: SearchRequest, query: SearchQuery) -> int:
         """Count every document `query` matches in `request.scope`, without ranking limits or grouping."""
         ...
