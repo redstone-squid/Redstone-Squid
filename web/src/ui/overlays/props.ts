@@ -45,12 +45,14 @@ export type ModalProps = {
 
 /**
  * One row of a `Menu`. An item runs `onSelect`, follows `href`, or posts a form to `action`.
- * `current` marks the active choice, such as the page's language.
+ * `current` marks the active choice, such as the page's language. `lang` applies to `label`
+ * only; `description` is a muted second line in the page's language.
  */
 export type MenuItem =
   | {
       kind?: "item";
       label: string;
+      description?: string;
       href?: string;
       action?: string;
       onSelect?: () => void;

@@ -1,25 +1,54 @@
 ---
+import Languages from "@lucide/svelte/icons/languages";
 import Menu from "@/ui/overlays/Menu.svelte";
-import { LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
+import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
+import { LOCALES, PUBLIC_LOCALES, localizePath, type Locale } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-type Props = { align?: "start" | "end" };
-const { align = "end" } = Astro.props;
+
+/**
+ * Links to the current page in each public language. The header's `menu` is a compact icon
+ * button; the footer's `segments` sits beside the theme choices. Each language is named in
+ * itself, and the menu also names the others in the page's language for visitors who landed
+ * on one they cannot read.
+ */
+type Props = { variant?: "menu" | "segments"; align?: "start" | "end" };
+const { variant = "menu", align = "end" } = Astro.props;
 const { locale, requestedPath: path } = Astro.locals;
+// The pseudo-locale is never listed, so it needs no name of its own.
+const names = {
+  en: m.navLanguageEn,
+  "zh-CN": m.navLanguageZhCn,
+  "en-XA": m.navLanguageEn,
+} satisfies Record<Locale, () => string>;
+const languages = PUBLIC_LOCALES.map((language) => ({
+  label: LOCALES[language].label,
+  href: localizePath(path, language),
+  lang: language,
+  current: language === locale,
+}));
 ---
 
-<Menu
-  nojs
-  {align}
-  label={m.navLanguage()}
-  trigger={{
-    label: LOCALES[locale].label,
-    name: `${LOCALES[locale].label} · ${m.navLanguage()}`,
-    lang: locale,
-  }}
-  items={PUBLIC_LOCALES.map((language) => ({
-    label: LOCALES[language].label,
-    href: localizePath(path, language),
-    lang: language,
-    current: language === locale,
-  }))}
-/>
+{variant === "menu" ? (
+  <Menu
+    nojs
+    {align}
+    label={m.navLanguage()}
+    trigger={{
+      label: LOCALES[locale].short,
+      name: `${LOCALES[locale].label} · ${m.navLanguage()}`,
+      lang: locale,
+      icon: Languages,
+    }}
+    items={languages.map((language) => ({
+      ...language,
+      description: language.current ? undefined : names[language.lang](),
+    }))}
+  />
+) : (
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <span class="text-fg-muted" aria-hidden="true">
+      {m.navLanguage()}
+    </span>
+    <SegmentedControl label={m.navLanguage()} items={languages} />
+  </div>
+)}

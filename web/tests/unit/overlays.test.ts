@@ -138,6 +138,7 @@ describe("Menu", () => {
       trigger: { label: "English", name: "English · Language", lang: "en" },
       items: [
         { label: "English", href: "/", lang: "en", current: true },
+        { label: "简体中文", description: "Simplified Chinese", href: "/zh-cn", lang: "zh-CN" },
         { kind: "separator" },
         { label: "Sign out", action: "/session/delete" },
       ],
@@ -151,6 +152,9 @@ describe("Menu", () => {
     const link = within(list).getByText("English").closest("a");
     expect(link).toHaveAttribute("aria-current", "true");
     expect(link).toHaveAttribute("hreflang", "en");
+    // Only the language's own name is in that language; its description is in the page's.
+    expect(within(list).getByText("简体中文")).toHaveAttribute("lang", "zh-CN");
+    expect(within(list).getByText("Simplified Chinese")).not.toHaveAttribute("lang");
     const signOut = within(list).getByText("Sign out");
     expect(signOut.closest("form")).toHaveAttribute("action", "/session/delete");
   });

@@ -52,7 +52,14 @@
       class="size-4 shrink-0 text-fg-muted"
       aria-hidden="true"
     />{/if}
-  <span class="flex-1">{item.label}</span>
+  {#if item.kind !== "checkbox" && item.description !== undefined}
+    <span class="grid flex-1">
+      <span lang={item.lang}>{item.label}</span>
+      <span class="text-sm text-fg-muted">{item.description}</span>
+    </span>
+  {:else}
+    <span class="flex-1" lang={item.kind === "checkbox" ? undefined : item.lang}>{item.label}</span>
+  {/if}
   {#if checked}<Check class="size-4 shrink-0" aria-hidden="true" />{/if}
 {/snippet}
 
@@ -78,7 +85,6 @@
           <li>
             <a
               href={item.href}
-              lang={item.lang}
               hreflang={item.lang}
               aria-current={item.current === true ? "true" : undefined}
               class={cn(itemClass, item.danger === true && "text-danger")}
@@ -139,7 +145,6 @@
                   <a
                     {...props}
                     href={item.href}
-                    lang={item.lang}
                     hreflang={item.lang}
                     aria-current={item.current === true ? "true" : undefined}
                     class={tone}>{@render itemContent(item)}</a

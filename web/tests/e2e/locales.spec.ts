@@ -38,10 +38,10 @@ test("the pseudo-locale formats interface text and stays out of search and menus
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");
   await expect(page.locator('link[hreflang="en-XA"]')).toHaveCount(0);
   await page.getByLabel(/^\[.*\] · \[.*\]$/).click();
-  await expect(page.getByRole("list", { name: /^\[.*\]$/ }).getByRole("link")).toHaveText([
-    "English",
-    "简体中文",
-  ]);
+  // Each link also names the language in the page's locale, after its own name.
+  const links = page.getByRole("list", { name: /^\[.*\]$/ }).getByRole("link");
+  await expect(links).toHaveCount(2);
+  await expect(links).toContainText(["English", "简体中文"]);
 });
 
 // Error pages are rewrites, so Astro.url there is /404 rather than the requested address.

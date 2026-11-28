@@ -7,11 +7,31 @@
  *
  * `en-XA` is a pseudo-locale compiled from English: accented, bracketed, and about 40% longer,
  * so untranslated text and layouts that cannot grow stand out. It is never listed or indexed.
+ *
+ * `label` is the language's own name and `short` its abbreviation for tight spaces.
  */
 export const LOCALES = {
-  en: { label: "English", prefix: "", openGraph: "en_US", pseudo: false },
-  "zh-CN": { label: "简体中文", prefix: "/zh-cn", openGraph: "zh_CN", pseudo: false },
-  "en-XA": { label: "[Ƥšéûđö]", prefix: "/en-xa", openGraph: "en_US", pseudo: true },
+  en: {
+    label: "English",
+    short: "EN",
+    prefix: "",
+    openGraph: "en_US",
+    pseudo: false,
+  },
+  "zh-CN": {
+    label: "简体中文",
+    short: "中文",
+    prefix: "/zh-cn",
+    openGraph: "zh_CN",
+    pseudo: false,
+  },
+  "en-XA": {
+    label: "[Ƥšéûđö]",
+    short: "[ÉŇ]",
+    prefix: "/en-xa",
+    openGraph: "en_US",
+    pseudo: true,
+  },
 } as const;
 export type Locale = keyof typeof LOCALES;
 /** The unprefixed locale that catalogs are written in and translated from. */

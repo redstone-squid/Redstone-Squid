@@ -98,6 +98,30 @@ export function navLanguage(locale: Locale = getLocale()): string {
   }
 }
 
+/** English */
+export function navLanguageEn(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "English";
+    case "zh-CN":
+      return "英语";
+    case "en-XA":
+      return "[" + "Éñĝļîšĥ" + "···]";
+  }
+}
+
+/** Simplified Chinese */
+export function navLanguageZhCn(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Simplified Chinese";
+    case "zh-CN":
+      return "简体中文";
+    case "en-XA":
+      return "[" + "Šîɱþļîƒîéđ Çĥîñéšé" + "········]";
+  }
+}
+
 /** Skip to content */
 export function navSkip(locale: Locale = getLocale()): string {
   switch (locale) {

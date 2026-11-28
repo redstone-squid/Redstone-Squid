@@ -2,7 +2,14 @@
   import type { LucideIcon } from "@lucide/svelte";
   import { cn } from "@/ui/cn";
 
-  type LinkSegment = { label: string; href: string; current?: boolean; icon?: LucideIcon };
+  /** `lang` is the label's language when it differs from the page's, as for language names. */
+  type LinkSegment = {
+    label: string;
+    href: string;
+    current?: boolean;
+    icon?: LucideIcon;
+    lang?: string;
+  };
   type RadioSegment = { label: string; value: string; icon?: LucideIcon; disabled?: boolean };
 
   /**
@@ -99,6 +106,8 @@
         <li>
           <a
             href={item.href}
+            lang={item.lang}
+            hreflang={item.lang}
             aria-current={item.current === true ? "true" : undefined}
             class={cn(
               segmentClass,
