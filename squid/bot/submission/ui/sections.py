@@ -105,6 +105,9 @@ class AnswerWorkspace(Protocol):
     """
 
     @property
+    def can_nominate_accounts(self) -> bool: ...
+
+    @property
     def editing_saved_build(self) -> bool: ...
 
     @property

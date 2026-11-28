@@ -34,7 +34,7 @@ from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.core.builds.domain import UnresolvedTags
+from squid.core.builds.domain import BuildStatus, UnresolvedTags
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.errors import BuildEditValidationError
@@ -110,6 +110,7 @@ class BuildEditWorkspace(sl.Reactive):
 
     def reset(self, build: Build) -> None:
         """Discard edits and their history, and start again from `build` as saved."""
+        self.can_nominate_accounts = build.submission_status is BuildStatus.PENDING
         self.saved = answers_from_build(build, self.option_sets)
         self.saved_expansion = build.expansion if isinstance(build, DoorBuild) else None
         self.expansion = self.saved_expansion

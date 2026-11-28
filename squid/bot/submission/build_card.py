@@ -378,6 +378,12 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
             for credit in build.credits
         )
 
+        proposals = [
+            f"{entry.name} → {entry.proposed_account_id}" for entry in build.credits if entry.proposed_account_id
+        ]
+        if proposals:
+            fields["Proposed creator accounts"] = ", ".join(proposals)
+
     if build.completion_time:
         fields["Date Of Completion"] = build.completion_time
 

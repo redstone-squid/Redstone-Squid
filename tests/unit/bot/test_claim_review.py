@@ -1,9 +1,10 @@
 """Semantic creator-credit review workspace tests."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass
 from typing import override
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import discord
 import pytest
@@ -62,7 +63,14 @@ class AccountRecorder(AccountService):
         return self.claims
 
     @override
-    async def approve_alias_claim(self, claim_id: int, *, context: ActingContext, reassign: bool = False) -> AliasClaim:
+    async def approve_alias_claim(
+        self,
+        claim_id: int,
+        *,
+        context: ActingContext,
+        reassign: bool = False,
+        credit_ids: Collection[UUID] | None = None,
+    ) -> AliasClaim:
         staff_account_id = context.effective.require_account_id()
         self.decisions.append(("approve", claim_id, staff_account_id, reassign))
         if self.conflict and not reassign:
@@ -151,7 +159,7 @@ async def test_a_held_name_explains_the_conflict_then_requires_deliberate_reassi
 
     assert harness.component.reassign_armed == claim.id
     assert "Builder" in first.notices[0][0]
-    assert "Approving again takes the name" in first.notices[0][0]
+    assert "Approving again reassigns the selected credits" in first.notices[0][0]
     assert first.notices[0][1] is sl.interactions.Visibility.PUBLIC
 
     second = RecordingResponder()
@@ -167,7 +175,7 @@ async def test_a_held_name_explains_the_conflict_then_requires_deliberate_reassi
 async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The reader never saw "Take the name", so their next Approve must not reassign it."""
+    """The reader never saw "Reassign credits", so their next Approve must not reassign it."""
 
     async def consented(
         event: sd.ActionEvent, accounts: AccountService, work: Callable[[sd.ActionEvent, int], Awaitable[None]]
@@ -195,7 +203,7 @@ async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_
     await message_root.dispatch(approve, retry, generation=generation)
 
     assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
-    assert "Take the name" in str(message.edit.await_args.kwargs["view"].to_components())
+    assert "Reassign credits" in str(message.edit.await_args.kwargs["view"].to_components())
 
 
 async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:

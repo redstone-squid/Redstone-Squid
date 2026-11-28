@@ -10,12 +10,14 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.creator_page import CreatorPage
 from squid.bot.accounts.workspace import AccountWorkspace
+from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.routes import ScreenUnavailable
 from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import suggests
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
+from squid.core.search.application.completion import render_value
 from squid_i18n import md_tr
 from squid_ui.content.text import Text
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -70,9 +72,12 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             label = member.display_name if member is not None else name
             return await self._discord_page(request, user_id, label, audience="public")
         alias = await self.account_service.get_creator_alias(name, context=ActingContext.current())
-        if alias is None or alias.public_account_id is None:
+        if alias is None:
             return _personal(_missing_creator_page(name))
-        return await self._public_page(request, alias.public_account_id, alias.name, audience="public")
+        query = f"creator:{render_value(alias.name, quoted=True)}"
+        return await request.respond(
+            await BuildBrowseScreen.create_search(request, query=query, typed=False), audience="public"
+        )
 
     @sd.context_menu(
         name=to_locale_str(tr(t"command-creator-page-context = Creator Page")),
@@ -91,6 +96,9 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user_id))
         # ORM identity columns may still be None before flush.
         if account is None or account.public_account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
+            return _personal(_missing_creator_page(label))
+        identity = account.identity_for(IdentityProvider.DISCORD, str(user_id))
+        if identity is None or not identity.is_public:
             return _personal(_missing_creator_page(label))
         return await self._public_page(request, account.public_account_id, label, audience=audience)
 

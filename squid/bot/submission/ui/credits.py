@@ -3,13 +3,17 @@
 from dataclasses import replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, cast, override
+from uuid import UUID
 
 import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.routes import AppRequest
 from squid.bot.ui import tr
+from squid.core.actors import ActingContext
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole, read_credits
+from squid.core.suggestions.domain import SuggestionRequest
 from squid_ui.ext.discord.form_fields import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -31,6 +35,9 @@ def edit_credit(credit: Credit, name: str, role: CreditRole) -> Credit:
 
 
 class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
+    matches: tuple[Credit, ...] = sl.state(())
+    match_revision: int = sl.state(0)
+
     def __init__(self, workspace: AnswerWorkspace, field_id: str) -> None:
         self.workspace = workspace
         self.field_id = field_id
@@ -42,9 +49,15 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [sl.heading(tr(t"credits-title = Credits"))]
         rows: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         for index, credit in enumerate(credits):
+            profile_id = credit.proposed_account_id
             rows.append(
                 sl.stack(
                     sl.paragraph(f"{credit.name} · {credit.kind.value.replace('_', ' ')} · {credit.role.value}"),
+                    *(
+                        [sl.note(tr(t"credits-proposed-account = Proposed profile: {profile_id!s}"))]
+                        if credit.proposed_account_id
+                        else []
+                    ),
                     sl.action_controls(
                         sl.form(
                             tr(t"credits-edit = Edit credit"),
@@ -58,6 +71,21 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                                         maximum=120,
                                     ),
                                     role_field(credit.role),
+                                    *(
+                                        (
+                                            sl.forms.ChoiceField(
+                                                key="profile",
+                                                label=tr(t"credits-profile = Profile"),
+                                                default="keep",
+                                                options=(
+                                                    sl.forms.ChoiceOption("keep", "Keep profile", "keep"),
+                                                    sl.forms.ChoiceOption("clear", "Clear profile", "clear"),
+                                                ),
+                                            ),
+                                        )
+                                        if credit.proposed_account_id
+                                        else ()
+                                    ),
                                 ),
                             ),
                             key=f"edit-{index}",
@@ -128,7 +156,33 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                 key="add-credit",
             )
         )
+        if self.matches and revision == self.match_revision:
+            nodes.append(
+                sd.v2.select(
+                    *(
+                        sd.v2.option(
+                            match.name[:100],
+                            str(index),
+                            description=(
+                                f"Public profile · {match.proposed_account_id}"
+                                if match.proposed_account_id
+                                else "Credited name"
+                            ),
+                        )
+                        for index, match in enumerate(self.matches)
+                    ),
+                    on_select=self._pick,
+                    key="credit-match",
+                    placeholder=tr(t"credits-select = Select a name or public profile"),
+                )
+            )
         return tuple(nodes)
+
+    async def _pick(self, event: sd.SelectionEvent) -> None:
+        credit = self.matches[int(event.values[0])]
+        credits = tuple(read_credits(self.workspace.answers.get(self.field_id, [])))
+        await self._save(event.transaction, (*credits, credit), self.match_revision)
+        self.matches = ()
 
     async def _save(self, transaction: sl.runtime.Transaction, credits: tuple[Credit, ...], revision: int) -> None:
         await self.workspace.save_values(
@@ -137,6 +191,8 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
 
     async def _edit(self, credits: tuple[Credit, ...], index: int, revision: int, event: sd.SubmitEvent) -> None:
         changed = edit_credit(credits[index], str(event.values["name"]), cast(CreditRole, event.values["role"]))
+        if event.values.get("profile") == "clear":
+            changed = replace(changed, proposed_account_id=None)
         await self._save(event.transaction, (*credits[:index], changed, *credits[index + 1 :]), revision)
 
     async def _remove(self, credits: tuple[Credit, ...], index: int, revision: int, event: sd.PressEvent) -> None:
@@ -151,6 +207,26 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
             username=name if kind is not CreditKind.NAME else None,
             role=cast(CreditRole, event.values["role"]),
         )
+        if kind is CreditKind.NAME and self.workspace.can_nominate_accounts:
+            client = cast(AppRequest, event.context).client
+            service = client.services.suggestions
+            choices = [credit]
+            for source in ("creators", "creator_profiles"):
+                result = await service.suggest(
+                    SuggestionRequest(source, query=name, limit=10), context=ActingContext.current()
+                )
+                for match in result.items:
+                    choice = replace(
+                        credit,
+                        name=match.label,
+                        proposed_account_id=UUID(match.value) if source == "creator_profiles" else None,
+                    )
+                    if choice not in choices:
+                        choices.append(choice)
+            if len(choices) > 1:
+                self.matches = tuple(choices)
+                self.match_revision = revision
+                return
         await self._save(event.transaction, (*credits, credit), revision)
 
     async def _add_discord(self, credits: tuple[Credit, ...], revision: int, event: sd.SubmitEvent) -> None:

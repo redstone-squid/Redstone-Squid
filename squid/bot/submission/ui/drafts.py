@@ -227,6 +227,7 @@ class DraftWorkspace(sl.Reactive):
         return next((section for section in self.sections if section.id == section_id), None)
 
     editing_saved_build = False
+    can_nominate_accounts = True
 
     @property
     def origin(self) -> SubmissionOrigin:

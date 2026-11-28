@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, override
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -31,6 +32,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
     """
 
     selected_id: int | None = sl.state(None)
+    included: tuple[str, ...] | None = sl.state(None)
     reassign_armed: int | None = sl.state(None)
     # Pending claims as last fetched from the account service. A decision reloads them inside
     # its action, so they must be state to roll back with it and to trigger the repaint.
@@ -99,17 +101,28 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
                 minimum=1,
                 maximum=1,
             )
+        credits = None
+        if self.selected is not None and self.selected.selected_credits:
+            targets = self.selected.selected_credits
+            credits = sl.choices(
+                *(sl.choice(f"Build #{item['build_id']}", key=key, description=key) for key, item in targets.items()),
+                key="selected-credits",
+                selection=tuple(targets) if self.included is None else self.included,
+                on_change=self._select_credits,
+                minimum=0,
+                maximum=len(targets),
+            )
         buttons: list[sl.semantic.ActionControl[sd.Request]] = []
         if ACCOUNT_CLAIM_APPROVE in self.grants:
             buttons.append(
                 sl.action_control(
-                    tr(t"claims-view-take-the-name = Take the name")
+                    tr(t"claims-view-take-the-name = Reassign credits")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
                     else tr(t"claims-view-approve = Approve"),
                     self._approve,
                     key="approve",
                     tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
-                    available=self.selected is not None,
+                    available=self.selected is not None and self.included != (),
                 )
             )
         if ACCOUNT_CLAIM_REJECT in self.grants:
@@ -125,6 +138,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
             sd.v2.heading(tr(t"claims-review-heading = Creator credit claims awaiting review")),
             body,
             choices,
+            credits,
             accent=sl.AccentRole.BRAND,
         )
         if not self._claims:
@@ -133,7 +147,12 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         return (panel, sl.action_controls(*buttons, key="claim-actions"))
 
     async def _select_claim(self, event: sd.ChoiceEvent) -> None:
+        self.included = None
         self.selected_id = int(event.selected[0])
+        self.reassign_armed = None
+
+    async def _select_credits(self, event: sd.ChoiceEvent) -> None:
+        self.included = tuple(event.selected)
         self.reassign_armed = None
 
     async def _approve(self, event: sd.PressEvent) -> None:
@@ -171,7 +190,10 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         try:
             if approve:
                 resolved = await self._accounts.approve_alias_claim(
-                    claim.id, reassign=self.reassign_armed == claim.id, context=context
+                    claim.id,
+                    reassign=self.reassign_armed == claim.id,
+                    context=context,
+                    credit_ids=[UUID(key) for key in self.included] if self.included is not None else None,
                 )
             else:
                 resolved = await self._accounts.reject_alias_claim(claim.id, context=context)
@@ -197,6 +219,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
                 with_claimants=True, context=ActingContext.for_actor(await self._actor())
             )
         )
+        self.included = None
         self.selected_id = None
         self.reassign_armed = None
 
@@ -225,5 +248,5 @@ def _claim_label(claim: AliasClaim) -> sl.text.Text:
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    warning = tr(t"claims-reapproval-warning = Approving again takes the name from them.")
+    warning = tr(t"claims-reapproval-warning = Approving again reassigns the selected credits from them.")
     return sl.text.Text(t"{conflict.message} {warning}")

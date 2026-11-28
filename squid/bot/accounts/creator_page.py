@@ -27,7 +27,7 @@ MAX_LISTED = 25
 class CreatorPage(sd.Screen[None, Any, RedstoneSquid]):
     """A creator's public profile, rendered from the same filtered view the API serves.
 
-    A hidden page still lists the names its builds are credited to.
+    Hidden profiles omit credited names.
     """
 
     policy = sd.ResponseSpec(audience="personal", access=sd.Everyone(), timeout=300)
@@ -67,10 +67,7 @@ class CreatorPage(sd.Screen[None, Any, RedstoneSquid]):
         if profile.hidden:
             card = card_node(
                 tr(t"bot-verify-hidden-creator-page = Hidden creator page"),
-                tr(
-                    t"verify-creator-page-hidden = This creator has hidden their "
-                    t"page. Their build credit is still listed."
-                ),
+                tr(t"verify-creator-page-hidden = This creator has hidden their page."),
                 fields=public_profile_fields(profile),
             )
         else:
