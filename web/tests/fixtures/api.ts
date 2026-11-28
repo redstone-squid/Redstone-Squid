@@ -321,7 +321,8 @@ async function routeRequest(request: Request): Promise<Response> {
       prev: null,
       next: null,
     });
-  if (url.pathname === "/v1/accounts/me/claims") return json([]);
+  if (url.pathname === "/v1/accounts/me/claims")
+    return json({ items: [], total: 0, next: null, prev: null });
   if (
     url.pathname === "/v1/creator-aliases/7/claims" &&
     request.method === "POST" &&

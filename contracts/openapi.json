@@ -588,6 +588,66 @@
         "summary": "OwnCreditClaims",
         "description": "Return the caller's credit claims and their outcomes.",
         "operationId": "account_credit_claims",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes cursor."
+            },
+            "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
@@ -599,11 +659,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CreditClaimDetail"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.creators.CreditClaimDetail_"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -643,6 +715,21 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2896,6 +2983,66 @@
         "summary": "ClaimQueue",
         "description": "List pending credit claims oldest first.",
         "operationId": "credit_claim_queue",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes cursor."
+            },
+            "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
@@ -2907,11 +3054,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CreditClaimDetail"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.creators.CreditClaimDetail_"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -2951,6 +3110,21 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -33345,6 +33519,47 @@
           "total"
         ],
         "title": "Page[PublicServerSummary]"
+      },
+      "Page_squid.api.v1.schemas.creators.CreditClaimDetail_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CreditClaimDetail"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[CreditClaimDetail]"
       },
       "Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_": {
         "properties": {

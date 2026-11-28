@@ -39,6 +39,7 @@ from squid.core.accounts.models import (
     CreatorAlias,
     MergeTicket,
 )
+from squid.core.pagination import Page, PageSelector, offset_page
 from tests.support.identity_uow import AccountScope
 
 NOW = Instant.from_utc(2026, 8, 11, 12)
@@ -345,8 +346,14 @@ class FakeAccountRepository:
         self.claims[claim.id] = claim
         return claim
 
-    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]:
-        return [c for c in self.claims.values() if c.account_id == account_id]
+    async def claim_page(self, *, account_id: int | None, selector: PageSelector, page_size: int) -> Page[AliasClaim]:
+        claims = [
+            c
+            for c in self.claims.values()
+            if (c.status is ClaimStatus.PENDING if account_id is None else c.account_id == account_id)
+        ]
+        claims.sort(key=lambda claim: (claim.created_at, claim.id), reverse=account_id is not None)
+        return offset_page(claims, offset=selector.offset, page_size=page_size)
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         return self.claims.get(claim_id)

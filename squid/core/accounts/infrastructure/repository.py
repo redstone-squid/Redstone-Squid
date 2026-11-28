@@ -55,7 +55,9 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, BuildCredit
 from squid.core.edits.domain import Revision
 from squid.core.errors import ConflictError, ValidationError
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.account_merge import AccountMergeContext
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.revisions import flush_revision
 from squid.core.persistence.types import InstantUTC
 
@@ -612,14 +614,27 @@ class AccountRepository:
         await session.flush()
         return _hydrate_claim(claim, alias.name)
 
-    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]:
-        rows = await self._session().execute(
+    async def claim_page(self, *, account_id: int | None, selector: PageSelector, page_size: int) -> Page[AliasClaim]:
+        session = self._session()
+        pending = account_id is None
+        condition = AliasClaim.status == ClaimStatus.PENDING if pending else AliasClaim.account_id == account_id
+        statement = (
             select(AliasClaim, CreatorAlias.name)
             .join(CreatorAlias, CreatorAlias.id == AliasClaim.alias_id)
-            .where(AliasClaim.account_id == account_id)
-            .order_by(AliasClaim.created_at.desc(), AliasClaim.id.desc())
+            .where(condition)
         )
-        return tuple(_hydrate_claim(claim, name) for claim, name in rows)
+        total = await session.scalar(select(func.count()).select_from(AliasClaim).where(condition))
+        order = KeysetOrder(
+            "pending_claims" if pending else "own_claims", AliasClaim.created_at, AliasClaim.id, descending=not pending
+        )
+        page = await order.page(session, statement, selector, page_size=page_size, total=total or 0)
+        claimants = (
+            await self._claimants(session, {claim.account_id for claim, _ in page.items})
+            if pending and page.items
+            else {}
+        )
+        items = tuple(_hydrate_claim(claim, name, claimants.get(claim.account_id)) for claim, name in page.items)
+        return Page(items, page.total, page.next, page.prev)
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         """Return one claim by identifier."""
@@ -648,15 +663,14 @@ class AccountRepository:
                 .order_by(AliasClaim.created_at, AliasClaim.id)
             )
         ).all()
-        claimants: dict[int, Account] = {}
-        if with_claimants and rows:
-            models = (
-                await session.scalars(
-                    select(Account).where(Account.id.in_({claim.account_id for claim, _ in rows})).order_by(Account.id)
-                )
-            ).all()
-            claimants = await self._load_accounts(session, models)
+        claimants = (
+            await self._claimants(session, {claim.account_id for claim, _ in rows}) if with_claimants and rows else {}
+        )
         return tuple(_hydrate_claim(claim, name, claimants.get(claim.account_id)) for claim, name in rows)
+
+    async def _claimants(self, session: AsyncSession, account_ids: set[int]) -> dict[int, Account]:
+        models = (await session.scalars(select(Account).where(Account.id.in_(account_ids)).order_by(Account.id))).all()
+        return await self._load_accounts(session, models)
 
     async def resolve_claim(
         self,

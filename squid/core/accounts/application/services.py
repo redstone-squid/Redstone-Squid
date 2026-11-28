@@ -49,6 +49,7 @@ from squid.core.accounts.models import (
 )
 from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.errors import ConflictError, InvalidStateError
+from squid.core.pagination import Page, PageSelector
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
@@ -583,9 +584,18 @@ class AccountService:
             return conflict
         return conflict.with_holder_name(profile.aliases[0])
 
-    async def own_credit_claims(self, *, context: ActingContext) -> Sequence[AliasClaim]:
-        async with self._uow_factory() as uow:
-            return await uow.accounts.claims_for_account(context.effective.require_account_id())
+    async def credit_claim_page(
+        self, *, context: ActingContext, staff_queue: bool, selector: PageSelector, page_size: int
+    ) -> Page[AliasClaim]:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if staff_queue:
+                    await self._permissions.require(context.effective, ACCOUNT_CLAIM_LIST, uow=uow)
+                return await uow.accounts.claim_page(
+                    account_id=None if staff_queue else context.effective.require_account_id(),
+                    selector=selector,
+                    page_size=page_size,
+                )
 
     async def pending_alias_claims(
         self, *, context: ActingContext, with_claimants: bool = False

@@ -92,7 +92,15 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
       );
     } catch (error) {
       if (!(error instanceof ApiError)) throw error;
-      if (error.status === 401 && context.locals.requiresSession) {
+      if (
+        error.problem?.code === "INVALID_PAGE_CURSOR" &&
+        context.request.method === "GET" &&
+        context.url.searchParams.has("cursor")
+      ) {
+        const first = new URL(context.locals.requestedPath, context.url);
+        for (const key of ["cursor", "offset", "page"]) first.searchParams.delete(key);
+        response = context.redirect(first.pathname + first.search, 303);
+      } else if (error.status === 401 && context.locals.requiresSession) {
         if (context.locals.session?.user) clearApiSession(context);
         response = context.redirect(
           `${localizePath("/sign-in", locale)}?redirect_to=${encodeURIComponent(context.locals.requestedPath)}`,

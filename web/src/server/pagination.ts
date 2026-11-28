@@ -9,16 +9,19 @@ export type PageAddress = { cursor?: string; offset?: number };
  * Invalid offsets are skipped, so a hand-edited link still renders a page. Cursors are opaque;
  * the API answers a damaged one with `INVALID_PAGE_CURSOR`.
  */
-export function readPageAddress(params: URLSearchParams): PageAddress {
+export function readPageAddress(params: URLSearchParams, pageSize = 20): PageAddress {
   const cursor = params.get("cursor")?.trim() ?? "";
   if (cursor !== "") return { cursor };
-  const offset = Number(params.get("offset")?.trim() ?? Number.NaN);
-  return Number.isSafeInteger(offset) && offset >= 1 ? { offset } : {};
+  const rawOffset = params.get("offset")?.trim();
+  const page = Number(params.get("page"));
+  if (!rawOffset && (!Number.isSafeInteger(page) || page < 1)) return {};
+  const offset = rawOffset ? Number(rawOffset) : (page - 1) * pageSize;
+  return Number.isSafeInteger(offset) && offset >= 0 && offset <= 10_000 ? { offset } : {};
 }
 
 /** The localized link to the page an API anchor points to, keeping the URL's other parameters. */
 export function pageHref(url: URL, anchor: PageAnchor): string {
-  type Address = { cursor: string; offset: number };
+  type Address = { cursor: string; offset: number; page: number };
   const nav = new RouteNavigation<Address>(url);
-  return nav.update({ cursor: anchor.cursor ?? null, offset: anchor.offset ?? null });
+  return nav.update({ page: null, cursor: anchor.cursor ?? null, offset: anchor.offset ?? null });
 }

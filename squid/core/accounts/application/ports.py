@@ -28,6 +28,7 @@ from squid.core.accounts.models import (
     MergeTicket,
 )
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
+from squid.core.pagination import Page, PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 
 
@@ -141,7 +142,9 @@ class AccountRepository(Protocol):
         self, *, name: str, account_id: int, credit_ids: Collection[UUID] | None = None
     ) -> AliasClaim: ...
 
-    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]: ...
+    async def claim_page(
+        self, *, account_id: int | None, selector: PageSelector, page_size: int
+    ) -> Page[AliasClaim]: ...
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None: ...
 

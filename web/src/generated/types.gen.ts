@@ -1886,6 +1886,16 @@ export type PageSquidApiV1MinecraftServersPublicServerSummary = {
 };
 
 /**
+ * Page[CreditClaimDetail]
+ */
+export type PageSquidApiV1SchemasCreatorsCreditClaimDetail = {
+    items: Array<CreditClaimDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[ErrorReportSummary]
  */
 export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
@@ -4262,11 +4272,28 @@ export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 export type AccountCreditClaimsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/accounts/me/claims';
 };
 
 export type AccountCreditClaimsErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -4275,6 +4302,10 @@ export type AccountCreditClaimsErrors = {
      * Forbidden
      */
     403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4291,7 +4322,7 @@ export type AccountCreditClaimsResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<CreditClaimDetail>;
+    200: PageSquidApiV1SchemasCreatorsCreditClaimDetail;
 };
 
 export type AccountCreditClaimsResponse = AccountCreditClaimsResponses[keyof AccountCreditClaimsResponses];
@@ -4997,11 +5028,28 @@ export type AccountProfileGetResponse = AccountProfileGetResponses[keyof Account
 export type CreditClaimQueueData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
     url: '/v1/claims';
 };
 
 export type CreditClaimQueueErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -5010,6 +5058,10 @@ export type CreditClaimQueueErrors = {
      * Forbidden
      */
     403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5026,7 +5078,7 @@ export type CreditClaimQueueResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<CreditClaimDetail>;
+    200: PageSquidApiV1SchemasCreatorsCreditClaimDetail;
 };
 
 export type CreditClaimQueueResponse = CreditClaimQueueResponses[keyof CreditClaimQueueResponses];
@@ -5618,6 +5670,42 @@ export type BuildMediaContentGetResponses = {
 };
 
 export type BuildMediaContentGetResponse = BuildMediaContentGetResponses[keyof BuildMediaContentGetResponses];
+
+export type BuildMirroredImageGetData = {
+    body?: never;
+    path: {
+        build_id: number;
+        mirror_id: string;
+    };
+    query?: never;
+    url: '/v1/builds/{build_id}/images/{mirror_id}';
+};
+
+export type BuildMirroredImageGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BuildMirroredImageGetError = BuildMirroredImageGetErrors[keyof BuildMirroredImageGetErrors];
+
+export type BuildMirroredImageGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Blob | File;
+};
+
+export type BuildMirroredImageGetResponse = BuildMirroredImageGetResponses[keyof BuildMirroredImageGetResponses];
 
 export type BuildsListData = {
     body?: never;

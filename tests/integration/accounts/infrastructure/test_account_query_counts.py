@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimStatus, PrivacyNoticeReceipt
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.pagination import FIRST_PAGE
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -152,6 +153,25 @@ async def test_pending_claims_with_claimants_does_not_scale_with_queue_length(
             ),
             commit=True,
         )
+
+    first = await transact(
+        repository, lambda uow: uow.accounts.claim_page(account_id=None, selector=FIRST_PAGE, page_size=2)
+    )
+    assert first.next is not None
+    assert first.next.cursor is not None
+    selector = first.next.selector()
+    second = await transact(
+        repository, lambda uow: uow.accounts.claim_page(account_id=None, selector=selector, page_size=2)
+    )
+    assert first.total == second.total == 4
+    assert len({claim.id for claim in (*first.items, *second.items)}) == 4
+    assert all(claim.claimant is not None for claim in second.items)
+    own = await transact(
+        repository,
+        lambda uow: uow.accounts.claim_page(account_id=first.items[0].account_id, selector=FIRST_PAGE, page_size=2),
+    )
+    assert [claim.id for claim in own.items] == [first.items[0].id]
+    assert own.total == 1
 
     with record_queries(async_session_factory) as statements:
         claims = await transact(repository, lambda uow: uow.accounts.pending_claims(with_claimants=True))

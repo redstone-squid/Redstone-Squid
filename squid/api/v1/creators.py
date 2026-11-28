@@ -11,6 +11,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, contract, tran
 from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, get_accounts, get_build_queries
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import requires
 from squid.api.v1.schemas.creators import CreatorAliasDetail, CreditClaimApproval, CreditClaimDetail, CreditClaimRequest
 from squid.core.accounts.errors import CreatorAliasNotFoundError
@@ -115,15 +116,24 @@ async def claim_credits(
     operation_id="credit_claim_queue",
     security=[WEB, DEVICE],
     guards=[requires(ACCOUNT_CLAIM_LIST)],
-    responses=responses(401, 403, 503),
+    responses=responses(400, 401, 403, 422, 503),
     opt=contract(cli=transport_only()),
 )
-async def claim_queue(accounts: Accounts, caller: CurrentCaller) -> list[CreditClaimDetail]:
+async def claim_queue(
+    accounts: Accounts,
+    caller: CurrentCaller,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[CreditClaimDetail]:
     """List pending credit claims oldest first."""
-    return [
-        CreditClaimDetail.from_claim(row)
-        for row in await accounts.pending_alias_claims(context=caller.context(), with_claimants=True)
-    ]
+    page = await accounts.credit_claim_page(
+        context=caller.context(),
+        staff_queue=True,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+    )
+    return Page.from_domain(page, CreditClaimDetail.from_claim)
 
 
 @post(

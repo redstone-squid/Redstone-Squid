@@ -24,6 +24,7 @@ from squid.api.contract import (
 from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
@@ -568,12 +569,24 @@ async def account_creator_stats(
     operation_id="account_credit_claims",
     security=[WEB, DEVICE],
     guards=[requires(ACCOUNT_SELF_READ)],
-    responses=responses(401, 403, 503),
+    responses=responses(400, 401, 403, 422, 503),
     opt=contract(cli=transport_only()),
 )
-async def own_credit_claims(accounts: Accounts, caller: CurrentCaller) -> list[CreditClaimDetail]:
+async def own_credit_claims(
+    accounts: Accounts,
+    caller: CurrentCaller,
+    offset: OffsetParam = None,
+    cursor: CursorParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[CreditClaimDetail]:
     """Return the caller's credit claims and their outcomes."""
-    return [CreditClaimDetail.from_claim(row) for row in await accounts.own_credit_claims(context=caller.context())]
+    page = await accounts.credit_claim_page(
+        context=caller.context(),
+        staff_queue=False,
+        selector=resolve_selector(offset=offset, cursor=cursor),
+        page_size=page_size,
+    )
+    return Page.from_domain(page, CreditClaimDetail.from_claim)
 
 
 router = Router(
