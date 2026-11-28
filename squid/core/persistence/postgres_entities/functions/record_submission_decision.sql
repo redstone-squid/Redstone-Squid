@@ -35,7 +35,10 @@ BEGIN
             WHERE v.id = t.vote_session_id AND t.build_id = NEW.build_id AND v.status = 'open'
                 AND coalesce(t.proposal_revision, t.reviewed_revision) IS DISTINCT FROM target_revision;
         END IF;
-        IF decided_status = 0 AND NEW.before_state_id IS NOT NULL THEN
+        IF NEW.operation = 'delete' THEN
+            UPDATE public.build_submissions SET decision = 'cancelled'
+            WHERE build_id = NEW.build_id AND edit_vote_id IS NULL AND decision = 'pending';
+        ELSIF decided_status = 0 AND NEW.before_state_id IS NOT NULL THEN
             UPDATE public.build_submissions SET decision = 'pending', decided_revision = NULL
             WHERE build_id = NEW.build_id AND edit_vote_id IS NULL;
             PERFORM public.publish_domain_event('build.review_requested', 1::smallint, 'build', NEW.build_id, jsonb_build_object('revision', target_revision));

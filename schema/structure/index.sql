@@ -36,6 +36,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/finish_build_edit_trigger.sql
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
+\ir public/TRIGGER_FUNCTIONS/record_submission_decision.sql
 \ir public/TRIGGER_FUNCTIONS/record_work_activity.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_door_range_snapshot_mutation.sql
@@ -62,10 +63,12 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/build_edit_pending.sql
 \ir public/TABLES/build_history_states.sql
 \ir public/SEQUENCES/build_history_states_id_seq.sql
+\ir public/TABLES/build_image_mirrors.sql
 \ir public/TABLES/build_links.sql
 \ir public/TABLES/build_schematics.sql
 \ir public/SEQUENCES/build_schematics_id_seq.sql
 \ir public/TABLES/build_source_messages.sql
+\ir public/TABLES/build_submissions.sql
 \ir public/TABLES/build_tag_assignments.sql
 \ir public/TABLES/build_versions.sql
 \ir public/TABLES/build_vote_sessions.sql

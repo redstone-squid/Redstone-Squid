@@ -1140,6 +1140,65 @@ $$;
 
 
 --
+-- Name: record_submission_decision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.record_submission_decision() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_revision bigint;
+    decided_status integer;
+BEGIN
+    IF TG_TABLE_NAME = 'vote_sessions' THEN
+        IF NEW.result IN ('denied', 'cancelled') THEN
+            UPDATE public.build_submissions SET decision = CASE NEW.result WHEN 'denied' THEN 'rejected' ELSE 'cancelled' END
+            WHERE edit_vote_id = NEW.id AND decision = 'pending';
+        END IF;
+    ELSE
+        SELECT build_revision, (snapshot #>> '{build,submission_status}')::integer
+        INTO target_revision, decided_status FROM public.build_history_states WHERE id = NEW.after_state_id;
+        IF NEW.operation = 'create' THEN
+            INSERT INTO public.build_submissions (build_id, submitter_account_id, content)
+            SELECT b.id, b.submitter_account_id, jsonb_strip_nulls(jsonb_build_object(
+                'display_name', b.display_name, 'description', b.description, 'category', b.category,
+                'version_compatibility', b.version_spec, 'capture_dimensions',
+                jsonb_build_object('width', b.width, 'height', b.height, 'depth', b.depth)))
+            FROM public.builds b WHERE b.id = NEW.build_id AND b.submitter_account_id IS NOT NULL
+            ON CONFLICT (build_id) WHERE edit_vote_id IS NULL DO NOTHING;
+        END IF;
+        IF NEW.source = 'build_edit_vote' AND NEW.correlation_kind = 'vote_session' THEN
+            UPDATE public.build_submissions SET decision = 'approved', decided_revision = target_revision
+            WHERE edit_vote_id = NEW.correlation_id::bigint AND decision = 'pending';
+        END IF;
+        IF NEW.before_state_id IS NOT NULL THEN
+            UPDATE public.build_submissions SET decision = 'stale'
+            WHERE build_id = NEW.build_id AND edit_vote_id IS NOT NULL AND decision = 'pending'
+                AND base_revision IS DISTINCT FROM target_revision;
+            UPDATE public.vote_sessions v SET status = 'closed', result = 'cancelled'
+            FROM public.build_vote_sessions t
+            WHERE v.id = t.vote_session_id AND t.build_id = NEW.build_id AND v.status = 'open'
+                AND coalesce(t.proposal_revision, t.reviewed_revision) IS DISTINCT FROM target_revision;
+        END IF;
+        IF NEW.operation = 'delete' THEN
+            UPDATE public.build_submissions SET decision = 'cancelled'
+            WHERE build_id = NEW.build_id AND edit_vote_id IS NULL AND decision = 'pending';
+        ELSIF decided_status = 0 AND NEW.before_state_id IS NOT NULL THEN
+            UPDATE public.build_submissions SET decision = 'pending', decided_revision = NULL
+            WHERE build_id = NEW.build_id AND edit_vote_id IS NULL;
+            PERFORM public.publish_domain_event('build.review_requested', 1::smallint, 'build', NEW.build_id, jsonb_build_object('revision', target_revision));
+        ELSIF decided_status IN (1, 2) THEN
+            UPDATE public.build_submissions SET decision = CASE decided_status WHEN 1 THEN 'approved' ELSE 'rejected' END,
+                decided_revision = target_revision
+            WHERE build_id = NEW.build_id AND edit_vote_id IS NULL AND decision = 'pending';
+        END IF;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: record_work_activity(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1980,6 +2039,29 @@ ALTER TABLE public.build_history_states ALTER COLUMN id ADD GENERATED ALWAYS AS 
 
 
 --
+-- Name: build_image_mirrors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.build_image_mirrors (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    build_id bigint NOT NULL,
+    url text NOT NULL,
+    attempts integer DEFAULT 1 NOT NULL,
+    retry_at timestamp with time zone DEFAULT (now() + '00:10:00'::interval) NOT NULL,
+    public_url text,
+    content bytea,
+    content_type text
+);
+
+
+--
+-- Name: TABLE build_image_mirrors; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_image_mirrors IS 'A bounded copy of an image retained for the lifetime of its source link.';
+
+
+--
 -- Name: build_links; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2272,6 +2354,33 @@ COMMENT ON COLUMN public.build_source_messages."position" IS 'Submission order, 
 
 
 --
+-- Name: build_submissions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.build_submissions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    build_id bigint NOT NULL,
+    submitter_account_id integer NOT NULL,
+    submitted_at timestamp with time zone DEFAULT now() NOT NULL,
+    finalization_job_id uuid,
+    edit_vote_id bigint,
+    base_revision bigint,
+    content jsonb NOT NULL,
+    decision text DEFAULT 'pending'::text NOT NULL,
+    decided_revision bigint,
+    feedback text,
+    CONSTRAINT build_submissions_origin_check CHECK ((((edit_vote_id IS NULL) AND (base_revision IS NULL)) OR ((finalization_job_id IS NULL) AND (edit_vote_id IS NOT NULL) AND (base_revision IS NOT NULL) AND (base_revision > 0))))
+);
+
+
+--
+-- Name: TABLE build_submissions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_submissions IS 'A submitted version, retained independently of its draft and voting session.';
+
+
+--
 -- Name: build_tag_assignments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2338,6 +2447,8 @@ CREATE TABLE public.build_vote_sessions (
     proposal_revision bigint,
     proposal_patch jsonb,
     public_suggestion boolean DEFAULT false NOT NULL,
+    reviewed_revision bigint,
+    submission_id uuid,
     CONSTRAINT build_vote_sessions_proposal_check CHECK ((((proposal_revision IS NULL) AND (proposal_patch IS NULL)) OR ((proposal_revision IS NOT NULL) AND (proposal_revision > 0) AND (proposal_patch IS NOT NULL) AND (jsonb_typeof(proposal_patch) = 'object'::text))))
 );
 
@@ -5826,6 +5937,7 @@ CREATE TABLE public.submission_finalization_results (
     job_id uuid NOT NULL,
     build_id bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    submission_id uuid,
     CONSTRAINT submission_finalization_results_build_id_positive CHECK ((build_id > 0))
 );
 
@@ -7019,6 +7131,22 @@ ALTER TABLE ONLY public.build_history_states
 
 
 --
+-- Name: build_image_mirrors build_image_mirrors_build_id_url_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_image_mirrors
+    ADD CONSTRAINT build_image_mirrors_build_id_url_key UNIQUE (build_id, url);
+
+
+--
+-- Name: build_image_mirrors build_image_mirrors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_image_mirrors
+    ADD CONSTRAINT build_image_mirrors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: build_links build_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7048,6 +7176,30 @@ ALTER TABLE ONLY public.build_schematics
 
 ALTER TABLE ONLY public.build_source_messages
     ADD CONSTRAINT build_source_messages_pkey PRIMARY KEY (build_id, message_id);
+
+
+--
+-- Name: build_submissions build_submissions_edit_vote_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_submissions
+    ADD CONSTRAINT build_submissions_edit_vote_id_key UNIQUE (edit_vote_id);
+
+
+--
+-- Name: build_submissions build_submissions_finalization_job_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_submissions
+    ADD CONSTRAINT build_submissions_finalization_job_id_key UNIQUE (finalization_job_id);
+
+
+--
+-- Name: build_submissions build_submissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_submissions
+    ADD CONSTRAINT build_submissions_pkey PRIMARY KEY (id);
 
 
 --
@@ -8588,6 +8740,27 @@ CREATE INDEX build_schematics_uploaded_by_idx ON public.build_schematics USING b
 --
 
 CREATE INDEX build_source_messages_message_id_idx ON public.build_source_messages USING btree (message_id);
+
+
+--
+-- Name: build_submissions_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_submissions_build_idx ON public.build_submissions USING btree (build_id);
+
+
+--
+-- Name: build_submissions_new_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX build_submissions_new_build_idx ON public.build_submissions USING btree (build_id) WHERE (edit_vote_id IS NULL);
+
+
+--
+-- Name: build_submissions_submitter_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_submissions_submitter_idx ON public.build_submissions USING btree (submitter_account_id, submitted_at);
 
 
 --
@@ -10348,6 +10521,20 @@ CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards
 
 
 --
+-- Name: build_edit_history submission_decision_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_decision_history AFTER INSERT ON public.build_edit_history FOR EACH ROW EXECUTE FUNCTION public.record_submission_decision();
+
+
+--
+-- Name: vote_sessions submission_decision_vote; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_decision_vote AFTER UPDATE OF result ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.record_submission_decision();
+
+
+--
 -- Name: submission_drafts submission_drafts_enqueue_status; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -10690,6 +10877,14 @@ ALTER TABLE ONLY public.build_edit_history
 
 
 --
+-- Name: build_image_mirrors build_image_mirrors_build_id_url_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_image_mirrors
+    ADD CONSTRAINT build_image_mirrors_build_id_url_fkey FOREIGN KEY (build_id, url) REFERENCES public.build_links(build_id, url) ON DELETE CASCADE;
+
+
+--
 -- Name: build_links build_links_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10743,6 +10938,14 @@ ALTER TABLE ONLY public.build_source_messages
 
 ALTER TABLE ONLY public.build_source_messages
     ADD CONSTRAINT build_source_messages_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: build_submissions build_submissions_submitter_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_submissions
+    ADD CONSTRAINT build_submissions_submitter_account_id_fkey FOREIGN KEY (submitter_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --

@@ -2,6 +2,7 @@ CREATE TABLE public.submission_finalization_results (
     job_id uuid NOT NULL,
     build_id bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    submission_id uuid,
     CONSTRAINT submission_finalization_results_build_id_positive CHECK ((build_id > 0))
 );
 

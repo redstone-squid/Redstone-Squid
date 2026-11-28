@@ -30,6 +30,8 @@ ALTER TABLE ONLY public.vote_sessions
 
 CREATE INDEX vote_sessions_author_idx ON public.vote_sessions USING btree (author_account_id);
 
+CREATE TRIGGER submission_decision_vote AFTER UPDATE OF result ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.record_submission_decision();
+
 CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 
 CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_vote_session_sync();

@@ -32,6 +32,8 @@ CREATE TRIGGER build_edit_history_immutable BEFORE DELETE OR UPDATE OR TRUNCATE 
 
 CREATE TRIGGER build_edit_history_work_activity AFTER INSERT ON public.build_edit_history FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
 
+CREATE TRIGGER submission_decision_history AFTER INSERT ON public.build_edit_history FOR EACH ROW EXECUTE FUNCTION public.record_submission_decision();
+
 ALTER TABLE ONLY public.build_edit_history
     ADD CONSTRAINT build_history_after_fkey FOREIGN KEY (build_id, after_state_id) REFERENCES public.build_history_states(build_id, id);
 
