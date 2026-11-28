@@ -189,11 +189,12 @@ def test_malformed_slug_cannot_create_authorization_state(login: BrowserLogin, s
 
 def test_provider_discovery_and_cancelled_login(login: BrowserLogin) -> None:
     assert login.client.get("/v1/auth/providers").json() == [{"id": "discord"}]
-    login.client.get("/v1/auth/discord", params={"redirect_to": "/account?tab=providers"})
+    login.client.get("/v1/auth/discord", params={"locale": "zh-CN", "redirect_to": "/account?tab=providers"})
     assert login.sessions.state is not None
     denied = login.client.get(
         "/v1/auth/discord/callback", params={"state": login.sessions.state.state, "error": "access_denied"}
     )
+    assert urlsplit(denied.headers["location"]).path == "/zh-cn/sign-in"
     assert parse_qs(urlsplit(denied.headers["location"]).query) == {
         "auth_error": ["cancelled"],
         "redirect_to": ["/account?tab=providers"],

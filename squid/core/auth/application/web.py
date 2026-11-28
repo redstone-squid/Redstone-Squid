@@ -47,10 +47,11 @@ def hash_web_session_token(pepper: bytes, token: str) -> bytes:
 class CallbackFailure(AuthenticationError):
     """A public callback error with an optional validated retry destination."""
 
-    def __init__(self, code: str, redirect_to: str | None = None):
+    def __init__(self, code: str, redirect_to: str | None = None, locale: str | None = None):
         super().__init__(code)
         self.callback_code = code
         self.redirect_to = redirect_to
+        self.locale = locale
 
 
 class WebSessionService:
@@ -82,7 +83,13 @@ class WebSessionService:
 
     @application_operation
     async def authorize_url(
-        self, slug: str, redirect_to: str | None, *, context: ActingContext, link: bool = False
+        self,
+        slug: str,
+        redirect_to: str | None,
+        *,
+        context: ActingContext,
+        link: bool = False,
+        locale: str | None = None,
     ) -> str:
         """Store a ten-minute login attempt and return the provider's authorization URL.
 
@@ -106,6 +113,7 @@ class WebSessionService:
                     state=state,
                     code_verifier=verifier,
                     redirect_to=redirect_to,
+                    locale=locale,
                     expires_at=self._now().add(minutes=10),
                 )
             )
@@ -148,20 +156,20 @@ class WebSessionService:
                 raise CallbackFailure(msg)
         if error or not code:
             raise CallbackFailure(
-                "cancelled" if error == "access_denied" else "provider_unavailable", saved.redirect_to
+                "cancelled" if error == "access_denied" else "provider_unavailable", saved.redirect_to, saved.locale
             )
         try:
             identity = await provider.fetch_identity(code=code, code_verifier=saved.code_verifier)
         except ServiceUnavailableError as exc:
             msg = "provider_unavailable"
-            raise CallbackFailure(msg, saved.redirect_to) from exc
+            raise CallbackFailure(msg, saved.redirect_to, saved.locale) from exc
         async with self._uow_factory() as uow:
             if linking and current_account_id is not None:
                 if not await uow.accounts.link_browser_identity(
                     current_account_id, identity.provider, identity.subject
                 ):
                     msg = "identity_in_use"
-                    raise CallbackFailure(msg, saved.redirect_to)
+                    raise CallbackFailure(msg, saved.redirect_to, saved.locale)
                 account_id = current_account_id
             else:
                 account = await uow.accounts.get_or_create_identity(identity.provider, identity.subject)

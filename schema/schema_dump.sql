@@ -4171,7 +4171,8 @@ CREATE TABLE public.oauth_states (
     redirect_to text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    provider text NOT NULL
+    provider text NOT NULL,
+    locale text
 );
 
 

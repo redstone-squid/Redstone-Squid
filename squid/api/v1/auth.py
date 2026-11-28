@@ -1,7 +1,7 @@
 """Browser-session routes, templated over the configured identity providers."""
 
 import secrets
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlencode, urlparse
 
 from litestar import Request, Response, Router, get, post
@@ -24,6 +24,8 @@ from squid.core.validation import (
     FieldErrorCode,
     SimpleIssue,
 )
+
+type SignInLocale = Literal["en", "zh-CN", "en-XA"]
 
 ProviderSlug = Annotated[str, PathParameter(pattern="^[a-z][a-z0-9_-]{0,31}$")]
 """One provider's URL segment. An unknown or unconfigured one is a 404 about the
@@ -97,13 +99,16 @@ async def browser_authorization_start(
     request: Request,
     web_auth: WebAuth,
     provider: ProviderSlug,
+    locale: Annotated[SignInLocale | None, QueryParameter()] = None,
     redirect_to: Annotated[str | None, QueryParameter(max_length=2048)] = None,
 ) -> Redirect:
     """Begin authorization with PKCE and durable one-time state."""
     if web_auth is None:
         raise AuthenticationError
     _validate_redirect(request, redirect_to)
-    return Redirect(await web_auth.authorize_url(provider, redirect_to, context=caller.context()), status_code=307)
+    return Redirect(
+        await web_auth.authorize_url(provider, redirect_to, locale=locale, context=caller.context()), status_code=307
+    )
 
 
 class LinkAuthorization(BaseModel):
@@ -155,9 +160,9 @@ async def browser_authorization_callback(
 ) -> Redirect:
     """Exchange an authorization code and set a revocable opaque session cookie."""
     public_site = request.app.state.config.notification.public_site_url
-    sign_in = f"{str(public_site).rstrip('/')}/sign-in" if public_site else "/sign-in"
+    site = str(public_site).rstrip("/") if public_site else ""
     if not oauth_state or web_auth is None or provider not in web_auth.provider_ids:
-        return Redirect(f"{sign_in}?auth_error=invalid_state", status_code=307)
+        return Redirect(f"{site}/sign-in?auth_error=invalid_state", status_code=307)
     try:
         token, redirect_to = await web_auth.callback(
             provider,
@@ -172,7 +177,8 @@ async def browser_authorization_callback(
         if failure.redirect_to:
             _validate_redirect(request, failure.redirect_to)
             params["redirect_to"] = failure.redirect_to
-        return Redirect(f"{sign_in}?{urlencode(params)}", status_code=307)
+        prefix = f"/{failure.locale.lower()}" if failure.locale in ("zh-CN", "en-XA") else ""
+        return Redirect(f"{site}{prefix}/sign-in?{urlencode(params)}", status_code=307)
     destination = redirect_to or "/"
     _validate_redirect(request, destination)
     response = Redirect(destination, status_code=307)

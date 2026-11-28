@@ -5669,6 +5669,7 @@ export type BrowserAuthorizationStartData = {
         provider: string;
     };
     query?: {
+        locale?: 'en' | 'zh-CN' | 'en-XA' | null;
         redirect_to?: string | null;
     };
     url: '/v1/auth/{provider}';

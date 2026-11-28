@@ -8,7 +8,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Identity, session and permissions
 
-56. **OAuth error locale.** Carry the sign-in locale through OAuth state so callback errors return to the localized sign-in page.
 57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/accounts/me/minecraft/grants`.
 
 ### Search
@@ -51,6 +50,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Identity, session and permissions
 
+56. **OAuth error locale.** Carry the sign-in locale through OAuth state so callback errors return to the localized sign-in page.
 1. **`GET /v1/session`** supplies one snapshot for the server render and header island. The island reuses the snapshot on hydration.
    - Return `{user: {id, display_name, avatar_url} | null, permissions: string[], counts: {unread_notifications: int, drafts: int, drafts_needing_attention: int, review_queue: int | null}}`. Permissions are effective global node names.
    - A missing or expired cookie returns 200 with a null user, empty permissions, zero personal counts and a null review queue. The queue count is null whenever the viewer lacks access and zero when a visible queue is empty.

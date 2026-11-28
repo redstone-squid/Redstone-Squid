@@ -51,6 +51,7 @@ class OAuthState(Base, kw_only=True):
         StrEnumText(IdentityProvider), nullable=False, default=IdentityProvider.DISCORD
     )
     """The namespace this state was minted for; the callback refuses a mismatch."""
+    locale: Mapped[str | None] = mapped_column(Text, default=None)
     redirect_to: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)

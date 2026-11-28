@@ -2,7 +2,7 @@
 import SignInPanel from "@/features/account/SignInPanel.svelte";
 import { browserProvidersList } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
-import { localizePath } from "@/locales/locale";
+import { getLocale, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { load } from "@/server/api";
 import { returnPath } from "@/server/session";
@@ -17,7 +17,7 @@ const loaded = await load(browserProvidersList({ client: Astro.locals.api }));
 // (api-gaps.md item 52).
 const providers = loaded.map((provider) => ({
   provider,
-  href: `${config.apiBaseUrl}/v1/auth/${encodeURIComponent(provider.id)}?redirect_to=${encodeURIComponent(redirectTo)}`,
+  href: `${config.apiBaseUrl}/v1/auth/${encodeURIComponent(provider.id)}?locale=${getLocale()}&redirect_to=${encodeURIComponent(redirectTo)}`,
 }));
 const title = m.signInTitle();
 ---

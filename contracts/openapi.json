@@ -4289,6 +4289,29 @@
             "deprecated": false
           },
           {
+            "name": "locale",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "en",
+                    "zh-CN",
+                    "en-XA"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "redirect_to",
             "in": "query",
             "schema": {

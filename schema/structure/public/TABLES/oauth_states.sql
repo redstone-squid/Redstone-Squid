@@ -4,7 +4,8 @@ CREATE TABLE public.oauth_states (
     redirect_to text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    provider text NOT NULL
+    provider text NOT NULL,
+    locale text
 );
 
 COMMENT ON TABLE public.oauth_states IS 'One-time OAuth PKCE state shared across API replicas.';
