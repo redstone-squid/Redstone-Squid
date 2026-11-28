@@ -54,3 +54,11 @@ def test_an_offset_past_the_clamp_is_rejected_before_it_reaches_the_database(
         response = client.get("/v1/versions", params={"offset": MAX_PAGE_OFFSET + 1})
 
     assert response.status_code == 422
+
+
+def test_long_malformed_cursor_returns_the_restart_error(app_factory: tuple[Litestar, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+    with TestClient(app) as client:
+        response = client.get("/v1/builds", params={"cursor": "x" * 513})
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_PAGE_CURSOR"

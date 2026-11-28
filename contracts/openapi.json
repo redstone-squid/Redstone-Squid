@@ -622,7 +622,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -3017,7 +3016,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -5385,7 +5383,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -7056,7 +7053,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -10487,7 +10483,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -14271,7 +14266,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -14709,7 +14703,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -15027,7 +15020,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -16411,7 +16403,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -17593,7 +17584,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -19348,7 +19338,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -20974,7 +20963,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -23592,7 +23580,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
@@ -26369,7 +26356,6 @@
                   "type": "null"
                 }
               ],
-              "maxLength": 512,
               "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
             "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",

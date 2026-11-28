@@ -79,6 +79,8 @@ class KeysetOrder:
         if cursor.order != self.name or not _fits(self.id, cursor.id):
             raise InvalidPageCursorError
         if self.key is self.id:
+            if type(cursor.key) is not type(cursor.id) or cursor.key != cursor.id:
+                raise InvalidPageCursorError
             return cursor.id
         if cursor.key is not None and not _fits(self.key, cursor.key):
             raise InvalidPageCursorError

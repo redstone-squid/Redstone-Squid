@@ -64,7 +64,7 @@ class PageCursor:
                 base64.b64decode(token + "=" * (-len(token) % 4), altchars=b"-_", validate=True)
             )
             key, identifier = _untagged(key), _untagged(identifier)
-        except (binascii.Error, UnicodeDecodeError, TypeError, ValueError) as error:
+        except (binascii.Error, RecursionError, UnicodeDecodeError, TypeError, ValueError) as error:
             raise InvalidPageCursorError from error
         # bool is an int subclass, so check the exact type of the ID.
         if not isinstance(order, str) or not isinstance(backward, bool) or type(identifier) not in (int, UUID):

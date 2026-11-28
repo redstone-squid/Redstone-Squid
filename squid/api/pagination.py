@@ -28,7 +28,6 @@ OffsetParam = Annotated[
 CursorParam = Annotated[
     str | None,
     QueryParameter(
-        max_length=512,
         description="An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
     ),
 ]
