@@ -480,6 +480,21 @@ export type ChoiceOptionResponse = {
 };
 
 /**
+ * ClaimSelection
+ */
+export type ClaimSelection = {
+    credit_id: string;
+    build_id: number;
+};
+
+/**
+ * ClaimStatus
+ *
+ * Review state of an explicit alias claim.
+ */
+export type ClaimStatus = 'pending' | 'approved' | 'rejected';
+
+/**
  * CliDeviceListResponse
  */
 export type CliDeviceListResponse = {
@@ -596,8 +611,6 @@ export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'durat
 export type CreatorAliasDetail = {
     id: number;
     name: string;
-    claimed: boolean;
-    account_id: string | null;
 };
 
 /**
@@ -610,12 +623,38 @@ export type CreatorBuildNotification = {
 };
 
 /**
+ * CreatorRecord
+ */
+export type CreatorRecord = {
+    id: string;
+    title: string;
+};
+
+/**
+ * CreatorStats
+ */
+export type CreatorStats = {
+    build_count: number;
+    builds_by_year: Array<CreatorYear>;
+    records_held: Array<CreatorRecord>;
+    records_ever: number;
+};
+
+/**
  * CreatorViewer
  */
 export type CreatorViewer = {
     subscription_id: number | null;
     is_self: boolean;
     can_claim: boolean;
+};
+
+/**
+ * CreatorYear
+ */
+export type CreatorYear = {
+    year: number;
+    count: number;
 };
 
 /**
@@ -629,6 +668,9 @@ export type Credit = {
     role?: CreditRole;
     attribution?: CreditAttribution;
     source_message_id?: number | null;
+    proposed_account_id?: string | null;
+    name_id?: number | null;
+    credit_id?: string | null;
     account_id?: string | null;
 };
 
@@ -638,6 +680,33 @@ export type Credit = {
  * How the attribution was obtained.
  */
 export type CreditAttribution = 'explicit' | 'assumed_sender' | 'confirmed' | 'legacy';
+
+/**
+ * CreditClaimApproval
+ */
+export type CreditClaimApproval = {
+    credit_ids: Array<string>;
+    reassign?: boolean;
+};
+
+/**
+ * CreditClaimDetail
+ */
+export type CreditClaimDetail = {
+    id: number;
+    name: string;
+    status: ClaimStatus;
+    credits: Array<ClaimSelection>;
+    approved_credit_ids: Array<string>;
+    claimant_id?: string | null;
+};
+
+/**
+ * CreditClaimRequest
+ */
+export type CreditClaimRequest = {
+    credit_ids: Array<string>;
+};
 
 /**
  * CreditKind
@@ -659,6 +728,15 @@ export type CreditRole = 'creator' | 'designer' | 'layout' | 'contributor';
 export type CreditedAlias = {
     name: string;
     build_count?: number;
+};
+
+/**
+ * CreditedNameSummary
+ */
+export type CreditedNameSummary = {
+    id: number;
+    name: string;
+    stats: CreatorStats;
 };
 
 /**
@@ -2163,6 +2241,8 @@ export type PublicBuildCredit = {
     role: CreditRole;
     attribution: CreditAttribution;
     account_id: string | null;
+    credit_id?: string | null;
+    name_id?: number | null;
 };
 
 /**
@@ -4179,6 +4259,82 @@ export type AccountGetResponses = {
 
 export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 
+export type AccountCreditClaimsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/claims';
+};
+
+export type AccountCreditClaimsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountCreditClaimsError = AccountCreditClaimsErrors[keyof AccountCreditClaimsErrors];
+
+export type AccountCreditClaimsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<CreditClaimDetail>;
+};
+
+export type AccountCreditClaimsResponse = AccountCreditClaimsResponses[keyof AccountCreditClaimsResponses];
+
+export type AccountCreatorStatsData = {
+    body?: never;
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/creator-stats';
+};
+
+export type AccountCreatorStatsErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountCreatorStatsError = AccountCreatorStatsErrors[keyof AccountCreatorStatsErrors];
+
+export type AccountCreatorStatsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CreatorStats;
+};
+
+export type AccountCreatorStatsResponse = AccountCreatorStatsResponses[keyof AccountCreatorStatsResponses];
+
 export type AccountBuildIndexingSetData = {
     body: BuildIndexingRequest;
     headers?: {
@@ -4838,6 +4994,161 @@ export type AccountProfileGetResponses = {
 
 export type AccountProfileGetResponse = AccountProfileGetResponses[keyof AccountProfileGetResponses];
 
+export type CreditClaimQueueData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/claims';
+};
+
+export type CreditClaimQueueErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreditClaimQueueError = CreditClaimQueueErrors[keyof CreditClaimQueueErrors];
+
+export type CreditClaimQueueResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<CreditClaimDetail>;
+};
+
+export type CreditClaimQueueResponse = CreditClaimQueueResponses[keyof CreditClaimQueueResponses];
+
+export type CreditClaimApproveData = {
+    body: CreditClaimApproval;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        claim_id: number;
+    };
+    query?: never;
+    url: '/v1/claims/{claim_id}/approve';
+};
+
+export type CreditClaimApproveErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreditClaimApproveError = CreditClaimApproveErrors[keyof CreditClaimApproveErrors];
+
+export type CreditClaimApproveResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CreditClaimDetail;
+};
+
+export type CreditClaimApproveResponse = CreditClaimApproveResponses[keyof CreditClaimApproveResponses];
+
+export type CreditClaimRejectData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        claim_id: number;
+    };
+    query?: never;
+    url: '/v1/claims/{claim_id}/reject';
+};
+
+export type CreditClaimRejectErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreditClaimRejectError = CreditClaimRejectErrors[keyof CreditClaimRejectErrors];
+
+export type CreditClaimRejectResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CreditClaimDetail;
+};
+
+export type CreditClaimRejectResponse = CreditClaimRejectResponses[keyof CreditClaimRejectResponses];
+
 export type BrowserProvidersListData = {
     body?: never;
     path?: never;
@@ -5318,6 +5629,7 @@ export type BuildsListData = {
         tag_id?: Array<number> | null;
         tag_slug?: Array<string> | null;
         account_id?: string | null;
+        creator_name_id?: number | null;
         submitted_by?: 'me' | null;
         /**
          * A named display order for build listings.
@@ -11558,6 +11870,106 @@ export type CreatorAliasLookupResponses = {
 };
 
 export type CreatorAliasLookupResponse = CreatorAliasLookupResponses[keyof CreatorAliasLookupResponses];
+
+export type CreatorNameSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        name: string;
+    };
+    url: '/v1/creator-aliases/summary';
+};
+
+export type CreatorNameSummaryErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreatorNameSummaryError = CreatorNameSummaryErrors[keyof CreatorNameSummaryErrors];
+
+export type CreatorNameSummaryResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CreditedNameSummary;
+};
+
+export type CreatorNameSummaryResponse = CreatorNameSummaryResponses[keyof CreatorNameSummaryResponses];
+
+export type CreatorCreditClaimData = {
+    body: CreditClaimRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        alias_id: number;
+    };
+    query?: never;
+    url: '/v1/creator-aliases/{alias_id}/claims';
+};
+
+export type CreatorCreditClaimErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreatorCreditClaimError = CreatorCreditClaimErrors[keyof CreatorCreditClaimErrors];
+
+export type CreatorCreditClaimResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: CreditClaimDetail;
+};
+
+export type CreatorCreditClaimResponse = CreatorCreditClaimResponses[keyof CreatorCreditClaimResponses];
 
 export type MinecraftVersionsListData = {
     body?: never;

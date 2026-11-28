@@ -21,7 +21,7 @@ from squid.api.contract import (
     contract,
     transport_only,
 )
-from squid.api.dependencies import Accounts, CurrentCaller, Services, get_accounts
+from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
@@ -37,6 +37,7 @@ from squid.api.v1.schemas.accounts import (
     ProfileDetail,
     ProfileUpdateRequest,
 )
+from squid.api.v1.schemas.creators import CreditClaimDetail
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
@@ -49,6 +50,8 @@ from squid.core.accounts.application.edits import (
 from squid.core.accounts.domain import AccountMerge, MergePreview, PublicCreatorProfile
 from squid.core.accounts.errors import AccountIdentityNotFoundError, AccountNotFoundError
 from squid.core.accounts.models import AccountIdentity
+from squid.core.builds.application.queries import CreatorStats
+from squid.core.builds.domain import BuildListFilters
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import (
@@ -544,6 +547,35 @@ async def clear_profile(
     )
 
 
+@get(
+    "/{account_id:uuid}/creator-stats",
+    operation_id="account_creator_stats",
+    responses=responses(404, 503),
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+    dependencies={"build_queries": Provide(get_build_queries, sync_to_thread=False)},
+)
+async def account_creator_stats(
+    account_id: FromPath[UUID], accounts: Accounts, build_queries: BuildQueries, caller: CurrentCaller
+) -> CreatorStats:
+    """Summarize the builds publicly attributed to an account, following merge redirects."""
+    await accounts.resolve_public_id(account_id, context=caller.context())
+    return await build_queries.creator_stats(BuildListFilters(public_account_id=account_id), context=caller.context())
+
+
+@get(
+    "/me/claims",
+    operation_id="account_credit_claims",
+    security=[WEB, DEVICE],
+    guards=[requires(ACCOUNT_SELF_READ)],
+    responses=responses(401, 403, 503),
+    opt=contract(cli=transport_only()),
+)
+async def own_credit_claims(accounts: Accounts, caller: CurrentCaller) -> list[CreditClaimDetail]:
+    """Return the caller's credit claims and their outcomes."""
+    return [CreditClaimDetail.from_claim(row) for row in await accounts.own_credit_claims(context=caller.context())]
+
+
 router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
@@ -554,6 +586,8 @@ router = Router(
     tags=["accounts"],
     route_handlers=[
         get_me,
+        own_credit_claims,
+        account_creator_stats,
         set_build_indexing,
         update_profile,
         list_identities,

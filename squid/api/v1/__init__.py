@@ -8,6 +8,7 @@ from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.capabilities import router as capabilities_router
 from squid.api.v1.cli_auth import router as cli_auth_router
+from squid.api.v1.creators import claims_router
 from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
@@ -36,6 +37,7 @@ router = Router(
     before_request=enforce_route_rate_limits_before_request,
     route_handlers=[
         accounts_router,
+        claims_router,
         auth_router,
         builds_router,
         capabilities_router,
