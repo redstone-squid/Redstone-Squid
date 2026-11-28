@@ -12,6 +12,7 @@ from squid.core.accounts.domain import (
     ClaimStatus,
     CreatorProfile,
     CreatorProfileRecord,
+    CreditRetention,
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
@@ -121,6 +122,8 @@ class AccountRepository(Protocol):
     async def consume_merge_ticket(self, code: str) -> MergeTicket | None: ...
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge: ...
+
+    async def delete(self, account_id: int, credits: CreditRetention) -> None: ...
 
     async def get_alias(self, alias_id: int) -> CreatorAlias | None: ...
 

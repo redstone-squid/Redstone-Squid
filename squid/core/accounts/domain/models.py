@@ -29,8 +29,8 @@ _POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
 str.isdigit() also accepts non-ASCII digits, which would give an identifier more
 than one spelling."""
 
-MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
-"""Maximum age of an identity proof accepted for a self-service account merge."""
+ACCOUNT_PROOF_MAX_AGE_SECONDS = 10 * 60
+"""Maximum age of the sign-in behind an irreversible account merge or deletion."""
 
 
 MERGE_CODE_BYTES = 5
@@ -40,7 +40,7 @@ The short code is intended for typing between sessions. One live ticket per
 account, expiry, and route rate limits restrict guessing."""
 
 MERGE_TICKET_TTL_SECONDS = 10 * 60
-"""Lifetime of a merge ticket, matching MERGE_PROOF_MAX_AGE_SECONDS.
+"""Lifetime of a merge ticket, matching ACCOUNT_PROOF_MAX_AGE_SECONDS.
 
 Ticket creation supplies the absorbed account's proof timestamp during a merge."""
 
@@ -83,10 +83,19 @@ class RecentAccountProof:
     account_id: int
     verified_at: Instant
 
-    def is_recent_at(self, now: Instant, *, max_age_seconds: int = MERGE_PROOF_MAX_AGE_SECONDS) -> bool:
-        """Return whether this proof is inside the permitted merge window."""
+    def is_recent_at(self, now: Instant, *, max_age_seconds: int = ACCOUNT_PROOF_MAX_AGE_SECONDS) -> bool:
+        """Return whether this proof is recent enough for an irreversible account change."""
         age = (now - self.verified_at).total("seconds")
         return 0 <= age <= max_age_seconds
+
+
+class CreditRetention(StrEnum):
+    """What account deletion does with build credits that name the account."""
+
+    KEEP_NAME = "keep_name"
+    """Keep the credited name as plain text, unlinked from any account or provider identity."""
+    REMOVE = "remove"
+    """Remove the credits; the builds stay published without them."""
 
 
 @dataclass(frozen=True, slots=True)

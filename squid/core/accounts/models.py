@@ -104,6 +104,9 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
             "(privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL)",
             name="accounts_privacy_notice_receipt_complete",
         ),
+        CheckConstraint(
+            "deleted_at IS NULL OR privacy_notice_version IS NULL", name="accounts_tombstone_has_no_receipt"
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True, default=None)
     """Internal account identifier; assigned when the account is first saved."""
@@ -113,6 +116,8 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
     discord_build_indexing_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     privacy_notice_version: Mapped[str | None] = mapped_column(Text, default=None)
     privacy_notice_acknowledged_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the owner deleted the account; the row stays as an empty tombstone for retained references."""
 
     identities: tuple[AccountIdentity, ...] = ()
     """Linked identities, populated together by the repository."""

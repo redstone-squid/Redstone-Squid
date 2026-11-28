@@ -8,13 +8,14 @@ import pytest
 from squid.core.accounts.application.ports import VerificationLinkResult
 from squid.core.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
 from squid.core.accounts.domain import (
-    MERGE_PROOF_MAX_AGE_SECONDS,
+    ACCOUNT_PROOF_MAX_AGE_SECONDS,
     MERGE_TICKET_TTL_SECONDS,
     PRIVACY_NOTICE_VERSION,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
     CreditPreview,
+    CreditRetention,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -32,6 +33,7 @@ from squid.core.accounts.errors import (
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
+    RecentSignInRequiredError,
     VerificationAttemptsExhaustedError,
 )
 from squid.core.accounts.models import (
@@ -412,6 +414,20 @@ async def test_merge_requires_recent_proof_of_two_distinct_accounts() -> None:
         )
 
 
+async def test_deletion_requires_a_recent_sign_in_to_the_same_account() -> None:
+    repository = FakeAccountRepository()
+    accounts = InMemoryAccountService(repository)
+    context = ActingContext.direct(UserActor(account_id=1))
+
+    for stale in (RecentAccountProof(2, NOW), RecentAccountProof(1, NOW.subtract(minutes=11))):
+        with pytest.raises(RecentSignInRequiredError):
+            await accounts.delete_account(stale, CreditRetention.REMOVE, now=NOW, context=context)
+    assert repository.deletions == []
+
+    await accounts.delete_account(RecentAccountProof(1, NOW), CreditRetention.REMOVE, now=NOW, context=context)
+    assert repository.deletions == [(1, CreditRetention.REMOVE)]
+
+
 async def test_code_generation_validates_java_identity() -> None:
     repository = FakeAccountRepository()
     generated = await InMemoryAccountService(repository).generate_verification_code(
@@ -719,7 +735,7 @@ class TestMergeCodes:
 
     async def test_the_ticket_window_matches_the_proof_window(self) -> None:
         """Keep ticket expiry aligned with the maximum age accepted for merge proof."""
-        assert MERGE_TICKET_TTL_SECONDS == MERGE_PROOF_MAX_AGE_SECONDS
+        assert MERGE_TICKET_TTL_SECONDS == ACCOUNT_PROOF_MAX_AGE_SECONDS
 
 
 async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write() -> None:

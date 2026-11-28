@@ -17,6 +17,7 @@ from squid.core.accounts.domain import (
     AccountMerge,
     ClaimStatus,
     CreatorProfile,
+    CreditRetention,
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
@@ -36,6 +37,7 @@ from squid.core.accounts.errors import (
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
+    RecentSignInRequiredError,
     VerificationAttemptsExhaustedError,
 )
 from squid.core.accounts.models import (
@@ -210,6 +212,38 @@ class AccountService:
             result = await uow.accounts.merge(surviving_proof.account_id, absorbed_proof.account_id)
             await uow.commit()
             return result
+
+    @application_operation
+    async def delete_account(
+        self,
+        proof: RecentAccountProof,
+        credits: CreditRetention,
+        *,
+        context: ActingContext,
+        now: Instant | None = None,
+    ) -> None:
+        """Delete the caller's account after a recent sign-in.
+
+        The account row remains as a tombstone for the builds, ballots, and reviews it
+        took part in; everything that identifies the person is erased, and every session
+        and credential for the account stops working. `credits` decides what happens to
+        build credits naming the account.
+
+        Raises:
+            RecentSignInRequiredError: The proof is for another account or too old.
+            AccountDeletionBlockedError: Submissions are under review or votes the account opened are open.
+        """
+        account_id = context.effective.require_account_id()
+        if proof.account_id != account_id or not proof.is_recent_at(now or Instant.now()):
+            raise RecentSignInRequiredError
+        async with (
+            self._uow_factory() as uow,
+            # Credit changes write build history; the tombstone remains their actor.
+            uow.builds.editing(actor=account_id, operation="edit", source="account_deletion"),
+        ):
+            await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
+            await uow.accounts.delete(account_id, credits)
+            await uow.commit()
 
     async def create_merge_code(self, *, context: ActingContext) -> tuple[str, MergeTicket]:
         """Create a single-use code for the account that will be absorbed in a merge.

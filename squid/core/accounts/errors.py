@@ -4,6 +4,7 @@ from uuid import UUID
 
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.errors import (
+    AuthorizationError,
     ConflictError,
     ErrorCode,
     JSONValue,
@@ -138,6 +139,40 @@ class InvalidMergeProofError(ValidationError):
     default_end_user_action = tr(
         t"accounts-merge-reauthenticate = Authenticate both accounts again, then retry the merge."
     )
+
+
+class RecentSignInRequiredError(AuthorizationError):
+    """The browser session is older than an irreversible account change allows."""
+
+    default_message = tr(
+        t"accounts-recent-sign-in-required = Sign in again to confirm it is you before changing this account."
+    )
+    default_title = tr(t"accounts-errors-recent-sign-in-required = Sign in again")
+    default_code = ErrorCode.RECENT_SIGN_IN_REQUIRED
+    default_resource = "account"
+    default_end_user_action = tr(t"accounts-sign-in-again-then-retry = Sign out, sign in again, then retry.")
+
+
+class AccountDeletionBlockedError(ConflictError):
+    """The account still has review work that deletion would leave half-finished.
+
+    Public context counts the account's pending submissions, including edit proposals,
+    and the votes it opened that have not closed.
+    """
+
+    default_message = tr(t"accounts-deletion-blocked = Your account has submissions under review or votes still open.")
+    default_title = tr(t"accounts-errors-deletion-blocked = Account deletion blocked")
+    default_code = ErrorCode.ACCOUNT_DELETION_BLOCKED
+    default_resource = "account"
+    default_end_user_action = tr(
+        t"accounts-deletion-wait-for-review = Wait until those reviews and votes close, then delete your account."
+    )
+
+    def __init__(self, *, pending_submissions: int, open_votes: int) -> None:
+        counts: dict[str, JSONValue] = {"pending_submissions": pending_submissions, "open_votes": open_votes}
+        super().__init__(context=counts, public_context=counts)
+        self.pending_submissions = pending_submissions
+        self.open_votes = open_votes
 
 
 class InvalidVerificationCodeError(ValidationError):

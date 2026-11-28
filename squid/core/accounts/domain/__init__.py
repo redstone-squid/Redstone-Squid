@@ -1,14 +1,15 @@
 """Public account domain API: one account, many identities."""
 
 from squid.core.accounts.domain.models import (
+    ACCOUNT_PROOF_MAX_AGE_SECONDS,
     MERGE_CODE_BYTES,
-    MERGE_PROOF_MAX_AGE_SECONDS,
     MERGE_TICKET_TTL_SECONDS,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
     CreatorProfile,
     CreditPreview,
+    CreditRetention,
     IdentityDetails,
     IdentityProvider,
     IdentityRefresh,
@@ -44,6 +45,7 @@ from squid.core.accounts.domain.profiles import (
 )
 
 __all__ = [
+    "ACCOUNT_PROOF_MAX_AGE_SECONDS",
     "DISCORD_AVATAR_URL_TEMPLATE",
     "JAVA_AVATAR_URL_TEMPLATE",
     "MAX_BIO_LENGTH",
@@ -53,7 +55,6 @@ __all__ = [
     "MAX_PROFILE_LINKS",
     "MAX_PRONOUNS_LENGTH",
     "MERGE_CODE_BYTES",
-    "MERGE_PROOF_MAX_AGE_SECONDS",
     "MERGE_TICKET_TTL_SECONDS",
     "PRIVACY_NOTICE",
     "PRIVACY_NOTICE_TITLE",
@@ -65,6 +66,7 @@ __all__ = [
     "CreatorProfile",
     "CreatorProfileRecord",
     "CreditPreview",
+    "CreditRetention",
     "CreditedAlias",
     "IdentityDetails",
     "IdentityProvider",

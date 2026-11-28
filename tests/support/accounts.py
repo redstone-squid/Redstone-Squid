@@ -21,6 +21,7 @@ from squid.core.accounts.domain import (
     CreatorProfile,
     CreatorProfileRecord,
     CreditedAlias,
+    CreditRetention,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -56,6 +57,7 @@ class FakeAccountRepository:
         self.created_code: tuple[UUID, str, str] | None = None
         self.taken_codes: set[str] = set()
         self.merge_result: AccountMerge | None = None
+        self.deletions: list[tuple[int, CreditRetention]] = []
         self.refreshed: tuple[int, UUID, str] | None = None
         self.reservable: dict[str, LinkPreview] = {}
         self.reservations: set[str] = set()
@@ -309,6 +311,9 @@ class FakeAccountRepository:
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
         assert self.merge_result is not None
         return self.merge_result
+
+    async def delete(self, account_id: int, credits: CreditRetention) -> None:
+        self.deletions.append((account_id, credits))
 
     async def get_alias(self, alias_id: int) -> CreatorAlias | None:
         alias = next((alias for alias in self.aliases.values() if alias.id == alias_id), None)

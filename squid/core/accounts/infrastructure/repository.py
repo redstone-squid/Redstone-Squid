@@ -18,6 +18,7 @@ from squid.core.accounts.domain import (
     CreatorProfile,
     CreatorProfileRecord,
     CreditedAlias,
+    CreditRetention,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -35,6 +36,7 @@ from squid.core.accounts.errors import (
     LastIdentityError,
     MinecraftAccountNotFoundError,
 )
+from squid.core.accounts.infrastructure.account_deletion import delete_account
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
 from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import (
@@ -456,6 +458,10 @@ class AccountRepository:
         session = self._session()
         return await merge_accounts(session, AccountMergeContext(surviving_account_id, absorbed_account_id))
 
+    async def delete(self, account_id: int, credits: CreditRetention) -> None:
+        """Erase the account and leave its row as a tombstone; see `delete_account`."""
+        await delete_account(self._session(), account_id, credits)
+
     # Creator credit and staff review of alias claims.
 
     async def get_alias(self, alias_id: int) -> CreatorAlias | None:
@@ -492,13 +498,16 @@ class AccountRepository:
 
     @staticmethod
     async def _account_for_public_id(session: AsyncSession, public_id: uuid.UUID) -> Account | None:
-        account = await session.scalar(select(Account).where(Account.public_account_id == public_id))
+        # A deleted account keeps its row and public ID, but no longer answers to it.
+        account = await session.scalar(
+            select(Account).where(Account.public_account_id == public_id, Account.deleted_at.is_(None))
+        )
         if account is not None:
             return account
         return await session.scalar(
             select(Account)
             .join(PublicAccountRedirect, PublicAccountRedirect.target_account_id == Account.id)
-            .where(PublicAccountRedirect.retired_public_account_id == public_id)
+            .where(PublicAccountRedirect.retired_public_account_id == public_id, Account.deleted_at.is_(None))
         )
 
     async def get_creator_profile(self, public_id: uuid.UUID) -> CreatorProfile | None:
