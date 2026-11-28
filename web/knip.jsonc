@@ -3,6 +3,7 @@
   // The PWA build and Astro script src attributes are entry points knip cannot follow.
   "entry": [
     "src/sw.ts",
+    "public/pagination-transition.js",
     "src/layouts/register-service-worker.ts",
     "src/layouts/browser-telemetry.ts",
     "src/ui/overlays/dropdown-position.ts",
