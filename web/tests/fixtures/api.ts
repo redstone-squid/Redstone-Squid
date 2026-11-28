@@ -278,6 +278,13 @@ async function routeRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/livez") return new Response("ok");
 
+  if (url.pathname === "/v1/session" && cookie(request, "__Host-squid_session") === "outage")
+    return problem(request, 503, "SERVICE_UNAVAILABLE");
+  if (url.pathname === "/v1/records/rate-limited") {
+    const response = problem(request, 429, "RATE_LIMITED");
+    response.headers.set("Retry-After", "45");
+    return response;
+  }
   if (url.pathname === "/v1/session") return json(session(request));
   if (url.pathname === "/v1/auth/providers") {
     return json([{ id: "discord" }] satisfies BrowserProvider[]);

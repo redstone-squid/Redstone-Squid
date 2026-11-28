@@ -3,7 +3,8 @@ import type { APIContext } from "astro";
 import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient, forwardedFor } from "@/server/api";
-import { readPreference } from "@/server/cookies";
+import { ApiError } from "@/api-client/api-error";
+import { clearApiSession, readPreference } from "@/server/cookies";
 import { getRuntimeConfig } from "@/server/config";
 import { loadSession } from "@/server/session";
 import { findRedirect } from "@/server/redirects";
@@ -84,11 +85,36 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
     // A rewrite to an error page keeps the session the first pass loaded.
     context.locals.session =
       inherited.session === undefined ? await loadSession(context) : inherited.session;
-    const response = await withRequestLocale(locale, () =>
-      prefixed === undefined ? next() : next(unprefixedPath(pathname) + search),
-    );
-    // A page that knows who is signed in must not be stored by a shared cache.
-    if (context.locals.session !== null) response.headers.set("Cache-Control", "private, no-store");
+    let response: Response;
+    try {
+      response = await withRequestLocale(locale, () =>
+        prefixed === undefined ? next() : next(unprefixedPath(pathname) + search),
+      );
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      if (error.status === 401 && context.locals.requiresSession) {
+        if (context.locals.session?.user) clearApiSession(context);
+        response = context.redirect(
+          `${localizePath("/sign-in", locale)}?redirect_to=${encodeURIComponent(context.locals.requestedPath)}`,
+          303,
+        );
+      } else {
+        context.locals.pageError = error;
+        if (error.status >= 500)
+          console.error(log("api_failure", { status: error.status, request_id: error.requestId }));
+        // The original request may be a POST whose form body was already consumed.
+        response = await context.rewrite(
+          new Request(new URL("/error", context.url), { headers: context.request.headers }),
+        );
+      }
+    }
+    if (
+      context.locals.session !== null ||
+      context.locals.sessionError ||
+      response.status >= 400 ||
+      response.status === 303
+    )
+      response.headers.set("Cache-Control", "private, no-store");
     console.info(log("http_request", { status: response.status }));
     return response;
   } catch (error) {

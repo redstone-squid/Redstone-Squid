@@ -12,10 +12,9 @@ const { session, config } = Astro.locals;
 const redirectTo = returnPath(Astro.url.searchParams.get("redirect_to"));
 if (session?.user != null) return Astro.redirect(redirectTo);
 const loaded = await load(browserProvidersList({ client: Astro.locals.api }));
-if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
 // The API redirects to the relative `redirect_to` on its own origin, which is this site's
 // (api-gaps.md item 52).
-const providers = loaded.data.map((provider) => ({
+const providers = loaded.map((provider) => ({
   provider,
   href: `${config.apiBaseUrl}/v1/auth/${encodeURIComponent(provider.id)}?redirect_to=${encodeURIComponent(redirectTo)}`,
 }));

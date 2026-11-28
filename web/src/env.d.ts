@@ -31,6 +31,9 @@ declare namespace App {
      * Who is signed in, from `GET /v1/session`; null when the visitor sent no session cookie.
      * A snapshot with a null user means the cookie expired.
      */
+    requiresSession?: boolean;
+    pageError?: import("@/api-client/api-error").ApiError;
+    sessionError?: import("@/api-client/api-error").ApiError;
     session: import("@/generated/types.gen").SessionSnapshot | null;
   }
 }

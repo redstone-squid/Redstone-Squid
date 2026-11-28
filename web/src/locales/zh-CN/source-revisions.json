@@ -34,8 +34,8 @@
   "common-home": "7352e1d60d6cc7911c3013f353293aeec45da713d310b0b5ff0164885b519f56",
   "error-not-found-title": "ad309996453d3c0a4389dea73ba974ac86edd885b6993a7f145a6ef0ee758965",
   "error-not-found-body": "6255d9a99451083af37ebea7eb6ec386310428ec6b4fa167755109a1781ae72a",
+  "error-forbidden": "7263390972f54d2319a13cec87bbb5f983513c775472088d9753b0691bcbe144",
   "error-service-title": "4fc736a6241fc1e664ea2aef7538e2d081dcd4351e6a17931a4c1ee31c82a85b",
-  "error-service-body": "08ca5ac72be669ef4b75818d5042054e47c46ddaa438b91a6c296ce92a5e189e",
   "meta-default-description": "7ec6f0112ec8dcd1f1829c7c6b6aac6d8fd1627ae38767199a1d1cef2309725a",
   "workbench-default-contrast": "18722ec9fa860ab2aac61a9dc270627f6bf8b58c988b00be29e8befb291ca2f1",
   "workbench-dark-theme": "fabb2077daa48cf1d0323ea3c06f58140b4940fc36dd8a520789b7b022e5d112",
@@ -935,6 +935,5 @@
   "sign-in-error-generic": "4bb4ff7e2ce48a6c476f3f1a6146015090bcb6da66bce67e5adf0a06be9eae00",
   "indexing-title": "e2ddf94a0369e140740f54c38722a840124d35bf753f137e92a349e270c3b9ab",
   "indexing-description": "615f5f795540c0418a48a2b38d3a079690b4abc8d14c53b5a90886f4ab62e1bc",
-  "indexing-save": "84e8e5fabee5b5e9454858ec43283a6b43c2e6acad45c4e6f1112cccdc2dd40f",
-  "indexing-error": "ac4005c60339e1802633bb6b6f2dd7e60cca110559c6a57015f379f6fc4a29ea"
+  "indexing-save": "84e8e5fabee5b5e9454858ec43283a6b43c2e6acad45c4e6f1112cccdc2dd40f"
 }

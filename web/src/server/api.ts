@@ -7,31 +7,12 @@ import { traceHttp } from "./telemetry";
 
 const API_TIMEOUT_MS = 5_000;
 
-/** The data a page loaded, or the status page it should render instead. */
-export type Loaded<T> = { data: T } | { status: 404 | 503 };
-
-/**
- * Await a generated SDK call for a page. An API 404 stays a 404; any other failure, including a
- * timeout, is logged and becomes 503, so the visitor sees a status page rather than a crash:
- *
- *     const loaded = await load(recordsGet({ client: Astro.locals.api, path }));
- *     if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
- */
-export async function load<T>(call: Promise<ApiResult<T>>): Promise<Loaded<T>> {
+/** Load data before a page streams. Middleware renders API failures. */
+export async function load<T>(call: Promise<ApiResult<T>>): Promise<T> {
   try {
-    return { data: unwrap(await call) };
+    return unwrap(await call);
   } catch (caught) {
-    const error = ApiError.from(caught);
-    if (error.status === 404) return { status: 404 };
-    console.error(
-      JSON.stringify({
-        event: "api_failure",
-        status: error.status,
-        request_id: error.requestId,
-        error: error.message,
-      }),
-    );
-    return { status: 503 };
+    throw ApiError.from(caught);
   }
 }
 

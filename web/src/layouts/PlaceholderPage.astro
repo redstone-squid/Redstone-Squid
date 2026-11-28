@@ -10,23 +10,23 @@ import PageHeader from "@/ui/patterns/PageHeader.svelte";
  * itself sets the response status. Other pages default to the "being rebuilt" description.
  * Every placeholder links home, except home, which links to the records that already exist.
  */
-type Props =
-  { title: () => string; description?: () => string; home?: true } | { status: 404 | 503 };
+type Props = { title: () => string; description?: () => string; home?: true } | { status: number };
 
 const props = Astro.props;
-const status = "status" in props ? props.status : undefined;
 const home = "home" in props && props.home === true;
-const copy =
-  status === 404
-    ? { title: m.errorNotFoundTitle, description: m.errorNotFoundBody }
-    : status === 503
-      ? { title: m.errorServiceTitle, description: m.errorServiceBody }
-      : {
-          title: "title" in props ? props.title : m.homeTitle,
-          description: ("description" in props && props.description) || m.placeholderRebuilding,
-        };
-const title = copy.title();
-const description = copy.description();
+const errors: Partial<Record<number, { title?: () => string; description: () => string }>> = {
+  401: { description: m.errorSignedOut },
+  403: { description: m.errorForbidden },
+  404: { title: m.errorNotFoundTitle, description: m.errorNotFoundBody },
+  429: { description: m.errorRateLimited },
+  503: { title: m.errorServiceTitle, description: m.errorUnavailable },
+};
+const title =
+  "status" in props ? (errors[props.status]?.title?.() ?? String(props.status)) : props.title();
+const description =
+  "status" in props
+    ? (errors[props.status]?.description ?? m.errorGeneric)()
+    : (props.description ?? m.placeholderRebuilding)();
 ---
 
 <CatalogueLayout {title} {description} noindex={!home}>

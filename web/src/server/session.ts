@@ -20,9 +20,22 @@ export async function loadSession(context: Context): Promise<SessionSnapshot | n
       await browserSessionGet({ client: context.locals.api, headers: { Cookie: cookie } }),
     );
   } catch (caught) {
-    logFailure("session_load_failed", ApiError.from(caught));
+    const error = ApiError.from(caught);
+    if (error.status !== 401) {
+      context.locals.sessionError = error;
+      logFailure("session_load_failed", error);
+    }
     return null;
   }
+}
+
+/** Get the cookie for a protected page or let middleware handle the failure. */
+export function requireSession(context: Context): string {
+  context.locals.requiresSession = true;
+  if (context.locals.sessionError) throw context.locals.sessionError;
+  const cookie = apiSessionCookie(context);
+  if (cookie === undefined || !context.locals.session?.user) throw new ApiError(401);
+  return cookie;
 }
 
 /**

@@ -401,6 +401,18 @@ export function errorNotFoundBody(locale: Locale = getLocale()): string {
   }
 }
 
+/** You do not have permission to access this page. */
+export function errorForbidden(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "You do not have permission to access this page.";
+    case "zh-CN":
+      return "你没有权限访问此页面。";
+    case "en-XA":
+      return "[" + "Ýöû đö ñöţ ĥåṽé þéŕɱîššîöñ ţö åççéšš ţĥîš þåĝé." + "···················]";
+  }
+}
+
 /** The catalogue service is unavailable */
 export function errorServiceTitle(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -410,22 +422,6 @@ export function errorServiceTitle(locale: Locale = getLocale()): string {
       return "目录服务暂时不可用";
     case "en-XA":
       return "[" + "Ţĥé çåţåļöĝûé šéŕṽîçé îš ûñåṽåîļåƀļé" + "···············]";
-  }
-}
-
-/** The catalogue API did not answer in time. Please try again shortly. */
-export function errorServiceBody(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "The catalogue API did not answer in time. Please try again shortly.";
-    case "zh-CN":
-      return "目录 API 未及时响应，请稍后重试。";
-    case "en-XA":
-      return (
-        "[" +
-        "Ţĥé çåţåļöĝûé ÅÞÎ đîđ ñöţ åñšŵéŕ îñ ţîɱé. Þļéåšé ţŕý åĝåîñ šĥöŕţļý." +
-        "···························]"
-      );
   }
 }
 
@@ -3608,17 +3604,5 @@ export function indexingSave(locale: Locale = getLocale()): string {
       return "保存设置";
     case "en-XA":
       return "[" + "Šåṽé šéţţîñĝ" + "·····]";
-  }
-}
-
-/** Could not save your setting. Please try again. */
-export function indexingError(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Could not save your setting. Please try again.";
-    case "zh-CN":
-      return "无法保存设置，请重试。";
-    case "en-XA":
-      return "[" + "Çöûļđ ñöţ šåṽé ýöûŕ šéţţîñĝ. Þļéåšé ţŕý åĝåîñ." + "···················]";
   }
 }

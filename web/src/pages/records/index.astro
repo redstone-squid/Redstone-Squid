@@ -11,8 +11,7 @@ const page = readPageAddress(Astro.url.searchParams);
 const loaded = await load(
   recordsList({ client: Astro.locals.api, query: { ...page, page_size: 20 } }),
 );
-if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
-const { items, next, prev } = loaded.data;
+const { items, next, prev } = loaded;
 ---
 
 <CatalogueLayout

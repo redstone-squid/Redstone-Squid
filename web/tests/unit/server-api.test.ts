@@ -172,10 +172,10 @@ describe("load", () => {
 
   it("returns the data of a successful call", async () => {
     server.use(http.get(`${API}/v1/builds`, () => HttpResponse.json(emptyPage)));
-    expect(await load(buildsList({ client: client() }))).toEqual({ data: emptyPage });
+    expect(await load(buildsList({ client: client() }))).toEqual(emptyPage);
   });
 
-  it("keeps a 404 and turns every other failure into a 503", async () => {
+  it("keeps HTTP statuses and reports a network failure as 503", async () => {
     server.use(
       http.get(`${API}/v1/builds/404`, () =>
         HttpResponse.json({ title: "Not found", status: 404 }, { status: 404 }),
@@ -186,8 +186,8 @@ describe("load", () => {
       http.get(`${API}/v1/builds/0`, () => HttpResponse.error()),
     );
     const lookup = (build_id: number) => load(buildsGet({ client: client(), path: { build_id } }));
-    expect(await lookup(404)).toEqual({ status: 404 });
-    expect(await lookup(500)).toEqual({ status: 503 });
-    expect(await lookup(0)).toEqual({ status: 503 });
+    await expect(lookup(404)).rejects.toMatchObject({ status: 404 });
+    await expect(lookup(500)).rejects.toMatchObject({ status: 500 });
+    await expect(lookup(0)).rejects.toMatchObject({ status: 503 });
   });
 });

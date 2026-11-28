@@ -13,6 +13,38 @@ for (const [route, status] of [
   });
 }
 
+test("rate-limited pages preserve the retry delay and locale", async ({ request }) => {
+  const response = await request.get("/zh-cn/records/rate-limited");
+  expect(response.status()).toBe(429);
+  expect(response.headers()["retry-after"]).toBe("45");
+  expect(await response.text()).toContain(m.errorRateLimited("zh-CN"));
+});
+
+test("settings distinguishes expired sessions from lookup failures", async ({ request }) => {
+  const path = "/zh-cn/settings?from=account";
+  const expired = await request.get(path, {
+    headers: { Cookie: "__Host-squid_session=expired" },
+    maxRedirects: 0,
+  });
+  expect(expired.status()).toBe(303);
+  expect(expired.headers().location).toBe(`/zh-cn/sign-in?redirect_to=${encodeURIComponent(path)}`);
+  const failed = await request.get(path, {
+    headers: { Cookie: "__Host-squid_session=outage" },
+    maxRedirects: 0,
+  });
+  expect(failed.status()).toBe(503);
+  expect(await failed.text()).toContain(m.errorServiceTitle("zh-CN"));
+});
+
+test("a settings POST without a CSRF token renders access denied", async ({ request }) => {
+  const response = await request.post("/settings", {
+    headers: { Cookie: "__Host-squid_session=member" },
+    form: { indexing: "on" },
+  });
+  expect(response.status()).toBe(403);
+  expect(await response.text()).toContain(m.errorForbidden("en"));
+});
+
 test("the sitemap lists the indexable home pages during the rebuild", async ({ request }) => {
   const response = await request.get("/sitemap.xml");
   expect(response.ok()).toBe(true);

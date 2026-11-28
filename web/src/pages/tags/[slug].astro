@@ -7,9 +7,7 @@ import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const slug = Astro.params.slug;
 if (!slug) return Astro.rewrite("/404");
-const loaded = await load(tagsLookup({ client: Astro.locals.api, query: { slug } }));
-if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
-const tag = loaded.data;
+const tag = await load(tagsLookup({ client: Astro.locals.api, query: { slug } }));
 if (slug !== tag.slug) {
   return new Response(null, {
     status: 302,

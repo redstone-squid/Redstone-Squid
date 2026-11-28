@@ -45,17 +45,23 @@ export class ApiError extends Error {
   readonly requestId: string | null;
   /** No response arrived: the network failed or the visitor is offline. Worth retrying. */
   readonly offline: boolean;
+  readonly retryAfter: string | null;
 
   constructor(
     status: number,
     problem?: ApiProblemDetail,
-    options?: ErrorOptions & { requestId?: string | null; offline?: boolean },
+    options?: ErrorOptions & {
+      requestId?: string | null;
+      offline?: boolean;
+      retryAfter?: string | null;
+    },
   ) {
     super(problem?.detail ?? problem?.title ?? "API request failed.", options);
     this.name = "ApiError";
     this.status = status;
     this.problem = problem;
     this.requestId = options?.requestId ?? null;
+    this.retryAfter = options?.retryAfter ?? null;
     this.offline = options?.offline ?? false;
   }
 
@@ -99,6 +105,7 @@ export function unwrap<T>(result: ApiResult<T>): T {
   if (result.data !== undefined) return result.data;
   const problem = problemDetail.safeParse(result.error).data;
   throw new ApiError(result.response?.status ?? problem?.status ?? 503, problem, {
+    retryAfter: result.response?.headers.get("Retry-After"),
     requestId: result.response?.headers.get("Request-Id") ?? null,
     offline: result.response === undefined,
     cause: result.error,

@@ -1,0 +1,9 @@
+---
+import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
+const error = Astro.locals.pageError;
+const status = error?.status ?? 404;
+Astro.response.status = status;
+if (error?.retryAfter) Astro.response.headers.set("Retry-After", error.retryAfter);
+---
+
+<PlaceholderPage {status} />

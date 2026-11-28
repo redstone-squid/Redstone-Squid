@@ -28,7 +28,7 @@ move the code to the right layer rather than working around the rule.
 
 ## Requests
 
-Middleware (`src/middleware.ts`) runs first and sets seven request locals:
+Middleware (`src/middleware.ts`) runs first and sets the request locals:
 
 - `Astro.locals.locale`: `en` or `zh-CN`. Every route exists once, without a locale prefix.
   Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
@@ -58,11 +58,9 @@ import { recordsGet } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { load } from "@/server/api";
 
-const loaded = await load(
+const record = await load(
   recordsGet({ client: Astro.locals.api, path: { record_id: Astro.params.id ?? "" } }),
 );
-if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
-const record = loaded.data;
 ---
 
 <CatalogueLayout title={record.title} canonicalPath={`/records/${record.record_id}`}>
@@ -70,9 +68,9 @@ const record = loaded.data;
 </CatalogueLayout>
 ```
 
-`load()` turns an API 404 into the 404 page and logs any other failure, including a timeout,
-as the 503 page. Responses stream, so load and choose the status before the template renders;
-an error thrown inside a component after rendering starts truncates a 200 response. Listings
+Load in frontmatter before the response streams. Middleware renders API failures with their
+HTTP status and sends expired sessions to sign-in. Protected pages call `requireSession(Astro)`.
+Listings
 read their page with `readPageAddress` from `src/server/pagination.ts`, turn the API's `next`
 and `prev` anchors into links with `pageHref`, and pass those to the feature, which renders
 `Pagination`; mark pages after the first `noindex`.
