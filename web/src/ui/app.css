@@ -350,7 +350,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
   :root:active-view-transition-type(page-forward, page-back) {
-    .pagination-results {
+    :has(+ [data-pagination]) {
       view-transition-name: pagination-results;
     }
 

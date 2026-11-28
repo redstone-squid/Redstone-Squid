@@ -27,7 +27,7 @@ const title = m.accountBuilds();
   {page.items.length === 0 ? (
     <p>{m.portfolioEmpty()}</p>
   ) : (
-    <List class="pagination-results">
+    <List>
       {page.items.map((row) => (
         <ListItem
           title={row.title ?? m.submissionBuildNumber({ id: row.build_id })}

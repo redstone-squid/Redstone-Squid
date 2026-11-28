@@ -34,7 +34,7 @@
         }))}
       />
     {/if}
-    <ul class="pagination-results">
+    <ul>
       {#each builds as build (build.id)}
         <li>
           <Link href={localizePath(`/builds/${build.id}`)}>{build.display_name ?? build.title}</Link

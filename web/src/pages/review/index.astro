@@ -25,7 +25,7 @@ const title = corrections ? m.submissionCorrectionInbox() : m.submissionReviewQu
   {page.items.length === 0 ? (
     <p>{m.submissionReviewEmpty()}</p>
   ) : (
-    <List class="pagination-results">
+    <List>
       {page.items.map((row) => (
         <ListItem
           title={
